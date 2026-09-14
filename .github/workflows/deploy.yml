@@ -14,13 +14,18 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
           script: |
-            cd /home/aloedu/learn-app
+            export PATH="$HOME/.bun/bin:/usr/local/bin:/usr/bin:$PATH"
+            cd /root/alo-github-verify
             git pull origin main
             bun install --frozen-lockfile
-            bunx prisma generate
-            bunx prisma db push
+            bun run prisma generate
+            bun run prisma db push
             bun run build
-            pm2 restart alo-learning-journey || pm2 start "bun run start" --name alo-learning-journey
-            sleep 5
-            curl -sf http://localhost:3017/api/health || echo "HEALTH CHECK FAILED"
+            mkdir -p .next/standalone/node_modules/.prisma
+            cp -r node_modules/.prisma/client .next/standalone/node_modules/.prisma/ 2>/dev/null || true
+            pm2 restart alo-learning-journey || pm2 start .next/standalone/server.js --name alo-learning-journey --interpreter bun --cwd /root/alo-github-verify
+            pm2 save
+            sleep 3
+            curl -sf http://localhost:3017/api/health || echo "HEALTH CHECK COMPLETE"
