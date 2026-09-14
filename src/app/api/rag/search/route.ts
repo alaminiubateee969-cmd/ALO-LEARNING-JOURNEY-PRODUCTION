@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   // 1) Chunk-level search (keyword + term overlap)
   const chunks = await db.ragChunk.findMany();
   const docs = await db.ragDocument.findMany();
-  const docMap = new Map(docs.map((d) => [d.id, d]));
+  const docMap = new Map<string, (typeof docs)[number]>(docs.map((d) => [d.id, d]));
   for (const c of chunks) {
     const text = c.text.toLowerCase();
     const keywords: string[] = c.keywordsJson ? JSON.parse(c.keywordsJson) : [];
