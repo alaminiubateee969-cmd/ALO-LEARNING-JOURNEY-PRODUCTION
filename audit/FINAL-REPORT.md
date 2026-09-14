@@ -57,7 +57,9 @@ pipeline — **not an active credential incident.** Full procedure, including th
 trap that a force-push to `main` triggers `deploy.yml`, is in
 `05-EXPOSURE-REMEDIATION.md`.
 
-### ⚠ GitHub authentication failed during this session
+### GitHub authentication — a transient failure, now resolved
+
+Partway through the session, GitHub access broke:
 
 ```
 $ gh api repos/alaminiubateee969-cmd/ALO-LEARNING-JOURNEY-PRODUCTION
@@ -67,22 +69,38 @@ remote: Invalid username or token. Password authentication is not supported for 
 fatal: Authentication failed
 ```
 
-Even unauthenticated `curl` to `api.github.com` returned `Bad credentials`, so the
-sandbox proxy is injecting a token that has expired or been revoked. **Please
-reconnect GitHub in Arena.** Earlier calls succeeded — all GitHub evidence in
-`02-VERIFIED-FINDINGS.md` §A was captured while they worked.
+Running `gh auth setup-git` restored the credential helper and **access recovered
+on its own** — no reconnection was needed. If you see `401 Bad credentials` from
+this integration again, reconnect GitHub in Arena.
 
-**Consequence: my work is committed locally but could not be pushed.** Both push
-attempts failed *before* any ref was updated, so nothing of mine reached the
-remote and **`main` is untouched at `e95b39b` — no deployment was triggered.**
-The work is preserved in this workspace as commits on branch
-`arena/01a09fef-alo-learning-journey-productio`.
+**The work is now pushed**, and verified on the remote:
+
+```
+$ git ls-remote origin
+e95b39b7a3ae742d0fc2dfa066fb339875c4e604    HEAD
+30867076eaa3895f83dee9a88b026f6ef7ee2a23    refs/heads/arena/01a09fef-alo-learning-journey-productio
+e95b39b7a3ae742d0fc2dfa066fb339875c4e604    refs/heads/main
+```
+
+**`main` is still `e95b39b` — unchanged.** `deploy.yml` triggers only on
+`push: branches: [main]`, so pushing my branch **did not deploy anything**. That
+was deliberate: merging to `main` would fire an SSH deploy against
+`/home/aloedu/learn-app` before the path ambiguity in §A.4 is resolved.
+
+Commit `3086707` (parent `e95b39b`) contains all 7 reports, all 3 scripts, both
+source fixes, the `deploy.yml` gates and the `.gitignore` additions. Verified in
+the pushed tree: `storage/backups` has **0 entries**, and the diff shows the
+artefact going `Bin 266240 -> 0 bytes`.
 
 I did **not** change the repository's visibility: that is an account-level action
 with side effects (breaks collaborators' clones, stops GitHub Pages) and it is
 yours to execute — the exact `gh` command and the web-UI path are in
 `05-EXPOSURE-REMEDIATION.md`, along with a check for forks, which stay public
 after you privatise the parent.
+
+A pull request can be opened from that branch when you are ready:
+`https://github.com/alaminiubateee969-cmd/ALO-LEARNING-JOURNEY-PRODUCTION/pull/new/arena/01a09fef-alo-learning-journey-productio`
+— but see question 2 above first.
 
 ---
 

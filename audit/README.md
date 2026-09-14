@@ -174,8 +174,7 @@ a production box.
    token rotation is needed**. What *was* public is business data (383 rows:
    analytics, audit log, approvals, content pipeline). Privatisation is instant
    and yours to do; history purge needs a force-push and therefore your approval.
-   ⚠ **GitHub auth is currently failing in this session** (`401 Bad credentials`),
-   so please reconnect GitHub in Arena. — `05-EXPOSURE-REMEDIATION.md`
+   — `05-EXPOSURE-REMEDIATION.md`
 
 4. **Auth for the 39 open API routes.** `SECURITY.md` itself says the app must not
    go live without it, and `DELETE /api/backups` lets an anonymous request

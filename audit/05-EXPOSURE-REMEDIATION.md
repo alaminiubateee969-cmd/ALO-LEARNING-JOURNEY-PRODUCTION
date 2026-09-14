@@ -78,9 +78,9 @@ What *was* public: 383 rows including `AnalyticsSnapshot` (315), `AuditLog` (13)
 
 ## Step 1 — Make the repository private
 
-### ⚠ Blocked right now: GitHub authentication is failing in this session
+### GitHub authentication — transient failure, resolved
 
-Partway through this session, GitHub access broke:
+Access broke mid-session and then recovered after `gh auth setup-git`:
 
 ```
 $ gh api repos/alaminiubateee969-cmd/ALO-LEARNING-JOURNEY-PRODUCTION
@@ -91,19 +91,18 @@ remote: Invalid username or token. Password authentication is not supported for 
 fatal: Authentication failed
 ```
 
-Even unauthenticated `curl` to `api.github.com` returns `Bad credentials`, which
-means the sandbox proxy is injecting a token that has expired or been revoked.
-**This needs attention on your side — please reconnect GitHub in Arena.** Earlier
-in the session the same calls succeeded, and all the GitHub evidence in
-`02-VERIFIED-FINDINGS.md` §A was captured while they worked.
+Even unauthenticated `curl` to `api.github.com` returned `Bad credentials` while
+it lasted, which points at the sandbox proxy injecting an expired token rather
+than anything wrong with your repository. **If you see this again, reconnect
+GitHub in Arena.**
 
-Consequence for you: **my work is committed locally but could not be pushed.**
-Nothing of mine reached the remote — both push attempts failed before any ref was
-updated, and `main` is untouched at `e95b39b`, so **no deployment was
-triggered**. The files are preserved in this workspace and in the commit
-`90aff59` on branch `arena/01a09fef-alo-learning-journey-productio`.
+**The remediation work is now pushed** to branch
+`arena/01a09fef-alo-learning-journey-productio` (`3086707`), and `main` is
+**unchanged at `e95b39b`** — so `deploy.yml` was not triggered and nothing was
+deployed. The removed artefact shows in the diff as `Bin 266240 -> 0 bytes`, and
+`storage/backups` has 0 entries in the pushed tree.
 
-### I did not change the repo's visibility, and would not without you doing it
+### I did not change the repo's visibility — that is yours to do
 
 Making a repository private is an account-level change with side effects (it
 breaks any existing clone/pull for collaborators and CI keys, and GitHub Pages
@@ -159,8 +158,7 @@ Only a history rewrite removes it.
 ### Why I did not run the rewrite
 
 It requires a **force-push to `main`**, which is explicitly on your do-not-do
-list without approval, and GitHub auth is currently failing anyway. It also has a
-trap worth flagging:
+list without approval. It also has a trap worth flagging:
 
 > **A force-push to `main` triggers `.github/workflows/deploy.yml`.** So the
 > history rewrite would simultaneously fire an SSH deploy at
