@@ -1,0 +1,25 @@
+{
+  "id": "backup_1786236820070",
+  "createdAt": "2026-08-09T00:53:40.105Z",
+  "tables": {
+    "company": 1,
+    "contentIdea": 4,
+    "contentPackage": 7,
+    "approvalItem": 11,
+    "socialConnection": 11,
+    "ragDocument": 4,
+    "ragChunk": 0,
+    "analyticsSnapshot": 315,
+    "telegramCommand": 3,
+    "auditLog": 13,
+    "notification": 3,
+    "familyModel": 0,
+    "publishedPost": 3,
+    "commentInbox": 8,
+    "aIAgentRun": 0
+  },
+  "totalRows": 383,
+  "status": "complete",
+  "encrypted": true,
+  "retentionDays": 14
+}

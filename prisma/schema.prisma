@@ -1,0 +1,462 @@
+// ALO Learning Journey — Prisma schema (SQLite)
+// Operational data layer. The 40-agent roster is a static config module
+// (src/lib/agents.ts) so it stays richly typed and always available even
+// before the DB is seeded. Runs, content, approvals, RAG, analytics etc.
+// are persisted here.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  domain    String?
+  logoUrl   String?
+  plan      String   @default("growth")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AIAgentRun {
+  id          String   @id @default(cuid())
+  agentId     String
+  status      String   @default("idle") // idle | running | success | failed | blocked_external_setup
+  inputBrief  String?
+  outputJson  String?
+  errorMsg    String?
+  retryCount  Int      @default(0)
+  costEstUsd  Float    @default(0)
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([agentId])
+  @@index([status])
+}
+
+model ContentIdea {
+  id          String   @id @default(cuid())
+  topic       String
+  hook        String
+  angle       String
+  audience    String
+  ragSources  String? // JSON array of source titles
+  status      String   @default("idea") // idea | packaged | approved | published | rejected
+  createdAt   DateTime @default(now())
+
+  @@index([status])
+}
+
+model ContentPackage {
+  id           String   @id @default(cuid())
+  ideaId       String?
+  topic        String
+  reelScript   String
+  hooksJson    String // JSON: string[]
+  seoKeywords  String? // JSON: string[]
+  captionsJson String // JSON: { platform: caption }
+  hashtagsJson String? // JSON: string[]
+  imagePrompt  String?
+  voiceDirection String?
+  cta          String
+  disclaimerBn String?
+  qualityScore Int      @default(0)
+  safetyStatus String   @default("pending") // pending | safe | needs_revision | blocked
+  ragCitations String? // JSON
+  createdAt    DateTime @default(now())
+
+  @@index([safetyStatus])
+}
+
+model ApprovalItem {
+  id            String   @id @default(cuid())
+  packageId     String?
+  topic         String
+  type          String   @default("content") // content | comment | image | voice | video
+  title         String
+  summary       String
+  riskLevel     String   @default("low") // low | medium | high
+  blockedReasons String? // JSON array
+  requiredEdits String?  // JSON array
+  status        String   @default("pending") // pending | approved | rejected | revised
+  reviewerNote  String?
+  createdAt     DateTime @default(now())
+  reviewedAt    DateTime?
+
+  @@index([status])
+}
+
+model SocialConnection {
+  id           String   @id @default(cuid())
+  platform     String   // facebook | instagram | youtube | tiktok | linkedin | x | whatsapp | telegram | pinterest | threads | gbp
+  accountName  String
+  handle        String?
+  status       String   @default("not_connected") // not_connected | connected | external_setup_required | expired | revoked | failed
+  scopesJson   String?
+  tokenExpiry  DateTime?
+  lastSyncAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([platform, accountName])
+}
+
+model RagDocument {
+  id         String   @id @default(cuid())
+  title      String
+  sourceType String   @default("manual") // manual | pdf | docx | csv | url | faq | policy
+  sourceUrl  String?
+  content    String
+  tagsJson   String? // JSON array
+  chunkCount Int      @default(0)
+  createdAt  DateTime @default(now())
+}
+
+model RagChunk {
+  id          String   @id @default(cuid())
+  documentId  String
+  text        String
+  keywordsJson String? // JSON array
+  createdAt   DateTime @default(now())
+
+  @@index([documentId])
+}
+
+model AnalyticsSnapshot {
+  id           String   @id @default(cuid())
+  platform     String
+  metric       String   // views | reach | watch_time | retention | shares | saves | leads | comments | followers
+  value        Int
+  capturedAt   DateTime @default(now())
+
+  @@index([platform, metric])
+}
+
+model TelegramCommand {
+  id         String   @id @default(cuid())
+  command    String
+  args       String?
+  senderId   String
+  status     String   @default("received") // received | executed | rejected | unknown
+  response   String?
+  createdAt  DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      String   @default("system")
+  action     String
+  detail     String?
+  severity   String   @default("info") // info | warn | error | critical
+  createdAt  DateTime @default(now())
+
+  @@index([severity])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  kind      String   @default("info") // info | success | warn | danger
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model FamilyModel {
+  id               String   @id @default(cuid())
+  characterName    String
+  personType       String   // baby_girl | mother | father | teacher | narrator | user_owned
+  consentConfirmed Boolean  @default(false)
+  consentDate      DateTime?
+  referenceImages  String?  // JSON array of urls
+  voiceSample      String?
+  appearanceJson   String?
+  voiceSettingsJson String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+}
+
+model PublishedPost {
+  id          String   @id @default(cuid())
+  platform    String
+  providerPostId String?
+  url         String?
+  topic       String
+  status      String   @default("queued") // queued | scheduled | publishing | published | failed | external_setup_required
+  createdAt   DateTime @default(now())
+  publishedAt DateTime?
+  scheduledAt DateTime?
+  packageId   String?
+
+  @@index([status])
+  @@index([platform])
+}
+
+model CommentInbox {
+  id           String   @id @default(cuid())
+  platform     String
+  authorName   String
+  authorHandle String?
+  text         String
+  postTopic    String?
+  category     String   @default("safe_general")
+  riskLevel    String   @default("low")
+  status       String   @default("new")
+  draftReply   String?
+  createdAt    DateTime @default(now())
+  repliedAt    DateTime?
+
+  @@index([status])
+  @@index([category])
+}
+
+// ===== Workforce Architecture (2,000 AI Employee scale) =====
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  family      String   // CONTENT_STRATEGY | SOCIAL_MEDIA | IMAGE | VIDEO | VOICE | etc.
+  description String?
+  agentCount  Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([family])
+}
+
+model AgentEmployee {
+  id            String   @id @default(cuid())
+  departmentId  String
+  name          String
+  role          String
+  specialization String
+  capabilities  String   // JSON: ["TEXT","IMAGE","VIDEO","VOICE","CALL","SMS","SOCIAL","ANALYTICS","RESEARCH","QA"]
+  tools         String   // JSON array
+  modelProvider String   @default("local")
+  modelName     String   @default("local")
+  qualityScore  Float    @default(0)
+  successRate   Float    @default(0)
+  status        String   @default("idle") // idle | active | busy | failed | suspended
+  sopCoverage   Float    @default(0)
+  maxAttempts   Int      @default(3)
+  createdAt     DateTime @default(now())
+
+  @@index([departmentId])
+  @@index([status])
+  @@index([capabilities])
+}
+
+model LoopCycle {
+  id          String   @id @default(cuid())
+  objective   String
+  phase       String   @default("observe") // observe|understand|plan|delegate|create|verify|critique|correct|evaluate|publish|learn
+  status      String   @default("running") // running|completed|failed|escalated
+  agentsUsed  String?  // JSON array of agent IDs
+  qualityScore Float   @default(0)
+  retryCount  Int      @default(0)
+  costUsd     Float    @default(0)
+  errorType   String?
+  lesson      String?
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([status])
+  @@index([phase])
+}
+
+// ===== Private Family AI Studio =====
+
+model FamilyProfile {
+  id               String   @id @default(cuid())
+  personName       String
+  personType       String   // me | wife | child
+  consentConfirmed Boolean  @default(false)
+  consentDate      DateTime?
+  guardianName     String?  // required if personType=child
+  voiceConsent     Boolean  @default(false)
+  faceConsent      Boolean  @default(false)
+  appearanceJson   String?  // JSON: hair, eyes, build, etc.
+  voiceSettingsJson String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  referenceAssets FamilyReferenceAsset[]
+  projects        FamilyProject[]
+
+  @@index([personType])
+}
+
+model FamilyReferenceAsset {
+  id            String   @id @default(cuid())
+  profileId     String
+  profile       FamilyProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  assetType     String   // photo | video | voice
+  angleType     String?  // front | left | right | three_quarter | full_body | close_up
+  context       String?  // indoor | outdoor | casual | formal
+  expression    String?  // smiling | neutral | surprised | etc.
+  lighting      String?  // natural | studio | low_light | golden_hour
+  clothing      String?  // casual | formal | sportswear | traditional
+  hairstyle     String?  // description
+  filePath      String
+  fileName      String?  // original filename
+  fileSize      Int      @default(0) // bytes
+  mimeType      String?  // image/jpeg | video/mp4 | audio/wav
+  qualityScore  Float    @default(0) // 0=blurry/low, 1=high
+  isDuplicate   Boolean  @default(false)
+  approved      Boolean  @default(false) // admin-approved for use
+  uploadedAt    DateTime @default(now())
+
+  @@index([profileId])
+  @@index([assetType])
+  @@index([approved])
+}
+
+model FamilyProject {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  prompt        String   // user's one-click prompt
+  castProfileIds String  // JSON array of FamilyProfile IDs
+  status        String   @default("draft") // draft|running|completed|failed
+  qualityScore  Float    @default(0)
+  currentStage  String?  // creative_director|script|storyboard|...|final_director
+  outputJson    String?  // JSON: generated outputs per stage
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profiles      FamilyProfile[]
+
+  @@index([status])
+}
+
+model MediaGeneration {
+  id            String   @id @default(cuid())
+  projectId     String?
+  stage         String   // script|storyboard|image|video|voice|lip_sync|edit|upscale
+  inputJson     String?  // JSON: input params
+  outputJson    String?  // JSON: generated output
+  qualityScore  Float    @default(0)
+  identityScore Float    @default(0) // face/likeness consistency 0-1
+  provider      String   @default("local")
+  status        String   @default("pending") // pending|running|passed|failed|regenerated
+  attempt       Int      @default(1)
+  maxAttempts   Int      @default(3)
+  issuesJson    String?  // JSON array of quality issues
+  createdAt     DateTime @default(now())
+
+  @@index([projectId])
+  @@index([stage])
+  @@index([status])
+}
+
+// ===== Growth Loop: Content Opportunity + Hook Testing + Campaigns =====
+
+model ContentOpportunityScore {
+  id                  String   @id @default(cuid())
+  topic               String
+  searchDemand        Int      @default(0)   // 0-100
+  parentRelevance     Int      @default(0)   // 0-100
+  bangladeshRelevance Int      @default(0)   // 0-100
+  competition          Int      @default(0)   // 0-100 (higher = harder)
+  videoPotential      Int      @default(0)   // 0-100
+  brandFit            Int      @default(0)   // 0-100
+  finalScore          Int      @default(0)   // weighted average
+  rationale           String?
+  approved            Boolean  @default(false) // only high-score topics enter production
+  provider            String   @default("local")
+  createdAt           DateTime @default(now())
+
+  @@index([approved])
+  @@index([finalScore])
+}
+
+model HookTest {
+  id            String   @id @default(cuid())
+  topic         String
+  hookText      String
+  variant       String   @default("A") // A | B | C | D | E
+  impressions   Int      @default(0)
+  hookRetention Float    @default(0)   // 3-sec retention %
+  watchTime     Int      @default(0)   // avg seconds
+  completion    Float    @default(0)   // %
+  isWinner      Boolean  @default(false)
+  status        String   @default("draft") // draft | testing | completed | winner
+  createdAt     DateTime @default(now())
+  testedAt      DateTime?
+
+  @@index([topic])
+  @@index([status])
+}
+
+model Campaign {
+  id            String   @id @default(cuid())
+  title         String
+  topic         String
+  opportunityId String?
+  status        String   @default("planned") // planned|in_production|published|measured|learned
+  platformCount Int      @default(0)
+  totalAssets   Int      @default(0)
+  views         Int      @default(0)
+  reach         Int      @default(0)
+  engagement    Float    @default(0)
+  followerGain  Int      @default(0)
+  audienceRelevance Float @default(0) // % relevant parents
+  conversionRate Float   @default(0)
+  lesson        String?
+  createdAt     DateTime @default(now())
+  publishedAt   DateTime?
+  measuredAt    DateTime?
+
+  @@index([status])
+}
+
+// ===== Inkbox Adapter Layer (OPTIONAL — ALO works without it) =====
+
+model InkboxIntegration {
+  id            String   @id @default(cuid())
+  name          String
+  agentId       String
+  inkboxIdentityId String?
+  channels      String   @default("[]")
+  status        String   @default("not_connected")
+  configJson    String?
+  lastHealthCheck DateTime?
+  lastError     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+  @@index([agentId])
+}
+
+model AgentMessage {
+  id            String   @id @default(cuid())
+  senderAgentId String
+  recipientAgentId String
+  taskId        String?
+  objective     String
+  context       String?
+  requiredOutput String?
+  priority      String   @default("normal")
+  status        String   @default("pending")
+  result        String?
+  failureReason String?
+  hopCount      Int      @default(0)
+  channel       String   @default("internal")
+  inkboxMessageId String?
+  createdAt     DateTime @default(now())
+  deliveredAt   DateTime?
+  completedAt   DateTime?
+
+  @@index([senderAgentId])
+  @@index([recipientAgentId])
+  @@index([status])
+  @@index([taskId])
+}
