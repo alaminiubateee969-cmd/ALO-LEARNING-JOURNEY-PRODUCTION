@@ -4,8 +4,6 @@ on:
   push:
     branches: [main]
 
-# Only one deployment at a time: two concurrent runs doing `git pull` + build in
-# the same directory can leave a half-built release live.
 concurrency:
   group: deploy-vps
   cancel-in-progress: false
@@ -13,6 +11,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
@@ -20,138 +19,407 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          # `set -e` so the FIRST failing step aborts the deploy instead of
-          # leaving a half-updated live directory. The previous version had no
-          # error handling at all and swallowed the health-check failure.
+          script_stop: true
+
           script: |
             set -euo pipefail
 
-            APP_PATH="${VPS_APP_PATH:-/home/aloedu/learn-app}"
-            HEALTH_URL="http://localhost:${PORT:-3017}/api/health"
+            export PATH="$HOME/.bun/bin:/usr/local/bin:/usr/bin:$PATH"
 
-            # --- 0. Fail loudly if the deploy path is wrong -------------------
-            # NOTE: audit finding A.4 — the operator refers to
-            # /root/ALO-LEARNING-JOURNEY while this workflow and DEPLOYMENT.md
-            # say /home/aloedu/learn-app. Confirm the real path before merging.
+            # ================================================================
+            # CONFIG
+            # ================================================================
+
+            APP_PATH="${VPS_APP_PATH:-/root/alo-github-verify}"
+            APP_NAME="alo-learning-journey"
+            PORT="${PORT:-3017}"
+            HEALTH_URL="http://127.0.0.1:${PORT}/api/health"
+
+            echo "============================================================"
+            echo "ALO LEARNING JOURNEY VPS DEPLOY"
+            echo "============================================================"
+            echo "APP_PATH:   $APP_PATH"
+            echo "APP_NAME:   $APP_NAME"
+            echo "PORT:       $PORT"
+            echo "HEALTH_URL: $HEALTH_URL"
+            echo "============================================================"
+
+            # ================================================================
+            # 0. VERIFY SERVER ENVIRONMENT
+            # ================================================================
+
+            command -v git >/dev/null 2>&1 || {
+              echo "FATAL: git is not installed"
+              exit 1
+            }
+
+            command -v bun >/dev/null 2>&1 || {
+              echo "FATAL: bun is not installed"
+              exit 1
+            }
+
+            command -v pm2 >/dev/null 2>&1 || {
+              echo "FATAL: pm2 is not installed"
+              exit 1
+            }
+
             if [ ! -d "$APP_PATH/.git" ]; then
-              echo "FATAL: $APP_PATH is not a git working tree. Refusing to deploy."
-              echo "       Set VPS_APP_PATH to the correct directory."
+              echo "FATAL: $APP_PATH is not a Git working tree."
+              echo "Set VPS_APP_PATH to the correct deployment directory."
               exit 1
             fi
+
             cd "$APP_PATH"
 
-            # --- 1. Record the rollback handle BEFORE changing anything -------
-            PREV_SHA="$(git rev-parse HEAD)"
-            echo "ROLLBACK_SHA=$PREV_SHA"
-            if [ ! -d .releases ]; then mkdir -p .releases; fi
-            echo "$PREV_SHA" > .releases/last-known-good
+            # ================================================================
+            # 1. VERIFY REMOTE
+            # ================================================================
 
-            # --- 2. Back up the database and secrets fingerprint --------------
-            # prisma db push has no migrations to undo it, so this is the only
-            # schema rollback path. Uses sqlite3 .backup for a consistent copy
-            # (a plain cp can capture a half-written page).
-            TS="$(date -u +%Y%m%d-%H%M%S)"
-            mkdir -p "$APP_PATH/.backups/$TS"
-            DB_URL="$(grep -E '^DATABASE_URL=' .env | head -1 | cut -d= -f2- || true)"
-            case "$DB_URL" in
-              file:*)
-                DB_FILE="${DB_URL#file:}"
-                case "$DB_FILE" in /*) ;; *) DB_FILE="$APP_PATH/$DB_FILE" ;; esac
-                if [ -f "$DB_FILE" ] && command -v sqlite3 >/dev/null 2>&1; then
-                  sqlite3 "$DB_FILE" ".backup '$APP_PATH/.backups/$TS/db.sqlite'"
-                  sqlite3 "$APP_PATH/.backups/$TS/db.sqlite" "PRAGMA integrity_check;"
-                else
-                  echo "WARN: no sqlite3 client or DB file not found at $DB_FILE"
-                fi
-                ;;
-              *) echo "INFO: DATABASE_URL is not a local sqlite file; skipping file backup. Ensure a server-side dump runs instead." ;;
-            esac
-            # Fingerprint the secret file WITHOUT copying it into the repo tree.
-            [ -f .env ] && sha256sum .env > "$APP_PATH/.backups/$TS/env.sha256"
+            echo ""
+            echo ">>> Git remote"
 
-            # --- 3. Refuse to deploy a dirty tree -----------------------------
+            git remote -v
+
+            # ================================================================
+            # 2. VERIFY CLEAN WORKING TREE
+            # ================================================================
+
+            echo ""
+            echo ">>> Checking working tree"
+
             if [ -n "$(git status --porcelain)" ]; then
-              echo "FATAL: working tree has uncommitted changes. Not discarding them."
-              git status --porcelain | head -40
+              echo "FATAL: Working tree contains uncommitted changes."
+              git status --short
               exit 1
             fi
 
-            # --- 4. Fetch and check out the exact commit that triggered this --
+            # ================================================================
+            # 3. SAVE CURRENT VERSION FOR ROLLBACK
+            # ================================================================
+
+            PREV_SHA="$(git rev-parse HEAD)"
+
+            echo ""
+            echo "CURRENT_SHA=$PREV_SHA"
+
+            mkdir -p .releases
+            echo "$PREV_SHA" > .releases/deploy-previous
+
+            # ================================================================
+            # 4. BACKUP DATABASE
+            # ================================================================
+
+            TS="$(date -u +%Y%m%d-%H%M%S)"
+
+            mkdir -p ".backups/$TS"
+
+            echo ""
+            echo ">>> Database backup"
+
+            DB_URL=""
+
+            if [ -f .env ]; then
+              DB_URL="$(grep -E '^DATABASE_URL=' .env | head -1 | cut -d= -f2- || true)"
+            fi
+
+            case "$DB_URL" in
+
+              file:*)
+                DB_FILE="${DB_URL#file:}"
+
+                case "$DB_FILE" in
+                  /*)
+                    ;;
+                  *)
+                    DB_FILE="$APP_PATH/$DB_FILE"
+                    ;;
+                esac
+
+                if [ -f "$DB_FILE" ] && command -v sqlite3 >/dev/null 2>&1; then
+
+                  sqlite3 "$DB_FILE" \
+                    ".backup '$APP_PATH/.backups/$TS/db.sqlite'"
+
+                  sqlite3 "$APP_PATH/.backups/$TS/db.sqlite" \
+                    "PRAGMA integrity_check;"
+
+                  echo "SQLite backup created."
+
+                else
+                  echo "WARN: SQLite database backup unavailable."
+                  echo "DB_FILE=$DB_FILE"
+                fi
+                ;;
+
+              *)
+                echo "INFO: Non-SQLite DATABASE_URL."
+                echo "Server-side database dump should be handled separately."
+                ;;
+
+            esac
+
+            if [ -f .env ]; then
+              sha256sum .env > ".backups/$TS/env.sha256"
+            fi
+
+            # ================================================================
+            # 5. FETCH EXACT GITHUB COMMIT
+            # ================================================================
+
+            echo ""
+            echo ">>> Fetching origin/main"
+
             git fetch --prune origin main
-            git checkout "${GITHUB_SHA:-origin/main}"
+
+            TARGET_SHA="${GITHUB_SHA:-$(git rev-parse origin/main)}"
+
+            echo "TARGET_SHA=$TARGET_SHA"
+
+            git checkout "$TARGET_SHA"
+
             NEW_SHA="$(git rev-parse HEAD)"
+
             echo "DEPLOYING_SHA=$NEW_SHA"
 
-            # --- 5. Install, generate, build ----------------------------------
+            # ================================================================
+            # 6. INSTALL DEPENDENCIES
+            # ================================================================
+
+            echo ""
+            echo ">>> Installing dependencies"
+
             bun install --frozen-lockfile
+
+            # ================================================================
+            # 7. PRISMA GENERATE
+            # ================================================================
+
+            echo ""
+            echo ">>> Prisma generate"
+
             bunx prisma generate
 
-            # Show what the schema push WILL do before doing it. There is no
-            # prisma/migrations directory, so db push diffs the live database
-            # directly and cannot be undone except from the backup above.
-            bunx prisma migrate diff \
-              --from-url "$DB_URL" \
-              --to-schema-datamodel prisma/schema.prisma \
-              --script || echo "WARN: could not compute schema diff"
+            # ================================================================
+            # 8. DATABASE SCHEMA
+            # ================================================================
+
+            echo ""
+            echo ">>> Prisma database push"
+
+            if [ -n "$DB_URL" ]; then
+
+              bunx prisma migrate diff \
+                --from-url "$DB_URL" \
+                --to-schema-datamodel prisma/schema.prisma \
+                --script \
+                || echo "WARN: Could not calculate Prisma schema diff."
+
+            else
+
+              echo "WARN: DATABASE_URL not found."
+
+            fi
+
             bunx prisma db push --skip-generate
+
+            # ================================================================
+            # 9. BUILD
+            # ================================================================
+
+            echo ""
+            echo ">>> Production build"
 
             bun run build
 
-            # --- 6. HARD GATE: the build must produce a startable artifact ----
-            # ecosystem.config.js and `bun run start` both require this file.
-            # A failed type check produces no .next/standalone at all, so without
-            # this gate PM2 would be restarted against a missing script path.
-            if [ ! -f .next/standalone/server.js ]; then
-              echo "FATAL: .next/standalone/server.js missing — build did not succeed."
-              echo "       Rolling back to $PREV_SHA"
+            # ================================================================
+            # 10. HARD BUILD GATE
+            # ================================================================
+
+            echo ""
+            echo ">>> Checking standalone build"
+
+            if [ ! -f ".next/standalone/server.js" ]; then
+
+              echo "FATAL: .next/standalone/server.js does not exist."
+
+              echo "Build artifact missing."
+              echo "Rolling back to $PREV_SHA"
+
               git checkout "$PREV_SHA"
+
               bun install --frozen-lockfile
               bunx prisma generate
               bun run build
-              pm2 restart alo-learning-journey --update-env || true
+
+              pm2 restart "$APP_NAME" --update-env || true
+
               exit 1
+
             fi
 
-            # --- 7. Restart ---------------------------------------------------
-            pm2 restart alo-learning-journey --update-env \
-              || pm2 start "bun run start" --name alo-learning-journey
+            echo "Standalone server exists."
+
+            # ================================================================
+            # 11. ENSURE PRISMA CLIENT EXISTS IN STANDALONE
+            # ================================================================
+
+            echo ""
+            echo ">>> Preparing standalone Prisma client"
+
+            mkdir -p \
+              ".next/standalone/node_modules/.prisma"
+
+            if [ -d "node_modules/.prisma/client" ]; then
+
+              rm -rf \
+                ".next/standalone/node_modules/.prisma/client"
+
+              cp -R \
+                "node_modules/.prisma/client" \
+                ".next/standalone/node_modules/.prisma/"
+
+            fi
+
+            # ================================================================
+            # 12. RESTART APPLICATION
+            # ================================================================
+
+            echo ""
+            echo ">>> Restarting PM2"
+
+            if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
+
+              pm2 restart "$APP_NAME" --update-env
+
+            else
+
+              pm2 start ".next/standalone/server.js" \
+                --name "$APP_NAME" \
+                --interpreter bun \
+                --cwd "$APP_PATH"
+
+            fi
+
             pm2 save
+
+            # ================================================================
+            # 13. WAIT FOR APPLICATION
+            # ================================================================
+
+            echo ""
+            echo ">>> Waiting for application"
+
             sleep 8
 
-            # --- 8. Health check that can actually FAIL the deploy ------------
-            # The endpoint now returns HTTP 503 when a critical check fails, so
-            # `curl -f` is meaningful. Previously it always returned 200 with a
-            # hardcoded "PARTIAL" body and this line used `|| echo`, which exits
-            # 0 either way — the job went green on a broken deploy.
-            if ! curl -sf --max-time 20 "$HEALTH_URL"; then
-              echo ""
-              echo "FATAL: HEALTH CHECK FAILED at $HEALTH_URL"
-              echo "       Rolling back to $PREV_SHA"
-              git checkout "$PREV_SHA"
-              bun install --frozen-lockfile
-              bunx prisma generate
-              bun run build || true
-              pm2 restart alo-learning-journey --update-env || true
-              sleep 5
-              curl -sf --max-time 20 "$HEALTH_URL" && echo "Rollback health OK" \
-                || echo "ROLLBACK ALSO UNHEALTHY — intervene manually, restore from .backups/$TS"
-              exit 1
-            fi
+            # ================================================================
+            # 14. HEALTH CHECK
+            # ================================================================
+
             echo ""
-            echo "DEPLOY OK: $NEW_SHA healthy at $HEALTH_URL"
+            echo ">>> Health check"
+
+            if ! curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 20 \
+              "$HEALTH_URL"; then
+
+              echo ""
+              echo "============================================================"
+              echo "FATAL: HEALTH CHECK FAILED"
+              echo "============================================================"
+
+              echo "Attempting rollback to:"
+              echo "$PREV_SHA"
+
+              # --------------------------------------------------------------
+              # Rollback source
+              # --------------------------------------------------------------
+
+              git checkout "$PREV_SHA"
+
+              # --------------------------------------------------------------
+              # Reinstall/build previous version
+              # --------------------------------------------------------------
+
+              bun install --frozen-lockfile
+
+              bunx prisma generate
+
+              bun run build || true
+
+              # --------------------------------------------------------------
+              # Restore standalone Prisma client
+              # --------------------------------------------------------------
+
+              mkdir -p \
+                ".next/standalone/node_modules/.prisma"
+
+              if [ -d "node_modules/.prisma/client" ]; then
+
+                rm -rf \
+                  ".next/standalone/node_modules/.prisma/client"
+
+                cp -R \
+                  "node_modules/.prisma/client" \
+                  ".next/standalone/node_modules/.prisma/"
+
+              fi
+
+              # --------------------------------------------------------------
+              # Restart previous version
+              # --------------------------------------------------------------
+
+              pm2 restart "$APP_NAME" --update-env || true
+
+              pm2 save || true
+
+              sleep 8
+
+              # --------------------------------------------------------------
+              # Verify rollback
+              # --------------------------------------------------------------
+
+              if curl \
+                --fail \
+                --silent \
+                --show-error \
+                --max-time 20 \
+                "$HEALTH_URL"; then
+
+                echo ""
+                echo "ROLLBACK HEALTH CHECK: OK"
+                echo "Restored SHA: $PREV_SHA"
+
+              else
+
+                echo ""
+                echo "============================================================"
+                echo "CRITICAL: ROLLBACK ALSO FAILED"
+                echo "============================================================"
+                echo "Manual intervention required."
+                echo "Backup directory: $APP_PATH/.backups/$TS"
+
+              fi
+
+              exit 1
+
+            fi
+
+            # ================================================================
+            # 15. SUCCESS
+            # ================================================================
+
+            echo ""
+            echo "============================================================"
+            echo "DEPLOYMENT SUCCESSFUL"
+            echo "============================================================"
+            echo "SHA:        $NEW_SHA"
+            echo "APP:        $APP_NAME"
+            echo "PORT:       $PORT"
+            echo "HEALTH:     $HEALTH_URL"
+            echo "BACKUP:     $APP_PATH/.backups/$TS"
+            echo "============================================================"
+
             echo "$NEW_SHA" > .releases/last-known-good
-          script_stop: true
-          script: |
-            export PATH="$HOME/.bun/bin:/usr/local/bin:/usr/bin:$PATH"
-            cd /root/alo-github-verify
-            git pull origin main
-            bun install --frozen-lockfile
-            bun run prisma generate
-            bun run prisma db push
-            bun run build
-            mkdir -p .next/standalone/node_modules/.prisma
-            cp -r node_modules/.prisma/client .next/standalone/node_modules/.prisma/ 2>/dev/null || true
-            pm2 restart alo-learning-journey || pm2 start .next/standalone/server.js --name alo-learning-journey --interpreter bun --cwd /root/alo-github-verify
-            pm2 save
-            sleep 3
-            curl -sf http://localhost:3017/api/health || echo "HEALTH CHECK COMPLETE"
