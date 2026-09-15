@@ -22,3 +22,32 @@ pnpm-debug.log*
 *.sqlite
 *.sqlite3
 *.db
+
+# --- added by the deployment audit (see audit/02-VERIFIED-FINDINGS.md F6) ------
+
+# Application backups are real SQLite database copies. The .alo.bak format is
+# only XOR-obfuscated with a key that is hardcoded in src/app/api/backups/route.ts
+# ("alo-backup-2024"), so it is NOT encryption — committing one publishes the
+# database. One such file (383 rows) was already committed and is being removed.
+storage/backups/
+
+# Generated media. ~19 MB of build/run output was being tracked, which dominated
+# the repository size. NOTE: the 19 already-tracked files under storage/videos/
+# and storage/scene-assets/ are deliberately LEFT tracked for now — rows in
+# MediaGeneration / PublishedPost may reference those paths, so removing them
+# could break stored references on a fresh deploy. Ignoring them here only stops
+# NEW generated media from being committed. Decide separately whether to migrate
+# existing media to object storage.
+storage/videos/
+storage/scene-assets/
+
+# Next.js / TypeScript build byproducts (both appeared as untracked after a build)
+next-env.d.ts
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Per-deploy artefacts created by .github/workflows/deploy.yml on the VPS.
+# These must never be committed: .backups/ holds a database copy and a
+# fingerprint of .env, and .releases/ records rollback SHAs.
+.backups/
+.releases/
