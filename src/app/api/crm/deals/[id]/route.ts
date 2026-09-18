@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
+import { emitEvent } from '@/lib/events';
 
 // PATCH /api/crm/deals/[id] — update deal (stage changes from kanban DnD hit this)
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -39,6 +40,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const deal = await db.deal.update({ where: { id }, data: update });
+
+    // Fire event when stage changes (especially deal.won, deal.lost)
+    if (data.stage && data.stage !== existing.stage) {
+      await emitEvent({
+        companyId: payload.companyId,
+        userId: payload.userId,
+        type: data.stage === 'won' ? 'deal.won' : data.stage === 'lost' ? 'deal.lost' : 'deal.stage_changed',
+        title: data.stage === 'won' ? '🎉 Deal won!' : data.stage === 'lost' ? 'Deal lost' : 'Deal moved',
+        description: `Deal "${deal.name}" moved from ${existing.stage} → ${data.stage} ($${deal.value})`,
+        resourceType: 'deal',
+        resourceId: id,
+        link: '/crm',
+        metadata: {
+          dealName: deal.name,
+          value: deal.value,
+          oldStage: existing.stage,
+          newStage: data.stage,
+        },
+      });
+    }
+
     return NextResponse.json({ deal });
   } catch (err) {
     console.error('[PATCH /api/crm/deals/[id]]', err);

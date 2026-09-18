@@ -97,3 +97,90 @@ Stage Summary:
 - Dev server: Next.js 16.3.5 (Turbopack) running on port 3000
 - Preview URL: https://preview-6aac8406.space-z.ai/
 - Login: admin@marketingos.com / admin123
+
+---
+Task ID: marketingos-real-2
+Agent: Main Orchestrator
+Task: Round 2 audit — add missing Notification/Message/Announcement models, event bus, webhook firing, CSV import/export, command palette, activity feed
+
+Work Log:
+- Audited previous build — found 6 broken endpoints (notifications/messages/announcements/audit-logs/users all returned HTTP 500 because the models didn't exist in Prisma schema; previous db push had silently dropped them)
+- Added 4 new Prisma models with proper relations + indexes:
+  * Notification (userId, type, title, message, link, isRead, readAt, metadata)
+  * Message (senderId, recipientId, content, isRead, readAt, with sender+recipient User relations)
+  * Announcement (title, content, priority, targetRoles, isActive, expiresAt, createdBy, companyId)
+  * Activity (companyId, userId, type, description, resourceType, resourceId, metadata)
+- Updated Company + User models to include reverse relations for new models
+- Created src/lib/events.ts — central event bus with `emitEvent()` that performs 4 side-effects atomically:
+  1. Creates Notification records for each recipient (skips the actor)
+  2. Writes an AuditLog row
+  3. Writes an Activity row (for company-wide feed)
+  4. Fires registered Webhooks via fetch with HMAC-SHA256 signature + 10s timeout
+- Wired `emitEvent()` into all existing CRUD endpoints:
+  * POST /api/crm/leads → fires `lead.created`
+  * PATCH /api/crm/leads/[id] → fires `lead.status_changed` (when status changes)
+  * POST /api/crm/deals → fires `deal.created`
+  * PATCH /api/crm/deals/[id] → fires `deal.won` / `deal.lost` / `deal.stage_changed` (from kanban DnD)
+  * POST /api/crm/contacts → fires `contact.created`
+  * POST /api/crm/tickets → fires `ticket.created` or `ticket.critical_created` (for high priority)
+  * POST /api/campaigns → fires `campaign.created`
+  * POST /api/content → fires `content.created` or `content.published`
+  * POST /api/announcements → fires `announcement.posted` (with role-filtered recipients)
+  * POST /api/messages → fires `message.sent` (notification to recipient only)
+- Rewrote 5 broken API endpoints to be company-scoped + use new models:
+  * /api/notifications GET (returns { data, unreadCount })
+  * /api/notifications/read-all POST (marks all as read)
+  * /api/notifications/[id]/read POST (marks single as read)
+  * /api/messages GET (returns threads grouped by partner) + POST (sends to recipientIds[])
+  * /api/messages/[id] GET (returns full thread between me and other user, marks unread as read)
+  * /api/announcements GET + POST (admin+ only) — company-scoped, no more institutionId
+  * /api/announcements/[id] PATCH + DELETE
+  * /api/audit-logs GET — returns { items, pagination } shape (avoids api-client auto-unwrap)
+  * /api/users GET + POST — rewritten without education-era `institutionId`/`roleRel`/`studentProfile` fields; exposes `userId` for messaging
+  * /api/team — added `userId` field to member response so frontend can address messages correctly
+- Created 2 new API endpoints:
+  * /api/activity-feed GET — returns recent activities + type-stats aggregation
+  * /api/leads/import POST — RFC-4180-compliant CSV parser, supports file upload or raw CSV text, validates statuses/sources, returns { created, skipped, errors }
+  * /api/leads/export GET — downloads real CSV with proper escaping (handles commas, quotes, newlines)
+- Built 2 new React components:
+  * src/components/notifications-bell.tsx — bell icon with badge count, dropdown showing recent notifications, 30s polling, mark-all-read + mark-one-read, type-specific emoji icons (🎉🤝👤🎫📣📝💬📢🔍🔔)
+  * src/components/command-palette.tsx — Cmd+K / Ctrl+K palette with:
+    - 14 nav commands (Dashboard, CRM, Campaigns, Content, Analytics, etc.)
+    - 4 action commands (Add Lead, Export CSV, Import CSV, Open Notifications)
+    - Keyboard nav (↑↓ to move, Enter to select, Esc to close)
+    - Grouped results (Navigate / Actions)
+    - Hover + keyboard sync
+- Wired both components into AppHeader in page.tsx (replaced static Bell button)
+- Added 3 views to sidebar nav + ViewId type + lazy imports:
+  * Messages (under "Reports" section)
+  * Announcements (under "Reports")
+  * Audit Logs (under "Reports")
+- Fixed announcements-view to use `useAppStore` instead of broken `useAuth` (AuthProvider not set up)
+- Fixed audit-logs-view data shape mismatch (was reading `items` from API that returned `data`)
+- Created prisma/seed-engagement.ts — seeds:
+  * 4 announcements (3 active, 1 archived example)
+  * 36 activity feed entries (lead/deal/ticket/system events)
+  * 18 notifications across 6 users (3 per user: welcome, deal.won, lead.created)
+  * 1 sample message thread between Admin and Sarah Chen
+
+Stage Summary:
+- All 26 endpoints return HTTP 200 (was 6 broken before)
+- All 4 new event-bus side-effects verified working:
+  1. ✓ Notifications created on lead/deal/contact/ticket/campaign/content/announcement/message CRUD
+  2. ✓ Audit logs written for every event (40 total now)
+  3. ✓ Activity feed populated (30 entries, with type stats)
+  4. ✓ Webhooks fire to registered URLs with HMAC signature (5 attempts logged)
+- Browser-verified via Agent Browser:
+  * Bell icon dropdown shows 3 real notifications with type icons
+  * Cmd+K palette opens with 14 nav commands + 4 actions
+  * Messages view shows 2 real threads (James Wilson, Sarah Chen with 2 unread)
+  * Announcements view shows 9 announcements with create/edit/delete
+  * Audit Logs view shows 40 entries with user/action/resource/details
+  * CRM Leads tab has Import/Export CSV buttons (file upload + download)
+- Final data volumes:
+  * 40 audit log entries (was 0)
+  * 30 activity feed entries (was 0)
+  * 9 announcements (was 0)
+  * 3+ notifications per user (was 0)
+  * 2 message threads (was 0)
+  * 1 registered webhook (fires on lead.created)

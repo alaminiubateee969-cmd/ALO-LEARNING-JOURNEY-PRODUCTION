@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAppStore } from "@/stores/app-store";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
@@ -25,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Plus, Search, Users, Handshake, Contact as ContactIcon, Ticket as TicketIcon,
   Loader2, ChevronRight, DollarSign, Building2, Mail, Briefcase, X, AlertCircle,
-  TrendingUp, Filter, Trash2, Pencil, Phone, MessageSquare,
+  TrendingUp, Filter, Trash2, Pencil, Phone, MessageSquare, Upload, Download,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -213,9 +213,59 @@ function LeadsTab({ leads, isLoading, reload }: { leads: Lead[]; isLoading: bool
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: "", email: "", company: "", source: "Website", phone: "", status: "new", notes: "",
   });
+
+  const handleExportCsv = useCallback(async () => {
+    try {
+      const res = await fetch("/api/leads/export", { headers: authHeaders() });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `leads-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Leads exported as CSV");
+    } catch {
+      toast.error("Failed to export leads");
+    }
+  }, []);
+
+  const handleImportCsv = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const formDataObj = new FormData();
+      formDataObj.append("file", file);
+      const token = getToken();
+      const res = await fetch("/api/leads/import", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formDataObj,
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || `HTTP ${res.status}`);
+      }
+      const json = await res.json();
+      const result = json.data || json;
+      toast.success(`Imported ${result.created} leads (${result.skipped} skipped)`);
+      reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to import leads");
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = ""; // reset for re-import
+    }
+  }, [reload]);
 
   const filtered = useMemo(() => {
     let result = leads;
@@ -353,13 +403,41 @@ function LeadsTab({ leads, isLoading, reload }: { leads: Lead[]; isLoading: bool
             </SelectContent>
           </Select>
         </div>
-        <Button
-          size="sm"
-          onClick={openCreate}
-          className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-md shadow-orange-500/25"
-        >
-          <Plus className="h-4 w-4 mr-1.5" /> Add Lead
-        </Button>
+        <div className="flex items-center gap-2">
+          <input
+            type="file"
+            accept=".csv"
+            ref={fileInputRef}
+            onChange={handleImportCsv}
+            className="hidden"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            title="Import leads from CSV"
+          >
+            {importing ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />}
+            Import
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExportCsv}
+            title="Export all leads as CSV"
+          >
+            <Download className="h-4 w-4 mr-1.5" />
+            Export
+          </Button>
+          <Button
+            size="sm"
+            onClick={openCreate}
+            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-md shadow-orange-500/25"
+          >
+            <Plus className="h-4 w-4 mr-1.5" /> Add Lead
+          </Button>
+        </div>
       </div>
 
       {filtered.length === 0 ? (

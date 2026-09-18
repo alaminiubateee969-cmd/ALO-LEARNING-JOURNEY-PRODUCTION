@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
+import { emitEvent } from '@/lib/events';
 
 // GET /api/crm/deals — list all deals, optionally filtered by stage
 export async function GET(req: NextRequest) {
@@ -65,6 +66,19 @@ export async function POST(req: NextRequest) {
         notes: data.notes ? String(data.notes) : null,
         companyId: payload.companyId,
       },
+    });
+
+    // Fire event: new deal created
+    await emitEvent({
+      companyId: payload.companyId,
+      userId: payload.userId,
+      type: 'deal.created',
+      title: 'New deal created',
+      description: `Deal "${deal.name}" created (${deal.stage}, $${deal.value})`,
+      resourceType: 'deal',
+      resourceId: deal.id,
+      link: '/crm',
+      metadata: { dealName: deal.name, value: deal.value, stage: deal.stage },
     });
 
     return NextResponse.json({ deal });

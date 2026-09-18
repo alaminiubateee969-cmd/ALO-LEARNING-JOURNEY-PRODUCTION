@@ -1,130 +1,131 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { withAuth } from "@/lib/api-middleware";
-import { sanitizeInput, createAuditLog, ipFromRequest } from "@/lib/security";
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { verifyToken } from '@/lib/auth';
+import { emitEvent } from '@/lib/events';
 
-export const GET = withAuth(async (request, { user }) => {
+// GET /api/messages — list current user's threads (most recent message per partner)
+export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
+    const payload = await verifyToken(token);
+    if (!payload || !payload.userId) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
 
-    const skip = (page - 1) * limit;
+    const userId = payload.userId;
 
-    // Get messages sent by the user
-    const sent = await db.message.findMany({
-      where: { senderId: user.userId },
+    // Get all messages where I'm sender or recipient
+    const allMessages = await db.message.findMany({
+      where: {
+        OR: [{ senderId: userId }, { recipientId: userId }],
+      },
       include: {
         sender: { select: { id: true, name: true, email: true, avatar: true } },
-        recipients: {
-          include: {
-            user: { select: { id: true, name: true, email: true, avatar: true } },
-          },
-        },
+        recipient: { select: { id: true, name: true, email: true, avatar: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
 
-    // Get messages received by the user
-    const received = await db.messageRecipient.findMany({
-      where: { userId: user.userId },
-      include: {
-        message: {
-          include: {
-            sender: { select: { id: true, name: true, email: true, avatar: true } },
-            recipients: {
-              include: {
-                user: { select: { id: true, name: true, email: true, avatar: true } },
-              },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    // Group into threads — one thread per "other user"
+    const threadMap = new Map<string, {
+      otherUser: any;
+      lastMessage: any;
+      unreadCount: number;
+    }>();
 
-    // Combine and deduplicate
-    const allMessages = new Map<string, unknown>();
-    for (const msg of sent) {
-      allMessages.set(msg.id, { ...msg, direction: "sent" });
-    }
-    for (const rec of received) {
-      if (!allMessages.has(rec.messageId)) {
-        allMessages.set(rec.messageId, {
-          ...rec.message,
-          isRead: rec.isRead,
-          readAt: rec.readAt,
-          direction: "received",
+    for (const msg of allMessages) {
+      const otherUserId = msg.senderId === userId ? msg.recipientId : msg.senderId;
+      const otherUser = msg.senderId === userId ? msg.recipient : msg.sender;
+      const existing = threadMap.get(otherUserId);
+
+      // unreadCount = messages where I'm the recipient and isRead is false
+      const contributesUnread = msg.recipientId === userId && !msg.isRead;
+
+      if (!existing) {
+        threadMap.set(otherUserId, {
+          otherUser,
+          lastMessage: {
+            id: msg.id,
+            content: msg.content,
+            createdAt: msg.createdAt.toISOString(),
+            isRead: msg.isRead,
+            senderId: msg.senderId,
+          },
+          unreadCount: contributesUnread ? 1 : 0,
         });
+      } else {
+        if (contributesUnread) existing.unreadCount++;
+        // lastMessage is the most recent (since we sorted desc)
       }
     }
 
-    const sorted = Array.from(allMessages.values()).sort(
-      (a, b) => new Date((b as Record<string, unknown>).createdAt as string).getTime() - new Date((a as Record<string, unknown>).createdAt as string).getTime()
+    // Return as array sorted by lastMessage createdAt desc (already in that order due to SQL ORDER BY)
+    return NextResponse.json({
+      data: Array.from(threadMap.values()),
+    });
+  } catch (err) {
+    console.error('[GET /api/messages]', err);
+    return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 });
+  }
+}
+
+// POST /api/messages — send a message to one or more recipients
+export async function POST(req: NextRequest) {
+  try {
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
+    const payload = await verifyToken(token);
+    if (!payload || !payload.userId) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { recipientIds, content } = body;
+    if (!recipientIds || !Array.isArray(recipientIds) || recipientIds.length === 0) {
+      return NextResponse.json({ error: 'recipientIds array is required' }, { status: 400 });
+    }
+    if (!content || !String(content).trim()) {
+      return NextResponse.json({ error: 'content is required' }, { status: 400 });
+    }
+
+    // Create one message per recipient
+    const messages = await Promise.all(
+      recipientIds.map((recipientId: string) =>
+        db.message.create({
+          data: {
+            content: String(content),
+            senderId: payload.userId,
+            recipientId,
+            isRead: false,
+          },
+          include: {
+            sender: { select: { id: true, name: true, email: true, avatar: true } },
+            recipient: { select: { id: true, name: true, email: true, avatar: true } },
+          },
+        }),
+      ),
     );
 
-    // Paginate after combining
-    const paginated = sorted.slice(skip, skip + limit);
-
-    return NextResponse.json({
-      data: paginated,
-      pagination: {
-        page,
-        limit,
-        total: sorted.length,
-        totalPages: Math.ceil(sorted.length / limit),
-      },
-    });
-  } catch (error) {
-    console.error("Messages GET error:", error);
-    return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 });
-  }
-});
-
-export const POST = withAuth(async (request, { user }) => {
-  try {
-    const body = await request.json();
-    const content = sanitizeInput(body.content);
-    const recipientIds: string[] = body.recipientIds || [];
-
-    if (!content) {
-      return NextResponse.json({ error: "Content is required" }, { status: 400 });
+    // Fire notification + activity + webhook for each message
+    for (const msg of messages) {
+      await emitEvent({
+        companyId: payload.companyId,
+        userId: payload.userId,
+        type: 'message.sent',
+        title: 'New message',
+        description: `${msg.sender.name} sent you a message: "${msg.content.slice(0, 60)}${msg.content.length > 60 ? '...' : ''}"`,
+        resourceType: 'message',
+        resourceId: msg.id,
+        link: '/messages',
+        recipientIds: [msg.recipientId],
+        metadata: { content: msg.content },
+      });
     }
 
-    if (recipientIds.length === 0) {
-      return NextResponse.json({ error: "At least one recipient is required" }, { status: 400 });
-    }
-
-    const message = await db.message.create({
-      data: {
-        content,
-        senderId: user.userId,
-        recipients: {
-          create: recipientIds.map((userId: string) => ({ userId })),
-        },
-      },
-      include: {
-        sender: { select: { id: true, name: true, email: true, avatar: true } },
-        recipients: {
-          include: {
-            user: { select: { id: true, name: true, email: true, avatar: true } },
-          },
-        },
-      },
-    });
-
-    await createAuditLog({
-      userId: user.userId,
-      action: "create",
-      resource: "message",
-      resourceId: message.id,
-      details: { recipientCount: recipientIds.length },
-      ipAddress: ipFromRequest(request),
-    });
-
-    return NextResponse.json({ data: message }, { status: 201 });
-  } catch (error) {
-    console.error("Messages POST error:", error);
-    return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+    return NextResponse.json({ data: messages }, { status: 201 });
+  } catch (err) {
+    console.error('[POST /api/messages]', err);
+    return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
   }
-});
+}

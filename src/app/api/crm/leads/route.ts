@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
+import { emitEvent } from '@/lib/events';
 
 // GET /api/crm/leads — list all leads for the current company
 export async function GET(req: NextRequest) {
@@ -76,6 +77,19 @@ export async function POST(req: NextRequest) {
         content: 'Lead created',
         leadId: lead.id,
       },
+    });
+
+    // Fire events: notification + audit log + activity feed + webhooks
+    await emitEvent({
+      companyId: payload.companyId,
+      userId: payload.userId,
+      type: 'lead.created',
+      title: 'New lead created',
+      description: `Lead "${lead.name}" from ${lead.companyName || 'Unknown'} was created (source: ${lead.source})`,
+      resourceType: 'lead',
+      resourceId: lead.id,
+      link: '/crm',
+      metadata: { leadName: lead.name, source: lead.source, score: lead.score },
     });
 
     return NextResponse.json({ lead });

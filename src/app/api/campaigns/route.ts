@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
+import { emitEvent } from '@/lib/events';
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,6 +45,19 @@ export async function POST(req: NextRequest) {
     if (data.endDate) createData.endDate = new Date(data.endDate);
     if (data.budget !== undefined) createData.budget = Number(data.budget);
     const campaign = await db.campaign.create({ data: createData });
+
+    // Fire event: campaign created
+    await emitEvent({
+      companyId: payload.companyId,
+      userId: payload.userId,
+      type: 'campaign.created',
+      title: 'New campaign created',
+      description: `Campaign "${campaign.name}" created (${campaign.type}, $${campaign.budget || 0} budget)`,
+      resourceType: 'campaign',
+      resourceId: campaign.id,
+      link: '/campaigns',
+      metadata: { name: campaign.name, type: campaign.type, budget: campaign.budget },
+    });
 
     return NextResponse.json({ campaign });
   } catch {

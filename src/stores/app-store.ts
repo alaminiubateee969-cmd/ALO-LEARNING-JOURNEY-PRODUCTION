@@ -10,9 +10,12 @@ export type ViewId =
   | 'crm'
   | 'seo'
   | 'campaigns'
-  | 'content-calendar'
+  | 'content'
   | 'analytics'
   | 'team'
+  | 'messages'
+  | 'announcements'
+  | 'audit-logs'
   | 'subscriptions'
   | 'settings'
   | 'ai-agents';

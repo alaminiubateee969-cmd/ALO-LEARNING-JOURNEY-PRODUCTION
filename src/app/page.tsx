@@ -10,6 +10,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { NotificationsBell } from '@/components/notifications-bell';
+import { CommandPalette } from '@/components/command-palette';
 import {
   LayoutDashboard,
   Link2,
@@ -49,6 +51,9 @@ const WorkforceView = lazy(() => import('@/components/views/workforce-view').the
 const AiAgentsView = lazy(() => import('@/components/views/ai-agents-view').then(m => ({ default: m.AiAgentsView })));
 const SettingsView = lazy(() => import('@/components/views/settings-view').then(m => ({ default: m.SettingsView })));
 const IntegrationsView = lazy(() => import('@/components/views/integrations-view').then(m => ({ default: m.IntegrationsView })));
+const MessagesView = lazy(() => import('@/components/views/messages-view'));
+const AnnouncementsView = lazy(() => import('@/components/views/announcements-view'));
+const AuditLogsView = lazy(() => import('@/components/views/audit-logs-view'));
 
 const views: Record<ViewId, React.LazyExoticComponent<React.ComponentType>> = {
   dashboard: DashboardView,
@@ -62,6 +67,9 @@ const views: Record<ViewId, React.LazyExoticComponent<React.ComponentType>> = {
   content: ContentView,
   analytics: AnalyticsView,
   team: TeamView,
+  messages: MessagesView,
+  announcements: AnnouncementsView,
+  'audit-logs': AuditLogsView,
   'ai-agents': AiAgentsView,
   integrations: IntegrationsView,
   subscriptions: SettingsView,
@@ -89,6 +97,9 @@ const navItems: NavItem[] = [
   { id: 'campaigns', label: 'Campaigns', icon: <Megaphone className="w-4 h-4" />, section: 'Marketing' },
   { id: 'content', label: 'Content', icon: <FileText className="w-4 h-4" />, section: 'Marketing' },
   { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="w-4 h-4" />, section: 'Reports' },
+  { id: 'messages', label: 'Messages', icon: <Bell className="w-4 h-4" />, section: 'Reports' },
+  { id: 'announcements', label: 'Announcements', icon: <Megaphone className="w-4 h-4" />, section: 'Reports' },
+  { id: 'audit-logs', label: 'Audit Logs', icon: <FileText className="w-4 h-4" />, section: 'Reports' },
   { id: 'team', label: 'Team', icon: <UserCog className="w-4 h-4" />, section: 'Management' },
   { id: 'subscriptions', label: 'Subscription', icon: <CreditCard className="w-4 h-4" />, section: 'Management' },
   { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, section: 'Management' },
@@ -238,12 +249,14 @@ function AppHeader() {
       )}
 
       <div className="ml-auto flex items-center gap-2">
+        {/* Cmd+K command palette trigger */}
+        <CommandPalette />
+
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-9 w-9 relative">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
-            </Button>
+            <div>
+              <NotificationsBell />
+            </div>
           </TooltipTrigger>
           <TooltipContent>Notifications</TooltipContent>
         </Tooltip>

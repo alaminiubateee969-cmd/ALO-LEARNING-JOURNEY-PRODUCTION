@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useApiQuery, useApiMutation } from "@/hooks/use-api-query";
-import { useAuth } from "@/hooks/use-auth";
+import { useAppStore } from "@/stores/app-store";
 import {
   Card,
   CardContent,
@@ -112,8 +112,8 @@ function AnnouncementsSkeleton() {
 }
 
 export default function AnnouncementsView() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin" || user?.isSuperAdmin;
+  const { user } = useAppStore();
+  const isAdmin = user?.role === "admin" || user?.role === "company_owner" || user?.role === "super_admin" || user?.role === "manager";
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);

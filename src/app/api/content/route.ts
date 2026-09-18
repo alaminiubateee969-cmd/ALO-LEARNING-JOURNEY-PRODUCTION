@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
+import { emitEvent } from '@/lib/events';
 
 export async function GET(req: NextRequest) {
   try {
@@ -43,6 +44,19 @@ export async function POST(req: NextRequest) {
     if (data.publishedAt) createData.publishedAt = new Date(data.publishedAt);
     createData.aiGenerated = data.aiGenerated || false;
     const content = await db.content.create({ data: createData });
+
+    // Fire event: content created (or content.published if status=published)
+    await emitEvent({
+      companyId: payload.companyId,
+      userId: payload.userId,
+      type: content.status === 'published' ? 'content.published' : 'content.created',
+      title: content.status === 'published' ? 'Content published' : 'New content created',
+      description: `"${content.title}" (${content.type}${content.platform ? ', ' + content.platform : ''})`,
+      resourceType: 'content',
+      resourceId: content.id,
+      link: '/content',
+      metadata: { title: content.title, type: content.type, platform: content.platform, status: content.status },
+    });
 
     return NextResponse.json({ content });
   } catch {

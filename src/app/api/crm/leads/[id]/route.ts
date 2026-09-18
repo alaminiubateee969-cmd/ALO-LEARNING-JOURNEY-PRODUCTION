@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
+import { emitEvent } from '@/lib/events';
 
 // GET /api/crm/leads/[id]
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -63,6 +64,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           content: `Status changed from ${existing.status} → ${data.status}`,
           leadId: id,
         },
+      });
+
+      // Fire event for status change — including "deal.won" if relevant
+      const isWon = data.status === 'won' || data.status === 'qualified';
+      await emitEvent({
+        companyId: payload.companyId,
+        userId: payload.userId,
+        type: `lead.status_changed`,
+        title: `Lead status updated`,
+        description: `Lead "${lead.name}" status: ${existing.status} → ${data.status}`,
+        resourceType: 'lead',
+        resourceId: id,
+        link: '/crm',
+        metadata: { oldStatus: existing.status, newStatus: data.status, leadName: lead.name },
       });
     }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
+import { emitEvent } from '@/lib/events';
 
 // GET /api/crm/tickets
 export async function GET(req: NextRequest) {
@@ -62,6 +63,19 @@ export async function POST(req: NextRequest) {
         },
       });
     }
+
+    // Fire event: ticket created (notifies assignee + admins)
+    await emitEvent({
+      companyId: payload.companyId,
+      userId: payload.userId,
+      type: ticket.priority === 'critical' ? 'ticket.critical_created' : 'ticket.created',
+      title: ticket.priority === 'critical' ? '🔴 Critical ticket created' : 'New support ticket',
+      description: `Ticket "${ticket.subject}" (${ticket.priority} priority)`,
+      resourceType: 'ticket',
+      resourceId: ticket.id,
+      link: '/crm',
+      metadata: { subject: ticket.subject, priority: ticket.priority, status: ticket.status },
+    });
 
     return NextResponse.json({ ticket });
   } catch (err) {

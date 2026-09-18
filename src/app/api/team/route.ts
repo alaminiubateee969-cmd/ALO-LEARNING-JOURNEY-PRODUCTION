@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
     // Transform to the shape the frontend expects
     const transformedMembers = members.map((m) => ({
       id: m.id,
+      userId: m.user.id,  // expose the actual User.id for messaging
       name: m.user.name,
       email: m.user.email,
       role: ROLE_LABELS[m.role] || m.role,

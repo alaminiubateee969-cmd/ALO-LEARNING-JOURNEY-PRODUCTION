@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
+import { emitEvent } from '@/lib/events';
 
 // GET /api/crm/contacts
 export async function GET(req: NextRequest) {
@@ -52,6 +53,18 @@ export async function POST(req: NextRequest) {
         notes: data.notes ? String(data.notes) : null,
         companyId: payload.companyId,
       },
+    });
+
+    await emitEvent({
+      companyId: payload.companyId,
+      userId: payload.userId,
+      type: 'contact.created',
+      title: 'New contact added',
+      description: `Contact "${contact.name}"${contact.companyName ? ' from ' + contact.companyName : ''} was added`,
+      resourceType: 'contact',
+      resourceId: contact.id,
+      link: '/crm',
+      metadata: { name: contact.name, companyName: contact.companyName },
     });
 
     return NextResponse.json({ contact });
