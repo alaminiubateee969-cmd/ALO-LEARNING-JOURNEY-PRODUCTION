@@ -1,6 +1,7 @@
 'use client';
 
 import React, { lazy, Suspense, useEffect } from 'react';
+import Image from 'next/image';
 import { ThemeProvider } from 'next-themes';
 import { useAppStore, type ViewId } from '@/stores/app-store';
 import { LoginView } from '@/components/views/login-view';
@@ -142,12 +143,17 @@ function Sidebar() {
       `}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-border/50 shrink-0">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-chart-2 flex items-center justify-center shrink-0">
-            <Zap className="w-5 h-5 text-white" />
-          </div>
+          <Image
+            src="/kexsio-logo.png"
+            alt="Kexsio MarketingOS"
+            width={36}
+            height={36}
+            className="rounded-lg shrink-0"
+            priority
+          />
           {isSidebarOpen && (
             <span className="font-bold text-lg bg-gradient-to-r from-primary to-chart-2 bg-clip-text text-transparent whitespace-nowrap">
-              MarketingOS
+              Kexsio MarketingOS
             </span>
           )}
           <Button variant="ghost" size="icon" className="ml-auto md:hidden h-8 w-8" onClick={() => setSidebarOpen(false)}>
@@ -305,7 +311,7 @@ function AppContent() {
           </main>
         </ScrollArea>
         <footer className="mt-auto shrink-0 border-t px-4 py-2 text-center text-[10px] text-muted-foreground bg-card/50">
-          MarketingOS — AI-Powered Marketing Operating System
+          Kexsio MarketingOS — AI-Powered Marketing Operating System
         </footer>
       </div>
     </div>
@@ -343,10 +349,15 @@ function AppShell() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-chart-2 flex items-center justify-center animate-pulse">
-            <Zap className="w-6 h-6 text-white" />
-          </div>
-          <p className="text-sm text-muted-foreground">Loading MarketingOS...</p>
+          <Image
+            src="/kexsio-logo.png"
+            alt="Kexsio MarketingOS"
+            width={64}
+            height={64}
+            className="rounded-xl animate-pulse"
+            priority
+          />
+          <p className="text-sm text-muted-foreground">Loading Kexsio MarketingOS...</p>
         </div>
       </div>
     );

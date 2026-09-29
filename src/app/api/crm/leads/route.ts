@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
 import { emitEvent } from '@/lib/events';
+import { autoScoreLead } from '@/lib/agent-runtime';
 
 // GET /api/crm/leads — list all leads for the current company
 export async function GET(req: NextRequest) {
@@ -90,6 +91,19 @@ export async function POST(req: NextRequest) {
       resourceId: lead.id,
       link: '/crm',
       metadata: { leadName: lead.name, source: lead.source, score: lead.score },
+    });
+
+    // Auto-score the lead via the Lead Qualifier AI agent (async — doesn't block the response)
+    autoScoreLead(payload.companyId, lead.id, {
+      name: lead.name,
+      email: lead.email,
+      phone: lead.phone,
+      companyName: lead.companyName,
+      source: lead.source,
+      score: lead.score,
+    }).catch((err) => {
+      console.error('[autoScoreLead] failed:', err);
+      // Don't fail the lead creation if scoring fails — it's a background task
     });
 
     return NextResponse.json({ lead });

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
 
-const PLATFORMS = ['Facebook', 'Instagram', 'LinkedIn', 'X', 'YouTube', 'TikTok', 'Pinterest', 'Telegram', 'WhatsApp'];
+const PLATFORMS = ['Facebook', 'Instagram', 'LinkedIn', 'X', 'YouTube', 'TikTok', 'Pinterest', 'Telegram'];
 
 const PLATFORM_REQUIREMENTS: Record<string, { oauthUrl?: string; scopes: string[]; needsBusinessVerification: boolean; setupGuide: string[] }> = {
   Facebook: { oauthUrl: 'https://developers.facebook.com', scopes: ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'instagram_basic', 'instagram_content_publish'], needsBusinessVerification: true, setupGuide: ['Create a Facebook App in Meta Developer Portal', 'Add Facebook Login product', 'Configure OAuth redirect URI', 'Request required permissions', 'Submit for app review'] },
@@ -13,7 +13,6 @@ const PLATFORM_REQUIREMENTS: Record<string, { oauthUrl?: string; scopes: string[
   TikTok: { oauthUrl: 'https://developers.tiktok.com', scopes: ['user.info.basic', 'video.publish'], needsBusinessVerification: true, setupGuide: ['Register as TikTok Developer', 'Create an app', 'Set up webhooks', 'Apply for video.publish scope'] },
   Pinterest: { oauthUrl: 'https://developers.pinterest.com', scopes: ['boards:read', 'pins:read', 'pins:write'], needsBusinessVerification: false, setupGuide: ['Create Pinterest Developer Account', 'Create an App', 'Get OAuth credentials'] },
   Telegram: { oauthUrl: 'https://my.telegram.org', scopes: [], needsBusinessVerification: false, setupGuide: ['Create a Telegram Bot via @BotFather', 'Get Bot API Token', 'Set webhook URL for bot'] },
-  WhatsApp: { oauthUrl: 'https://business.facebook.com', scopes: ['whatsapp_business_management', 'whatsapp_business_messaging'], needsBusinessVerification: true, setupGuide: ['Create a Meta Business Account', 'Set up WhatsApp Business API', 'Configure webhook endpoint', 'Get API access token'] },
 };
 
 export async function GET(req: NextRequest) {

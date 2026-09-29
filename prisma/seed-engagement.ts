@@ -30,7 +30,7 @@ async function main() {
   console.log('  → Announcements...');
   const announcements = [
     {
-      title: 'Welcome to MarketingOS 🎉',
+      title: 'Welcome to Kexsio MarketingOS 🎉',
       content: 'Your AI-powered marketing operating system is ready. Check the dashboard for an overview of leads, deals, and campaigns. Press Ctrl+K (or Cmd+K on Mac) anytime to open the command palette.',
       priority: 'high',
       targetRoles: 'all',
@@ -131,7 +131,7 @@ async function main() {
       companyId,
       userId: adminUser.id,
       type: 'system',
-      description: 'MarketingOS platform initialized — 120 integrations, 2000 AI employees, 9 AI agents ready',
+      description: 'Kexsio MarketingOS platform initialized — 120 integrations, 2000 AI employees, 9 AI agents ready',
       resourceType: null,
       resourceId: null,
       metadata: JSON.stringify({ version: '1.0.0' }),
@@ -157,7 +157,7 @@ async function main() {
   // Send a welcome notification to each team member
   for (const member of teamMembers) {
     const exists = await prisma.notification.findFirst({
-      where: { userId: member.userId, type: 'system', title: 'Welcome to MarketingOS' },
+      where: { userId: member.userId, type: 'system', title: 'Welcome to Kexsio MarketingOS' },
     });
     if (exists) continue;
 
@@ -165,7 +165,7 @@ async function main() {
       data: {
         userId: member.userId,
         type: 'system',
-        title: 'Welcome to MarketingOS 👋',
+        title: 'Welcome to Kexsio MarketingOS 👋',
         message: 'Your AI-powered marketing command center is ready. Check the dashboard to see your latest metrics.',
         link: '/dashboard',
         isRead: false,

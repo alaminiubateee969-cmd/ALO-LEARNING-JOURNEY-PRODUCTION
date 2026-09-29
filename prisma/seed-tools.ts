@@ -348,71 +348,6 @@ const TOOLS: ToolSeed[] = [
     color: '#E4405F',
     sortOrder: 15,
   },
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // WHATSAPP (3 tools, 016–018)
-  // ═══════════════════════════════════════════════════════════════════════════
-  {
-    toolNumber: 16,
-    name: 'WhatsApp Cloud API',
-    url: 'https://developers.facebook.com/docs/whatsapp/cloud-api',
-    authType: 'api_key',
-    requiredCredentials: creds([
-      { key: 'WHATSAPP_ACCESS_TOKEN', label: 'WhatsApp Access Token', isSecret: true },
-      { key: 'WHATSAPP_PHONE_NUMBER_ID', label: 'Phone Number ID', isSecret: false },
-      { key: 'WHATSAPP_BUSINESS_ACCOUNT_ID', label: 'Business Account ID', isSecret: false },
-    ]),
-    connectionType: 'api',
-    category: 'whatsapp',
-    subcategory: 'messaging',
-    capabilities: 'Message sending/templates/media/interactive messages',
-    automationLevel: 'AUTO',
-    description: 'Send and receive WhatsApp messages via the official Cloud API.',
-    icon: 'MessageSquare',
-    color: '#25D366',
-    sortOrder: 16,
-  },
-  {
-    toolNumber: 17,
-    name: 'WhatsApp Webhook',
-    url: 'https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks',
-    authType: 'api_key',
-    requiredCredentials: creds([
-      { key: 'WHATSAPP_VERIFY_TOKEN', label: 'Webhook Verify Token', isSecret: true },
-      { key: 'WHATSAPP_APP_SECRET', label: 'App Secret', isSecret: true },
-    ]),
-    connectionType: 'webhook',
-    category: 'whatsapp',
-    subcategory: 'webhooks',
-    capabilities: 'Inbound message webhooks/status callbacks',
-    automationLevel: 'AUTO',
-    description: 'Receive WhatsApp messages and delivery status updates via webhooks.',
-    icon: 'Webhook',
-    color: '#25D366',
-    sortOrder: 17,
-  },
-  {
-    toolNumber: 18,
-    name: 'WhatsApp Business',
-    url: 'https://business.whatsapp.com',
-    authType: 'partner',
-    requiredCredentials: creds([
-      { key: 'WHATSAPP_BUSINESS_ACCOUNT_ID', label: 'WhatsApp Business Account ID', isSecret: false },
-    ]),
-    connectionType: 'platform',
-    category: 'whatsapp',
-    subcategory: 'lead_communication',
-    capabilities: 'Business profile/catalog management/lead communication',
-    automationLevel: 'MANUAL',
-    description: 'Manage WhatsApp Business profile, product catalog, and lead communication.',
-    icon: 'Phone',
-    color: '#25D366',
-    sortOrder: 18,
-  },
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // TIKTOK (3 tools, 019–021)
-  // ═══════════════════════════════════════════════════════════════════════════
   {
     toolNumber: 19,
     name: 'TikTok',
@@ -1650,9 +1585,9 @@ const TOOLS: ToolSeed[] = [
     connectionType: 'rest_api',
     category: 'email',
     subcategory: 'sms',
-    capabilities: 'SMS/Voice/WhatsApp/verification/two-factor auth',
+    capabilities: 'SMS/Voice/verification/two-factor auth',
     automationLevel: 'AUTO',
-    description: 'Send SMS, voice calls, and WhatsApp messages via Twilio.',
+    description: 'Send SMS and voice calls via Twilio.',
     icon: 'Smartphone',
     color: '#F22F46',
     sortOrder: 81,
@@ -2334,29 +2269,6 @@ const TOOLS: ToolSeed[] = [
     sortOrder: 114,
   },
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // WHATSAPP EXTENDED (1 tool, 115)
-  // ═══════════════════════════════════════════════════════════════════════════
-  {
-    toolNumber: 115,
-    name: 'WhatsApp Click-to-Chat',
-    url: 'https://faq.whatsapp.com/general/how-to-create-a-whatsapp-link',
-    authType: 'none',
-    requiredCredentials: creds([
-      { key: 'WHATSAPP_BUSINESS_PHONE', label: 'WhatsApp Business Phone Number', isSecret: false },
-    ]),
-    connectionType: 'platform',
-    category: 'whatsapp',
-    subcategory: 'lead_conversion',
-    capabilities: 'Click-to-chat links/pre-filled messages/lead conversion/CTA',
-    automationLevel: 'AUTO',
-    description: 'Generate WhatsApp Click-to-Chat links for instant lead conversion on websites.',
-    icon: 'MessageSquare',
-    color: '#25D366',
-    sortOrder: 115,
-  },
-
-  // ═══════════════════════════════════════════════════════════════════════════
   // ALO INTERNAL (5 tools, 116–120)
   // ═══════════════════════════════════════════════════════════════════════════
   {
@@ -2422,26 +2334,6 @@ const TOOLS: ToolSeed[] = [
     icon: 'CheckCircle',
     color: '#F97316',
     sortOrder: 119,
-  },
-  {
-    toolNumber: 120,
-    name: 'ALO WhatsApp Lead Capture',
-    url: 'https://marketingos.ai',
-    authType: 'bot_token',
-    requiredCredentials: creds([
-      { key: 'ALO_WHATSAPP_ACCESS_TOKEN', label: 'ALO WhatsApp Access Token', isSecret: true },
-      { key: 'ALO_WHATSAPP_PHONE_NUMBER_ID', label: 'ALO WhatsApp Phone Number ID', isSecret: false },
-    ]),
-    connectionType: 'bot_api',
-    category: 'alo_internal',
-    subcategory: 'qualified_leads',
-    capabilities: 'WhatsApp lead capture/conversational AI/lead qualification/chatbot',
-    automationLevel: 'AUTO',
-    description: 'WhatsApp-integrated lead capture system with conversational AI qualification.',
-    icon: 'Phone',
-    color: '#25D366',
-    sortOrder: 120,
-  },
 ]
 
 // ── Seed Function ────────────────────────────────────────────────────────────

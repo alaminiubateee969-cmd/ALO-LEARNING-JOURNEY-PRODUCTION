@@ -49,7 +49,6 @@ const PLATFORM_CHART_COLORS: Record<string, string> = {
   tiktok: "#ef4444",    // red
   linkedin: "#10b981",  // emerald
   pinterest: "#f59e0b", // amber
-  whatsapp: "#10b981",  // emerald
   email: "#f97316",     // orange
   google_business: "#ef4444",
 };
@@ -479,8 +478,7 @@ export default function DashboardView() {
                       tiktok: "TikTok",
                       linkedin: "LinkedIn",
                       pinterest: "Pinterest",
-                      whatsapp: "WhatsApp",
-                    };
+                                        };
                     return names[val] || val;
                   }}
                 />

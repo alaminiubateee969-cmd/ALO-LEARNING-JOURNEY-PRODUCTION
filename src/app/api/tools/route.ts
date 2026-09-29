@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
     const requiredCreds = JSON.parse(tool.requiredCredentials);
     if (credentials) {
       for (const cred of requiredCreds) {
-        if (!credentials[cred.key] && cred.key !== 'GOOGLE_*' && cred.key !== 'META_*' && cred.key !== 'REDDIT_*' && cred.key !== 'GOOGLE_ADS_*' && cred.key !== 'WHATSAPP_*') {
+        if (!credentials[cred.key] && cred.key !== 'GOOGLE_*' && cred.key !== 'META_*' && cred.key !== 'REDDIT_*' && cred.key !== 'GOOGLE_ADS_*') {
           return NextResponse.json({ error: `Missing credential: ${cred.label}` }, { status: 400 });
         }
       }

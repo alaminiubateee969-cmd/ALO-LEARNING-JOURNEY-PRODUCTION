@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAppStore } from '@/stores/app-store';
-import { Zap, Mail, Lock, User, Building2, Globe, Briefcase } from 'lucide-react';
+import { Mail, Lock, User, Building2, Globe, Briefcase } from 'lucide-react';
 
 export function LoginView() {
   const { setUser } = useAppStore();
@@ -71,12 +72,17 @@ export function LoginView() {
         className="w-full max-w-md relative z-10"
       >
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-chart-2 flex items-center justify-center">
-              <Zap className="w-6 h-6 text-white" />
-            </div>
+          <div className="inline-flex items-center gap-3 mb-4">
+            <Image
+              src="/kexsio-logo.png"
+              alt="Kexsio MarketingOS"
+              width={48}
+              height={48}
+              className="rounded-xl"
+              priority
+            />
             <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-chart-2 bg-clip-text text-transparent">
-              MarketingOS
+              Kexsio MarketingOS
             </h1>
           </div>
           <p className="text-muted-foreground">AI-Powered Marketing Operating System</p>

@@ -83,7 +83,6 @@ const PLATFORM_COLORS: Record<string, string> = {
   TikTok: "#010101",
   Pinterest: "#E60023",
   Telegram: "#26A5E4",
-  WhatsApp: "#25D366",
 };
 
 const PLATFORM_LIGHT_COLORS: Record<string, string> = {
@@ -95,7 +94,6 @@ const PLATFORM_LIGHT_COLORS: Record<string, string> = {
   TikTok: "#E8E8E8",
   Pinterest: "#FDE3E3",
   Telegram: "#E3F2FB",
-  WhatsApp: "#E3F9EE",
 };
 
 const PLATFORM_INITIALS: Record<string, string> = {
@@ -107,7 +105,6 @@ const PLATFORM_INITIALS: Record<string, string> = {
   TikTok: "TK",
   Pinterest: "P",
   Telegram: "TG",
-  WhatsApp: "WA",
 };
 
 const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
@@ -193,7 +190,7 @@ function getRequirementItems(
   });
   items.push({
     label: "Webhook URL",
-    met: platform === "Telegram" || platform === "WhatsApp",
+    met: platform === "Telegram",
   });
   items.push({
     label: "Business Verification",
@@ -539,7 +536,7 @@ export function SocialAccountsView() {
                       Select the social media platform you want to connect.
                     </p>
                     <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
-                      {(data?.platforms || missingPlatforms.length > 0 ? data?.platforms : ["Facebook", "Instagram", "LinkedIn", "X", "YouTube", "TikTok", "Pinterest", "Telegram", "WhatsApp"]).map(
+                      {(data?.platforms || missingPlatforms.length > 0 ? data?.platforms : ["Facebook", "Instagram", "LinkedIn", "X", "YouTube", "TikTok", "Pinterest", "Telegram"]).map(
                         (platform) => {
                           const isConnected =
                             data?.connectedPlatforms?.includes(platform);

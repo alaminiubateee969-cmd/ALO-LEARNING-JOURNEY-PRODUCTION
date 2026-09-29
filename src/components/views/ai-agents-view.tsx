@@ -19,6 +19,14 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -47,6 +55,9 @@ import {
   Zap,
   Brain,
   Filter,
+  Play,
+  X,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -209,17 +220,6 @@ const AGENT_DEFINITIONS: AIAgent[] = [
     tasksCompleted: 34,
   },
   {
-    id: "whatsapp-agent",
-    name: "WhatsApp Agent",
-    icon: "💬",
-    type: "Communication",
-    category: "Messaging",
-    description: "Manages WhatsApp Business messaging, broadcasts, and automated customer responses.",
-    enabled: true,
-    lastActive: "2025-01-22T16:00:00Z",
-    tasksCompleted: 456,
-  },
-  {
     id: "sms-agent",
     name: "SMS Agent",
     icon: "📲",
@@ -345,10 +345,14 @@ function AgentCard({
   agent,
   onToggle,
   isToggling,
+  onRun,
+  isRunning,
 }: {
   agent: AIAgent;
   onToggle: (id: string, enabled: boolean) => void;
   isToggling: boolean;
+  onRun?: (agent: AIAgent) => void;
+  isRunning?: boolean;
 }) {
   const catColors = CATEGORY_COLORS[agent.category] || CATEGORY_COLORS.Optimization;
   const CatIcon = CATEGORY_ICONS[agent.category] || Bot;
@@ -394,6 +398,31 @@ function AgentCard({
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {onRun && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px] bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400"
+                        disabled={!agent.enabled || isRunning}
+                        onClick={() => onRun(agent)}
+                      >
+                        {isRunning ? (
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <Play className="h-3 w-3 mr-1" />
+                        )}
+                        Run
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {agent.enabled ? "Run this agent on a task" : "Enable the agent first"}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -505,6 +534,11 @@ export function AiAgentsView() {
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [runningAgentId, setRunningAgentId] = useState<string | null>(null);
+  const [runDialogAgent, setRunDialogAgent] = useState<AIAgent | null>(null);
+  const [runTask, setRunTask] = useState("");
+  const [runOutput, setRunOutput] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
 
   // Fetch real AI agents from /api/ai-agents
   const { data: apiData, isLoading, refetch } = useApiQuery<{ agents: any[] }>("/api/ai-agents", { enabled: true });
@@ -547,6 +581,51 @@ export function AiAgentsView() {
     },
     [toggleMutation, agents]
   );
+
+  const handleRunAgent = useCallback(
+    async (agent: AIAgent) => {
+      setRunDialogAgent(agent);
+      setRunTask("");
+      setRunOutput(null);
+      setRunError(null);
+    },
+    [],
+  );
+
+  const handleExecuteAgent = useCallback(async () => {
+    if (!runDialogAgent || !runTask.trim()) return;
+    setRunningAgentId(runDialogAgent.id);
+    setRunOutput(null);
+    setRunError(null);
+    try {
+      const token = localStorage.getItem("mos_token");
+      const res = await fetch(`/api/ai/agents/${runDialogAgent.id}/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ task: runTask }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const json = await res.json();
+      const result = json.data || json;
+      if (result.success === false) {
+        setRunError(result.error || "Agent failed to produce output");
+        toast.error(`Agent failed: ${result.error || "unknown error"}`);
+      } else {
+        setRunOutput(result.output);
+        toast.success(`${runDialogAgent.name} completed in ${result.durationMs}ms`);
+        refetch(); // refresh task counts
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to run agent";
+      setRunError(msg);
+      toast.error(msg);
+    } finally {
+      setRunningAgentId(null);
+    }
+  }, [runDialogAgent, runTask, refetch]);
 
   // Calculate stats from real agent list
   const stats = {
@@ -653,16 +732,86 @@ export function AiAgentsView() {
             agent={agent}
             onToggle={handleToggle}
             isToggling={togglingId === agent.id}
+            onRun={handleRunAgent}
+            isRunning={runningAgentId === agent.id}
           />
         ))}
       </motion.div>
 
       {filteredAgents.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <Bot className="h-10 w-10 mb-3 opacity-40" />
-          <p className="text-sm">No agents match your search</p>
+          <Bot className="h-10 w-10 opacity-30 mb-2" />
+          <p className="text-sm">No agents found matching your filters</p>
         </div>
       )}
+
+      {/* Run Agent Dialog */}
+      <Dialog open={!!runDialogAgent} onOpenChange={(v) => !v && setRunDialogAgent(null)}>
+        <DialogContent className="sm:max-w-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-white/20 dark:border-white/10 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="text-lg">{runDialogAgent?.icon}</span>
+              Run Agent: {runDialogAgent?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Type a task for the {runDialogAgent?.name} agent to execute via the LLM. The agent will save its output to the activity feed + audit log.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Task description</label>
+              <textarea
+                value={runTask}
+                onChange={(e) => setRunTask(e.target.value)}
+                placeholder="e.g. Score this lead: Sarah Chen from TechVault Inc, source LinkedIn, currently 65"
+                disabled={runningAgentId === runDialogAgent?.id}
+                className="w-full min-h-[80px] rounded-md border border-border/50 bg-white/80 dark:bg-slate-800/80 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                rows={3}
+              />
+            </div>
+
+            {runningAgentId === runDialogAgent?.id && (
+              <div className="flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Calling LLM... (this may take 5-15 seconds)
+              </div>
+            )}
+
+            {runError && (
+              <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-700 dark:text-red-300">
+                <strong>Error:</strong> {runError}
+              </div>
+            )}
+
+            {runOutput && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Agent output</label>
+                <pre className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs whitespace-pre-wrap font-mono max-h-[300px] overflow-y-auto">
+                  {runOutput}
+                </pre>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRunDialogAgent(null)} disabled={!!runningAgentId}>
+              Close
+            </Button>
+            <Button
+              onClick={handleExecuteAgent}
+              disabled={!runTask.trim() || runningAgentId === runDialogAgent?.id}
+              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
+            >
+              {runningAgentId === runDialogAgent?.id ? (
+                <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Running...</>
+              ) : (
+                <><Send className="h-4 w-4 mr-1.5" /> Run Agent</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }

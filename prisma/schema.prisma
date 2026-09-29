@@ -46,6 +46,11 @@ model Company {
   apiKeys         ApiKey[]
   announcements   Announcement[]
   activities      Activity[]
+  feedSources     FeedSource[]
+  feedItems       FeedItem[]
+  smsMessages     SmsMessage[]
+  competitors     Competitor[]
+  keywordTrackers KeywordTracker[]
 }
 
 // ==================== USER & ROLES ====================
@@ -72,6 +77,7 @@ model User {
   receivedMessages Message[] @relation("MessageRecipient")
   announcements  Announcement[] @relation("AnnouncementCreator")
   activities     Activity[] @relation("ActivityActor")
+  sentSms        SmsMessage[] @relation("SmsSender")
 }
 
 model CompanyUser {
@@ -546,8 +552,10 @@ model TaskExecution {
   priority        String   @default("medium")
 
   // Agent Assignment
-  assignedEmployeeId String
-  assignedEmployee   Employee @relation(fields: [assignedEmployeeId], references: [id])
+  // Optional — AI agents (AiAgent table) don't have an Employee row, only the workforce does.
+  // Real workforce tasks have assignedEmployeeId set; AI agent runs leave it null.
+  assignedEmployeeId String?
+  assignedEmployee   Employee? @relation(fields: [assignedEmployeeId], references: [id])
   delegatedById     String?
   reviewedById      String?
 
@@ -883,4 +891,101 @@ model UserSession {
   location    String?
   lastActiveAt DateTime @default(now())
   createdAt   DateTime @default(now())
+}
+
+// ==================== MISSING MODELS — re-added ====================
+
+model FeedSource {
+  id           String   @id @default(cuid())
+  name         String
+  url          String   @unique
+  category     String   @default("general")
+  isActive     Boolean  @default(true)
+  lastFetchedAt DateTime?
+  lastError    String?
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items        FeedItem[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model FeedItem {
+  id           String   @id @default(cuid())
+  sourceId     String
+  source       FeedSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  title        String
+  link         String
+  description  String?
+  author       String?
+  publishedAt  DateTime
+  guid         String?
+  isRead       Boolean  @default(false)
+  isStarred    Boolean  @default(false)
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+}
+
+model SmsMessage {
+  id           String   @id @default(cuid())
+  to           String
+  from         String?
+  body         String
+  status       String   @default("queued")
+  providerMessageId String?
+  error        String?
+  leadId       String?
+  contactId    String?
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sentBy       String?
+  sender       User?    @relation("SmsSender", fields: [sentBy], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Competitor {
+  id           String   @id @default(cuid())
+  name         String
+  website      String?
+  description  String?
+  strengths    String   @default("[]")
+  weaknesses   String   @default("[]")
+  pricing      String?
+  marketShare  String?
+  threatLevel  String   @default("medium")
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model KeywordTracker {
+  id           String   @id @default(cuid())
+  keyword      String
+  searchVolume Int      @default(0)
+  difficulty   Int      @default(0)
+  trend        String   @default("stable")
+  lastPosition Int?
+  competitorPositions String @default("{}")
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model EnrichmentCache {
+  id           String   @id @default(cuid())
+  domain       String   @unique
+  companyName  String?
+  industry     String?
+  website      String?
+  description  String?
+  logo         String?
+  employees    String?
+  foundedYear  Int?
+  linkedinUrl  String?
+  twitterHandle String?
+  fetchedAt    DateTime @default(now())
 }

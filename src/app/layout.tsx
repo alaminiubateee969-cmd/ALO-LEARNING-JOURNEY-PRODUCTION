@@ -13,20 +13,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const SITE_URL = "https://marketingos.ai";
-const SITE_NAME = "MarketingOS";
+const SITE_URL = "https://www.kexsio.com";
+const SITE_NAME = "Kexsio MarketingOS";
 const SITE_DESCRIPTION =
-  "Enterprise AI Workforce Platform — 2,000 specialized AI employees running your entire marketing operation. Connect 120+ tools, automate campaigns, manage CRM, optimize SEO, and scale your business with intelligent AI agents.";
-const OG_IMAGE = `${SITE_URL}/og-image.png`;
+  "Kexsio MarketingOS — Enterprise AI Workforce Platform with 2,000 specialized AI employees, 120+ integrations, autonomous CRM, SEO, content, and campaign automation. Built by Kexsio.";
+const OG_IMAGE = `${SITE_URL}/kexsio-logo.png`;
 
 export const metadata: Metadata = {
   // --- Basic ---
   title: {
-    default: "MarketingOS — Enterprise AI Workforce Platform",
+    default: "Kexsio MarketingOS — Enterprise AI Workforce Platform",
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
   keywords: [
+    "kexsio",
     "marketing",
     "AI",
     "AI workforce",
@@ -43,9 +44,9 @@ export const metadata: Metadata = {
     "marketing automation",
     "AI marketing platform",
   ],
-  authors: [{ name: "MarketingOS", url: SITE_URL }],
-  creator: "MarketingOS",
-  publisher: "MarketingOS",
+  authors: [{ name: "Kexsio", url: SITE_URL }],
+  creator: "Kexsio",
+  publisher: "Kexsio",
   category: "Business > Marketing > Automation",
   robots: {
     index: true,
@@ -66,8 +67,12 @@ export const metadata: Metadata = {
 
   // --- Icons ---
   icons: {
-    icon: "/logo.svg",
-    apple: "/logo.svg",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/kexsio-logo.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/kexsio-logo.png", sizes: "512x512" }],
+    shortcut: "/favicon.ico",
   },
 
   // --- Open Graph ---
@@ -76,14 +81,14 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: SITE_URL,
     siteName: SITE_NAME,
-    title: "MarketingOS — Enterprise AI Workforce Platform",
+    title: "Kexsio MarketingOS — Enterprise AI Workforce Platform",
     description: SITE_DESCRIPTION,
     images: [
       {
         url: OG_IMAGE,
-        width: 1200,
-        height: 630,
-        alt: "MarketingOS — Enterprise AI Workforce Platform",
+        width: 512,
+        height: 512,
+        alt: "Kexsio MarketingOS — Enterprise AI Workforce Platform",
       },
     ],
   },
@@ -91,7 +96,7 @@ export const metadata: Metadata = {
   // --- Twitter Card ---
   twitter: {
     card: "summary_large_image",
-    title: "MarketingOS — Enterprise AI Workforce Platform",
+    title: "Kexsio MarketingOS — Enterprise AI Workforce Platform",
     description: SITE_DESCRIPTION,
     images: [OG_IMAGE],
   },
@@ -109,7 +114,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="canonical" href={SITE_URL} />
-        <meta name="author" content="MarketingOS" />
+        <meta name="author" content="Kexsio" />
         <meta property="og:locale:alternate" content="en_US" />
       </head>
       <body

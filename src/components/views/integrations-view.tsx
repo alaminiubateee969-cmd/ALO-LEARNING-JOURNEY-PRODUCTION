@@ -93,7 +93,6 @@ interface ToolsResponse {
 const CATEGORY_CONFIG: Record<string, { label: string; icon: LucideIcon; color: string; gradient: string }> = {
   google: { label: 'Google', icon: Globe, color: '#4285F4', gradient: 'from-blue-500 to-blue-600' },
   meta: { label: 'Meta', icon: MessageSquare, color: '#1877F2', gradient: 'from-blue-600 to-blue-700' },
-  whatsapp: { label: 'WhatsApp', icon: MessageSquare, color: '#25D366', gradient: 'from-green-500 to-green-600' },
   tiktok: { label: 'TikTok', icon: Radio, color: '#000000', gradient: 'from-gray-700 to-gray-900' },
   linkedin: { label: 'LinkedIn', icon: Globe, color: '#0A66C2', gradient: 'from-sky-600 to-sky-700' },
   reddit: { label: 'Reddit', icon: MessageSquare, color: '#FF4500', gradient: 'from-orange-500 to-red-600' },

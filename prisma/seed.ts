@@ -96,7 +96,7 @@ async function seed() {
   }
 
   // Create social accounts
-  const platforms = ['Facebook', 'Instagram', 'LinkedIn', 'YouTube', 'X', 'TikTok', 'Pinterest', 'Telegram', 'WhatsApp'];
+  const platforms = ['Facebook', 'Instagram', 'LinkedIn', 'YouTube', 'X', 'TikTok', 'Pinterest', 'Telegram'];
   const connectedPlatforms = platforms.slice(0, 4);
   for (const platform of connectedPlatforms) {
     await prisma.socialAccount.create({
@@ -217,7 +217,6 @@ async function seed() {
     { name: 'Competitor Research Agent', type: 'competitor', desc: 'Competitor analysis and monitoring' },
     { name: 'CRM Agent', type: 'crm', desc: 'Customer relationship management' },
     { name: 'Sales Agent', type: 'sales', desc: 'Sales automation and pipeline management' },
-    { name: 'WhatsApp Agent', type: 'whatsapp', desc: 'WhatsApp marketing automation' },
     { name: 'SMS Agent', type: 'sms', desc: 'SMS campaign management' },
     { name: 'Strategy Planner', type: 'strategy', desc: 'Marketing strategy planning' },
   ];
