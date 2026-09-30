@@ -45,7 +45,7 @@ export default function SocialView() {
       });
       const data = await res.json();
       toast({
-        title: action === "connect" ? "OAuth শুরু" : "সংযোগ বিচ্ছিন্ন",
+        title: action === "connect" ? "সেটআপ প্রয়োজন" : "সংযোগ বিচ্ছিন্ন",
         description: `${platform} → ${data.status}`,
         variant: data.status === "external_setup_required" ? "destructive" : "default",
       });
@@ -60,7 +60,7 @@ export default function SocialView() {
       <SectionHeader
         title="Social Connections"
         bn="সোশ্যাল সংযোগ"
-        desc="অফিশিয়াল OAuth দিয়ে সংযোগ। আমরা কখনো পাসওয়ার্ড বা OTP সংরক্ষণ করি না। encrypted access/refresh token, scope validation, auto-refresh।"
+        desc="সোশ্যাল সংযোগের অবস্থা। আমরা কখনো পাসওয়ার্ড বা OTP সংরক্ষণ করি না; বাস্তব OAuth callback ও token storage চালুর আগে কোনো account connected দেখানো হবে না।"
         icon={<Send className="h-5 w-5" />}
         action={
           <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
@@ -140,7 +140,7 @@ export default function SocialView() {
                         disabled={busy === p.id}
                       >
                         {busy === p.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Link2 className="h-3 w-3 mr-1" />}
-                        Connect via OAuth
+                        OAuth setup required
                       </Button>
                     )}
                   </div>

@@ -334,7 +334,7 @@ export default function FamilyStudioView() {
             <Card className="p-12 text-center">
               <Users className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
               <p className="font-medium text-sm">কোনো ফ্যামিলি প্রোফাইল নেই</p>
-              <p className="text-xs text-muted-foreground mt-1">&quot;প্রোফাইল&quot; চেপে শুরু করুন।</p>
+              <p className="text-xs text-muted-foreground mt-1">ফ্যামিলি প্রোফাইল ইচ্ছাকৃতভাবে seed করা হয় না—নাম, সম্মতি এবং (শিশুর ক্ষেত্রে) অভিভাবকের তথ্য দিয়ে “প্রোফাইল” চেপে তৈরি করুন।</p>
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

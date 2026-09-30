@@ -15,6 +15,7 @@ export async function ensureSeeded() {
     // Already seeded in a previous run — but make sure newer collections
     // (e.g. CommentInbox added in round 2) are backfilled if empty.
     await backfillComments();
+    await reconcileLegacySocialConnections();
     return;
   }
 
@@ -37,18 +38,18 @@ export async function ensureSeeded() {
     
   });
 
-  // Social connections from platform registry
+  // Social connections are setup records, not proof of a live provider account.
+  // A provider must complete its real OAuth callback before it can be marked
+  // connected. Do not seed fictional accounts that make the dashboard look live.
   for (const p of PLATFORMS) {
     await db.socialConnection.create({
       data: {
         platform: p.id,
-        accountName: p.connected ? `${p.name} Official` : `${p.name} (pending)`,
-        handle: p.id === "facebook" ? "aloeducation" : null,
-        status: p.connected ? "connected" : "external_setup_required",
-        tokenExpiry: p.connected
-          ? new Date(Date.now() + 1000 * 60 * 60 * 24 * 12)
-          : null,
-        lastSyncAt: p.connected ? new Date(Date.now() - 1000 * 60 * 30) : null,
+        accountName: `${p.name} (setup required)`,
+        handle: null,
+        status: "external_setup_required",
+        tokenExpiry: null,
+        lastSyncAt: null,
       },
     });
   }
@@ -180,6 +181,26 @@ export async function ensureSeeded() {
       { platform: "youtube", authorName: "অসন্তুষ্ট", text: "এত সময় কোথায় পাব? বাস্তবসম্মত নয়", postTopic: "স্ক্রিন টাইম", category: "complaint", riskLevel: "medium", status: "new" },
       { platform: "whatsapp", authorName: "ফারজানা", text: "ধন্যবাদ, খুব কাজে লেগেছে 💛", postTopic: "প্যারেন্টিং", category: "praise", riskLevel: "low", status: "replied", draftReply: "ধন্যবাদ ফারজানা! আপনার অভিজ্ঞতা শেয়ার করায় আনন্দিত 💛", repliedAt: new Date(Date.now() - 1000 * 60 * 60 * 2) },
     ],
+  });
+}
+
+// Versions before the social integration existed seeded these five fictional
+// records as connected. Only downgrade the exact legacy records so a future
+// real OAuth implementation can persist a verified connection independently.
+async function reconcileLegacySocialConnections() {
+  const legacyPlatforms = ["facebook", "instagram", "youtube", "whatsapp", "telegram"];
+  await db.socialConnection.updateMany({
+    where: {
+      platform: { in: legacyPlatforms },
+      status: "connected",
+      accountName: { endsWith: " Official" },
+    },
+    data: {
+      status: "external_setup_required",
+      handle: null,
+      tokenExpiry: null,
+      lastSyncAt: null,
+    },
   });
 }
 
