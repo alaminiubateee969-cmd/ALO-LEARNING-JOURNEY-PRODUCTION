@@ -20,7 +20,7 @@ export const PLATFORMS: PlatformDef[] = [
     icon: "📘",
     color: "text-blue-600",
     bgColor: "bg-blue-50",
-    connected: true,
+    connected: false,
     scopes: ["pages_manage_posts", "pages_read_engagement"],
     mediaSizes: [
       { label: "Profile", w: 1080, h: 1080 },
@@ -35,7 +35,7 @@ export const PLATFORMS: PlatformDef[] = [
     icon: "📸",
     color: "text-pink-600",
     bgColor: "bg-pink-50",
-    connected: true,
+    connected: false,
     scopes: ["instagram_content_publish"],
     mediaSizes: [
       { label: "Profile", w: 1080, h: 1080 },
@@ -52,7 +52,7 @@ export const PLATFORMS: PlatformDef[] = [
     icon: "▶️",
     color: "text-red-600",
     bgColor: "bg-red-50",
-    connected: true,
+    connected: false,
     scopes: ["youtube.upload"],
     mediaSizes: [
       { label: "Profile", w: 800, h: 800 },
@@ -111,7 +111,7 @@ export const PLATFORMS: PlatformDef[] = [
     icon: "💬",
     color: "text-green-600",
     bgColor: "bg-green-50",
-    connected: true,
+    connected: false,
     scopes: ["whatsapp_business_messaging"],
     mediaSizes: [
       { label: "Profile", w: 1080, h: 1080 },
@@ -125,7 +125,7 @@ export const PLATFORMS: PlatformDef[] = [
     icon: "✈️",
     color: "text-cyan-600",
     bgColor: "bg-cyan-50",
-    connected: true,
+    connected: false,
     scopes: ["bot.messages"],
     mediaSizes: [{ label: "Post", w: 1280, h: 720 }],
   },
