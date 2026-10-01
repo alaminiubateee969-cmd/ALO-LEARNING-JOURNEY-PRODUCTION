@@ -3,12 +3,12 @@ module.exports = {
     {
       name: "alo-learning-journey",
       script: ".next/standalone/server.js",
-      interpreter: "bun",
-      cwd: "/root/alo-github-verify",
+      interpreter: "node",
+      cwd: __dirname,
       env: {
         NODE_ENV: "production",
         PORT: 3017,
-        HOSTNAME: "0.0.0.0"
+        HOSTNAME: "127.0.0.1"
       }
     }
   ]
