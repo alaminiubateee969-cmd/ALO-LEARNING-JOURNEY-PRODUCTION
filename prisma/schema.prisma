@@ -51,6 +51,8 @@ model Company {
   smsMessages     SmsMessage[]
   competitors     Competitor[]
   keywordTrackers KeywordTracker[]
+  workflows       Workflow[]
+  workflowRuns    WorkflowRun[]
 }
 
 // ==================== USER & ROLES ====================
@@ -78,6 +80,7 @@ model User {
   announcements  Announcement[] @relation("AnnouncementCreator")
   activities     Activity[] @relation("ActivityActor")
   sentSms        SmsMessage[] @relation("SmsSender")
+  createdWorkflows Workflow[] @relation("WorkflowCreator")
 }
 
 model CompanyUser {
@@ -988,4 +991,41 @@ model EnrichmentCache {
   linkedinUrl  String?
   twitterHandle String?
   fetchedAt    DateTime @default(now())
+}
+
+// ==================== WORKFLOW BUILDER (OpenLogi/ruflo pattern) ====================
+
+model Workflow {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  trigger      String   @default("manual")  // manual | lead.created | deal.won | ticket.created | schedule
+  triggerConfig String  @default("{}")      // JSON: schedule config, event filter, etc.
+  steps        String   @default("[]")      // JSON array of step definitions
+  isActive     Boolean  @default(false)
+  lastRunAt    DateTime?
+  runCount     Int      @default(0)
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy    String?
+  creator      User?    @relation("WorkflowCreator", fields: [createdBy], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  runs         WorkflowRun[]
+}
+
+model WorkflowRun {
+  id           String   @id @default(cuid())
+  workflowId   String
+  workflow     Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  status       String   @default("pending")  // pending | running | completed | failed
+  trigger      String   @default("manual")
+  input        String   @default("{}")
+  output       String?
+  error        String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
 }
