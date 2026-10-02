@@ -19,6 +19,11 @@ pnpm-debug.log*
 *.crt
 *.p12
 *.pfx
+# SSH private-key filenames commonly have no extension.
+id_rsa
+id_ed25519
+id_ecdsa
+id_dsa
 *.sqlite
 *.sqlite3
 *.db

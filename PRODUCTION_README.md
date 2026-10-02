@@ -1,67 +1,36 @@
-# ALO Learning Journey — Production System
+# ALO Learning Journey — Project Overview (Not Production Verified)
 
-## Quick Start
+> **This file is not a production sign-off.** The application, server, database, domain, HTTPS, authentication, and external services have not been verified live. Do not expose this application publicly until the blockers in `SECURITY.md` and `DEPLOYMENT.md` are resolved.
+
+## Local development only
+
+The repository uses Bun (`bun.lock`) for dependency management and Prisma with MySQL. Configure a development MySQL database; do not copy production credentials into this checkout.
 
 ```bash
-# Install dependencies
-bun install
-
-# Configure environment
+bun install --frozen-lockfile
 cp .env.example .env
-# Edit .env with your values (optional — works without external credentials)
-
-# Push database schema
-bun run db:push
-
-# Start development server
-bun run dev
-
-# Open http://localhost:3000
+# Edit .env with a development-only MySQL URL.
+bunx prisma generate
+bun run db:push  # development only; never use as a production migration
+bun run dev       # development server on port 3000
 ```
 
-## Verified Real Features
+Production standalone startup is configured for Node.js 22 and the intended application port 3017, but the actual production server has not been inspected.
 
-1. Content Opportunity Score (zai-llm, 6-dimension scoring)
-2. Hook A/B Testing (zai-llm, 5 variants)
-3. Content Package Generation (zai-llm, full Bengali package)
-4. Protective Mode (zai-llm, safety review)
-5. Comment Classification + Reply (zai-llm)
-6. Image Generation (zai image-gen, real PNG files)
-7. Video Generation 50s (espeak TTS + FFmpeg, ffprobe verified)
-8. Video Generation 5min (espeak TTS + FFmpeg, ffprobe verified)
-9. Cinematic Video 50s (subtitles + scene images + storyboard)
-10. Bengali TTS (espeak bn voice)
-11. Natural Language Command Center (zai-llm, Bengali/English)
-12. SEO Content Brief Generator (zai-llm)
-13. Telegram Commands (real allow-list, real execution)
-14. RAG Search (hybrid keyword + document, 7 citation fields)
-15. CSV/JSON Export (all 8 combinations)
-16. Backups (XOR + DB copy, real .alo.bak files)
-17. Growth Loop Dashboard (real scores, hooks, campaigns)
-18. Content Categories (37 categories × 8 age groups)
-19. Inkbox Adapter Layer (graceful degradation, internal A2A fallback)
-20. Human Approval Architecture
+## Feature inventory — source presence is not live verification
 
-## Blocked External Setup (needs credentials)
-- Social publishing (OAuth tokens)
-- Social metrics (platform API access)
-- AI phone calls (Twilio)
-- SMS (Twilio)
-- WhatsApp (WhatsApp Business API)
-- STT (Vosk/Whisper model)
-- Face consistency (ML model)
-- Voice cloning (specialized model)
-- Email (SMTP credentials)
+The repository contains UI/API code for content generation, approvals, analytics, RAG, social integrations, Telegram, video, family media, backups, and operations. Some paths use local fallbacks or demo behavior. Their presence does not prove that an external provider is configured or that a production workflow succeeds.
 
-## Architecture
-- ALO Agents = brains 🧠
-- ALO Orchestrator = manager ⚙️
-- ALO Database = source of truth 🗄️
-- Inkbox = optional communication/identity layer 📬
-- Human Approval = safety boundary 🛡️
+The AI implementation currently imports `z-ai-web-dev-sdk`; there is no OpenAI adapter. Redis, n8n, and Resend integrations are not present in the application source. Do not describe those services as working until the corresponding application-level tests pass.
 
-## Tech Stack
-- Next.js 16 + TypeScript + Prisma/SQLite + shadcn/ui
-- z-ai-web-dev-sdk (LLM + image generation)
-- espeak (Bengali TTS)
-- FFmpeg/ffprobe (video generation + validation)
+The backup route's XOR obfuscation is **not encryption** and is not a safe production backup. It copies a local SQLite file even though Prisma is configured for MySQL. Do not rely on it for production backup or rollback.
+
+## Production status
+
+- Authentication/RBAC: not implemented; all 39 API route files are unguarded.
+- Database: MySQL Prisma schema exists, but no checked-in migration history exists.
+- Upload storage: current code writes below the process working directory and does not honor the configured `UPLOAD_DIR`.
+- Deployment: the current working branch has a fail-closed deployment gate; it will not deploy. The audited `main` workflow at `03361c5f6bf19727907452ed0edc5247948b9466` used unverified host/path/process assumptions and must not be run.
+- Build, login/session, API, storage, integrations, DNS, HTTPS, and live health: not verified.
+
+See `DEPLOYMENT.md`, `SECURITY.md`, and `audit/` for the evidence and required follow-up.

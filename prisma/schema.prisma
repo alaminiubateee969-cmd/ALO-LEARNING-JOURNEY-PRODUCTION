@@ -1,4 +1,4 @@
-// ALO Learning Journey — Prisma schema (SQLite)
+// ALO Learning Journey — Prisma schema (MySQL)
 // Operational data layer. The 40-agent roster is a static config module
 // (src/lib/agents.ts) so it stays richly typed and always available even
 // before the DB is seeded. Runs, content, approvals, RAG, analytics etc.
@@ -6,7 +6,7 @@
 
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
