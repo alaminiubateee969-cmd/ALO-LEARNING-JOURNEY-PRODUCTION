@@ -145,7 +145,7 @@ function Sidebar() {
         <div className="flex items-center gap-3 px-4 h-16 border-b border-border/50 shrink-0">
           <Image
             src="/kexsio-logo.png"
-            alt="Kexsio MarketingOS"
+            alt="ALO Labs MarketingOS"
             width={36}
             height={36}
             className="rounded-lg shrink-0"
@@ -153,7 +153,7 @@ function Sidebar() {
           />
           {isSidebarOpen && (
             <span className="font-bold text-lg bg-gradient-to-r from-primary to-chart-2 bg-clip-text text-transparent whitespace-nowrap">
-              Kexsio MarketingOS
+              ALO Labs MarketingOS
             </span>
           )}
           <Button variant="ghost" size="icon" className="ml-auto md:hidden h-8 w-8" onClick={() => setSidebarOpen(false)}>
@@ -311,7 +311,7 @@ function AppContent() {
           </main>
         </ScrollArea>
         <footer className="mt-auto shrink-0 border-t px-4 py-2 text-center text-[10px] text-muted-foreground bg-card/50">
-          Kexsio MarketingOS — AI-Powered Marketing Operating System
+          ALO Labs MarketingOS — AI-Powered Marketing Operating System
         </footer>
       </div>
     </div>
@@ -351,13 +351,13 @@ function AppShell() {
         <div className="flex flex-col items-center gap-4">
           <Image
             src="/kexsio-logo.png"
-            alt="Kexsio MarketingOS"
+            alt="ALO Labs MarketingOS"
             width={64}
             height={64}
             className="rounded-xl animate-pulse"
             priority
           />
-          <p className="text-sm text-muted-foreground">Loading Kexsio MarketingOS...</p>
+          <p className="text-sm text-muted-foreground">Loading ALO Labs MarketingOS...</p>
         </div>
       </div>
     );

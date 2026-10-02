@@ -75,14 +75,14 @@ export function LoginView() {
           <div className="inline-flex items-center gap-3 mb-4">
             <Image
               src="/kexsio-logo.png"
-              alt="Kexsio MarketingOS"
+              alt="ALO Labs MarketingOS"
               width={48}
               height={48}
               className="rounded-xl"
               priority
             />
             <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-chart-2 bg-clip-text text-transparent">
-              Kexsio MarketingOS
+              ALO Labs MarketingOS
             </h1>
           </div>
           <p className="text-muted-foreground">AI-Powered Marketing Operating System</p>

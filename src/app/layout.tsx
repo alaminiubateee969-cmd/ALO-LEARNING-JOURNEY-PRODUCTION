@@ -13,16 +13,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const SITE_URL = "https://www.kexsio.com";
-const SITE_NAME = "Kexsio MarketingOS";
+const SITE_URL = "https://marketing.alolabs.net";
+const SITE_NAME = "ALO Labs MarketingOS";
 const SITE_DESCRIPTION =
-  "Kexsio MarketingOS — Enterprise AI Workforce Platform with 2,000 specialized AI employees, 120+ integrations, autonomous CRM, SEO, content, and campaign automation. Built by Kexsio.";
+  "ALO Labs MarketingOS — Enterprise AI Workforce Platform with 2,000 specialized AI employees, 120+ integrations, autonomous CRM, SEO, content, and campaign automation.";
 const OG_IMAGE = `${SITE_URL}/kexsio-logo.png`;
 
 export const metadata: Metadata = {
   // --- Basic ---
   title: {
-    default: "Kexsio MarketingOS — Enterprise AI Workforce Platform",
+    default: "ALO Labs MarketingOS — Enterprise AI Workforce Platform",
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
@@ -44,9 +44,9 @@ export const metadata: Metadata = {
     "marketing automation",
     "AI marketing platform",
   ],
-  authors: [{ name: "Kexsio", url: SITE_URL }],
-  creator: "Kexsio",
-  publisher: "Kexsio",
+  authors: [{ name: "ALO Labs", url: SITE_URL }],
+  creator: "ALO Labs",
+  publisher: "ALO Labs",
   category: "Business > Marketing > Automation",
   robots: {
     index: true,
@@ -81,14 +81,14 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: SITE_URL,
     siteName: SITE_NAME,
-    title: "Kexsio MarketingOS — Enterprise AI Workforce Platform",
+    title: "ALO Labs MarketingOS — Enterprise AI Workforce Platform",
     description: SITE_DESCRIPTION,
     images: [
       {
         url: OG_IMAGE,
         width: 512,
         height: 512,
-        alt: "Kexsio MarketingOS — Enterprise AI Workforce Platform",
+        alt: "ALO Labs MarketingOS — Enterprise AI Workforce Platform",
       },
     ],
   },
@@ -96,7 +96,7 @@ export const metadata: Metadata = {
   // --- Twitter Card ---
   twitter: {
     card: "summary_large_image",
-    title: "Kexsio MarketingOS — Enterprise AI Workforce Platform",
+    title: "ALO Labs MarketingOS — Enterprise AI Workforce Platform",
     description: SITE_DESCRIPTION,
     images: [OG_IMAGE],
   },
@@ -114,7 +114,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="canonical" href={SITE_URL} />
-        <meta name="author" content="Kexsio" />
+        <meta name="author" content="ALO Labs" />
         <meta property="og:locale:alternate" content="en_US" />
       </head>
       <body
