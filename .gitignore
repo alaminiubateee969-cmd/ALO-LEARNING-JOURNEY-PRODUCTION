@@ -52,3 +52,10 @@ prompt
 server.log
 # Skills directory
 /skills/
+# Database binaries — never commit
+db/*.db
+db/*.db-journal
+marketingos/db/
+upload/
+*.zip
+*.tar.gz

@@ -7,7 +7,7 @@ async function seed() {
   console.log('Seeding database...');
 
   // Create super admin user
-  const passwordHash = await hashPassword('admin123');
+  const passwordHash = await hashPassword(seedPassword);
   const admin = await prisma.user.upsert({
     where: { email: 'admin@marketingos.com' },
     update: {},
@@ -81,7 +81,7 @@ async function seed() {
     const user = await prisma.user.create({
       data: {
         email: member.email,
-        passwordHash: await hashPassword('password123'),
+        passwordHash: await hashPassword(seedPassword),
         name: member.name,
         isActive: true,
       },
@@ -309,7 +309,7 @@ async function seed() {
 
   console.log('Seed completed successfully!');
   console.log(`Admin email: admin@marketingos.com`);
-  console.log(`Admin password: admin123`);
+  console.log('Admin password: (set via ADMIN_SEED_PASSWORD env var)');
 }
 
 seed()

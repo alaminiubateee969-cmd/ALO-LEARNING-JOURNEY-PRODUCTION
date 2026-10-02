@@ -16,7 +16,7 @@ export function LoginView() {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [loginForm, setLoginForm] = useState({ email: 'admin@marketingos.com', password: 'admin123' });
+  const [loginForm, setLoginForm] = useState({ email: 'admin@marketingos.com', password: '' });
   const [registerForm, setRegisterForm] = useState({ email: '', password: '', name: '', companyName: '', industry: '', country: '' });
 
   const handleLogin = async () => {
