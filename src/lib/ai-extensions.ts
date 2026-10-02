@@ -31,33 +31,34 @@ export async function storeMemory(
   content: string,
   metadata?: Record<string, any>,
 ): Promise<void> {
-  // Use EmployeeMemory model (already exists in schema) as the memory store
-  // Find an employee of the right type, or create a generic one
-  let employee = await db.employee.findFirst({
-    where: { companyId, title: { contains: agentType, mode: 'insensitive' } },
-    take: 1,
-  });
+  try {
+    // Find any employee in the company (agents use EmployeeMemory as storage)
+    const employee = await db.employee.findFirst({
+      where: { companyId },
+      take: 1,
+    });
 
-  if (!employee) {
-    // Find any employee in the company
-    employee = await db.employee.findFirst({ where: { companyId } });
+    if (!employee) {
+      console.log('[ai-memory] No employee found for company', companyId, '— skipping memory store');
+      return;
+    }
+
+    await db.employeeMemory.create({
+      data: {
+        employeeId: employee.id,
+        memoryType: 'semantic',
+        category,
+        title: `${agentType} memory: ${content.slice(0, 80)}`,
+        content,
+        metadata: JSON.stringify(metadata || {}),
+        relevance: 1.0,
+        sourceType: 'execution',
+        companyId,
+      },
+    });
+  } catch (err) {
+    console.error('[ai-memory] storeMemory failed:', err);
   }
-
-  if (!employee) return;
-
-  await db.employeeMemory.create({
-    data: {
-      employeeId: employee.id,
-      memoryType: 'semantic',
-      category,
-      title: `${agentType} memory: ${content.slice(0, 80)}`,
-      content,
-      metadata: JSON.stringify(metadata || {}),
-      relevance: 1.0,
-      sourceType: 'execution',
-      companyId,
-    },
-  });
 }
 
 /**
@@ -70,35 +71,32 @@ export async function retrieveMemories(
   category?: string,
   limit = 10,
 ): Promise<MemoryItem[]> {
-  let employee = await db.employee.findFirst({
-    where: { companyId, title: { contains: agentType, mode: 'insensitive' } },
-    take: 1,
-  });
+  try {
+    const employee = await db.employee.findFirst({
+      where: { companyId },
+      take: 1,
+    });
 
-  if (!employee) {
-    employee = await db.employee.findFirst({ where: { companyId } });
-  }
+    if (!employee) return [];
 
-  if (!employee) return [];
+    const where: any = { employeeId: employee.id };
+    if (category) where.category = category;
 
-  const where: any = { employeeId: employee.id };
-  if (category) where.category = category;
+    const memories = await db.employeeMemory.findMany({
+      where,
+      orderBy: [{ relevance: 'desc' }, { createdAt: 'desc' }],
+      take: limit,
+    });
 
-  const memories = await db.employeeMemory.findMany({
-    where,
-    orderBy: [{ relevance: 'desc' }, { createdAt: 'desc' }],
-    take: limit,
-  });
+  // Increment access count (async, non-blocking)
+    for (const m of memories) {
+      db.employeeMemory.update({
+        where: { id: m.id },
+        data: { accessCount: { increment: 1 }, lastAccessedAt: new Date() },
+      }).catch(() => {});
+    }
 
-  // Increment access count for retrieved memories (async, non-blocking)
-  for (const m of memories) {
-    db.employeeMemory.update({
-      where: { id: m.id },
-      data: { accessCount: { increment: 1 }, lastAccessedAt: new Date() },
-    }).catch(() => {});
-  }
-
-  return memories.map((m) => ({
+    return memories.map((m) => ({
     id: m.id,
     agentType,
     category: m.category || 'general',
@@ -108,7 +106,11 @@ export async function retrieveMemories(
     accessCount: m.accessCount,
     createdAt: m.createdAt.toISOString(),
     lastAccessedAt: m.lastAccessedAt?.toISOString() || null,
-  }));
+    }));
+  } catch (err) {
+    console.error('[ai-memory] retrieveMemories failed:', err);
+    return [];
+  }
 }
 
 /**

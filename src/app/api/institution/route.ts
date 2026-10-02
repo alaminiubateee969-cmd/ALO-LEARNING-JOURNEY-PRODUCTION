@@ -1,42 +1,13 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
 import { withAuth } from "@/lib/api-middleware";
 
-export const GET = withAuth(
-  async () => {
-    try {
-      const institution = await db.institution.findFirst({
-        orderBy: { createdAt: "asc" },
-        include: {
-          _count: {
-            select: {
-              departments: true,
-              programs: true,
-              batches: true,
-              users: true,
-              subjects: true,
-              announcements: true,
-              feeStructures: true,
-            },
-          },
-        },
-      });
+// This module is part of the education platform and is not active in the CRM.
+// Returns empty data so the UI doesn't crash with 500 errors.
 
-      if (!institution) {
-        return NextResponse.json(
-          { error: "No institution found" },
-          { status: 404 }
-        );
-      }
+export const GET = withAuth(async () => {
+  return NextResponse.json({ data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } });
+});
 
-      return NextResponse.json({ data: institution });
-    } catch (error) {
-      console.error("Institution fetch error:", error);
-      return NextResponse.json(
-        { error: "Failed to fetch institution" },
-        { status: 500 }
-      );
-    }
-  },
-  { allowPublic: true }
-);
+export const POST = withAuth(async () => {
+  return NextResponse.json({ error: "This module is not available in the CRM" }, { status: 404 });
+});

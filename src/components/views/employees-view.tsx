@@ -357,7 +357,7 @@ export default function EmployeesView() {
                   <Label htmlFor="e-phone">Phone</Label>
                   <Input
                     id="e-phone"
-                    placeholder="+880 1XXX-XXXXXX"
+                    placeholder="+1-555-XXX-XXXX"
                     value={addForm.phone}
                     onChange={(e) =>
                       setAddForm({ ...addForm, phone: e.target.value })
