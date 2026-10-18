@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Settings, Server, ShieldCheck, ScrollText, Loader2, AlertOctagon, Activity } from "lucide-react";
 import BrandSettings from "./BrandSettings";
+import AiProvidersSettings from "./AiProvidersSettings";
 
 interface Health {
   status: string;
@@ -81,6 +82,9 @@ export default function SettingsView() {
 
       {/* Brand & system settings */}
       <BrandSettings />
+
+      {/* AI provider management (OmniRoute-style add-provider helper) */}
+      <AiProvidersSettings />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Server health */}

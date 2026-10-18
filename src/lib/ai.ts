@@ -1,8 +1,13 @@
 // ALO Learning Journey — local-first AI service (server-only).
-// This shared service never calls paid/external model APIs. Local models and
-// deterministic fallbacks report their real provider/status to callers.
+// Local models are always tried first. Direct external free providers
+// (src/lib/external-ai.ts) may be tried ONLY when (a) the local model
+// is unavailable, (b) both owner switches are on, and (c) the caller is on
+// the non-personal content-draft allowlist below (allowExternal: true).
+// Everything else — comments, protective review, commands, narration, song,
+// email drafts — stays local-only. Providers/status are reported honestly.
 
 import { generateComfyUiImage, generateLocalChatJson } from "@/lib/local-models";
+import { generateExternalChatJson } from "@/lib/external-ai";
 
 export interface AIResult<T> {
   ok: boolean;
@@ -13,44 +18,81 @@ export interface AIResult<T> {
   latencyMs: number;
 }
 
+function mergeChatJson<T>(content: string, fallback: T): T {
+  const jsonMatch = content.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  const cleaned = (jsonMatch ? jsonMatch[0] : content)
+    .replace(/```json\n?/g, "")
+    .replace(/```\n?/g, "")
+    .trim();
+  const parsed = JSON.parse(cleaned) as Partial<T>;
+  if (Array.isArray(fallback)) {
+    if (Array.isArray(parsed)) return parsed as T;
+    if (parsed && typeof parsed === "object") {
+      const obj = parsed as Record<string, unknown>;
+      const arrayKey = Object.keys(obj).find((key) => Array.isArray(obj[key]));
+      return (arrayKey ? obj[arrayKey] : fallback) as T;
+    }
+    return fallback;
+  }
+  return { ...(fallback as object), ...(parsed as object) } as T;
+}
+
+// External fallback is opt-in per caller (allowExternal). Allowlisted callers
+// are ONLY non-personal, admin-initiated content drafts driven by a topic
+// string: generateIdeas, generateContentPackage, scoreContentOpportunity,
+// generateHookVariants, generateContentBrief. Never allowlist anything that
+// carries user, student, family, comment, or draft-body text.
 async function chatJSON<T>(
   system: string,
   user: string,
   fallback: T,
-  opts?: { timeoutMs?: number }
+  opts?: { timeoutMs?: number; allowExternal?: boolean }
 ): Promise<AIResult<T>> {
   const start = Date.now();
+  const timeoutMs = opts?.timeoutMs ?? 18000;
+
+  const tryExternal = async (): Promise<AIResult<T> | null> => {
+    if (!opts?.allowExternal) return null;
+    try {
+      const external = await generateExternalChatJson(system, user, timeoutMs);
+      return {
+        ok: true,
+        data: mergeChatJson(external.content, fallback),
+        provider: external.model,
+        usedFallback: false,
+        latencyMs: Date.now() - start,
+      };
+    } catch {
+      return null; // Guard/config/provider failure -> honest template fallback below.
+    }
+  };
+
   try {
-    const local = await generateLocalChatJson(system, user, opts?.timeoutMs ?? 18000);
+    const local = await generateLocalChatJson(system, user, timeoutMs);
     if (local.model.includes("(built-in-local)")) {
+      const external = await tryExternal();
+      if (external) return external;
       return {
         ok: false,
         data: fallback,
         provider: "local-template-fallback",
         usedFallback: true,
-        error: "The configured local model was unavailable; no external or paid provider was called.",
+        error: opts?.allowExternal
+          ? "The configured local model was unavailable and no usable external provider was configured; template fallback used."
+          : "The configured local model was unavailable; no external or paid provider was called.",
         latencyMs: Date.now() - start,
       };
     }
-    const jsonMatch = local.content.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-    const cleaned = (jsonMatch ? jsonMatch[0] : local.content)
-      .replace(/```json\n?/g, "")
-      .replace(/```\n?/g, "")
-      .trim();
-    const parsed = JSON.parse(cleaned) as Partial<T>;
-    let merged: T;
-    if (Array.isArray(fallback)) {
-      if (Array.isArray(parsed)) merged = parsed as T;
-      else if (parsed && typeof parsed === "object") {
-        const obj = parsed as Record<string, unknown>;
-        const arrayKey = Object.keys(obj).find((key) => Array.isArray(obj[key]));
-        merged = (arrayKey ? obj[arrayKey] : fallback) as T;
-      } else merged = fallback;
-    } else {
-      merged = { ...(fallback as object), ...(parsed as object) } as T;
-    }
-    return { ok: true, data: merged, provider: local.model, usedFallback: false, latencyMs: Date.now() - start };
+    return {
+      ok: true,
+      data: mergeChatJson(local.content, fallback),
+      provider: local.model,
+      usedFallback: false,
+      latencyMs: Date.now() - start,
+    };
   } catch (error) {
+    const external = await tryExternal();
+    if (external) return external;
     return {
       ok: false,
       data: fallback,
@@ -456,7 +498,7 @@ export async function generateIdeas(
       audience: "প্রাক-প্রাথমিক পিতামাতা",
     },
   ];
-  return chatJSON<IdeaOut[]>(sys, user, fallback);
+  return chatJSON<IdeaOut[]>(sys, user, fallback, { allowExternal: true });
 }
 
 export interface ContentPackageOut {
@@ -509,7 +551,7 @@ export async function generateContentPackage(
     qualityScore: 0,
     ragCitations: [],
   };
-  const result = await chatJSON<ContentPackageOut>(sys, user, fallback);
+  const result = await chatJSON<ContentPackageOut>(sys, user, fallback, { allowExternal: true });
   const sourcesByTitle = new Map(availableSources.map((source) => [source.title.trim().toLocaleLowerCase(), source]));
   const verifiedTitleMatches = (Array.isArray(result.data.ragCitations) ? result.data.ragCitations : [])
     .flatMap((citation) => {
@@ -648,7 +690,7 @@ export async function scoreContentOpportunity(
     finalScore: 78,
     rationale: "প্যারেন্টিং টপিক — বাবা-মায়েদের জন্য প্রাসঙ্গিক, বাংলাদেশি প্রেক্ষাপটে উপযুক্ত।",
   };
-  return chatJSON<OpportunityScore>(sys, user, fallback, { timeoutMs: 15000 });
+  return chatJSON<OpportunityScore>(sys, user, fallback, { timeoutMs: 15000, allowExternal: true });
 }
 
 export interface HookVariants {
@@ -670,7 +712,7 @@ export async function generateHookVariants(
       { variant: "E", text: `আমার মেয়ে যখন প্রথম... ${topic} 💛`, strategy: "story", predictedRetention: 70 },
     ],
   };
-  return chatJSON<HookVariants>(sys, user, fallback, { timeoutMs: 15000 });
+  return chatJSON<HookVariants>(sys, user, fallback, { timeoutMs: 15000, allowExternal: true });
 }
 
 // ===== CONTENT CATEGORY + SEO ENGINE =====
@@ -721,7 +763,7 @@ export async function generateContentBrief(
     estimatedReadTime: 3,
     qualityScore: 0,
   };
-  const result = await chatJSON<ContentBrief>(sys, user, fallback, { timeoutMs: 20000 });
+  const result = await chatJSON<ContentBrief>(sys, user, fallback, { timeoutMs: 20000, allowExternal: true });
   return { ...result, data: { ...result.data, qualityScore: 0 } };
 }
 
