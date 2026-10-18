@@ -1,0 +1,12 @@
+{
+  "generated_at_utc": "2026-10-18T16:26:00Z",
+  "unique_repositories": 135,
+  "malformed_links": [
+    "httpshttps://github.com/elebumm/RedditVideoMakerBot.git://github.com/OpenTalker/video-retalking.git"
+  ],
+  "method": "GitHub REST repository metadata, default-branch commit SHA, README contents and license file contents (path and SHA-256); no code executed",
+  "catalog": "GITHUB_SOURCE_CATALOG.csv",
+  "license_files_fetched": 108,
+  "license_file_unavailable_or_ambiguous": 27,
+  "source_code_review_depth": "Metadata/README/license-file triage only; no full clone/dependency/build review."
+}

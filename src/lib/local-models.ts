@@ -450,7 +450,7 @@ export async function generateComfyUiImage(
   outputPath: string,
   size: "1024x1024" | "768x1344" | "1344x768" | "1440x720",
   timeoutMs = 180_000
-): Promise<void> {
+): Promise<"comfyui" | "built-in-editorial"> {
   const base = getPrivateLocalBaseUrl("COMFYUI_BASE_URL", "http://127.0.0.1:8188");
   const checkpoint = process.env.COMFYUI_CHECKPOINT?.trim();
   const [width, height] = size.split("x").map(Number);
@@ -512,7 +512,7 @@ export async function generateComfyUiImage(
         if (error.code !== "EEXIST") throw error;
         await writeFile(outputPath, bytes);
       });
-      return;
+      return "comfyui";
     } catch (error) {
       if (process.env.ALO_DISABLE_BUILTIN_LOCAL_AI === "true") {
         throw error;
@@ -523,6 +523,7 @@ export async function generateComfyUiImage(
   }
 
   await renderBuiltInEditorialPng(prompt, outputPath, width, height);
+  return "built-in-editorial";
 }
 
 async function probeService(url: URL, timeoutMs = 1_800): Promise<{ ok: boolean; data?: unknown; error?: string }> {

@@ -30,6 +30,7 @@ storage/videos/
 storage/backups/
 storage/scene-assets/
 storage/uploads/
+storage/agentos/
 public/generated/
 
 # Misc
@@ -42,3 +43,7 @@ public/generated/
 # Keep .env.example
 !.env.example
 skills/
+
+# Python cache
+__pycache__/
+*.py[cod]

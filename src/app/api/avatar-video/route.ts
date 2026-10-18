@@ -13,6 +13,7 @@ import { checkRateLimit, markGenerationStart, markGenerationEnd } from '@/lib/ra
 import { log, newJobId, truncatePrompt } from '@/lib/observability';
 import { cleanupVideoFiles, resolvePublicPath } from '@/lib/cleanup';
 import { mintMediaToken } from '@/lib/media-token';
+import { assertExternalAiAllowed } from "@/lib/agentos/payment-guard";
 
 /**
  * ALO Avatar Video Director — PRODUCTION REPAIR (Task B1+B2+hardening)
@@ -98,7 +99,8 @@ async function generateScript(
   targetDurationSec: number,
   jobId: string
 ): Promise<Script> {
-  const ZAI = (await import('z-ai-web-dev-sdk')).default;
+  assertExternalAiAllowed("z-ai-web-dev-sdk");
+      const ZAI = (await import("z-ai-web-dev-sdk")).default;
   const zai = await ZAI.create();
   const targetMin = (targetDurationSec / 60).toFixed(1);
   const sceneCount = Math.max(3, Math.min(20, Math.round(targetDurationSec / 40)));
@@ -171,7 +173,8 @@ async function generateSceneAudio(
   jobId: string,
   sceneIdx: number
 ): Promise<{ duration: number }> {
-  const ZAI = (await import('z-ai-web-dev-sdk')).default;
+  assertExternalAiAllowed("z-ai-web-dev-sdk");
+      const ZAI = (await import("z-ai-web-dev-sdk")).default;
   const zai = await ZAI.create();
   const chunks = splitForTTS(text, 1000);
   const partPaths: string[] = [];
@@ -217,7 +220,8 @@ async function generateSceneImage(
   jobId: string,
   sceneIdx: number
 ): Promise<void> {
-  const ZAI = (await import('z-ai-web-dev-sdk')).default;
+  assertExternalAiAllowed("z-ai-web-dev-sdk");
+      const ZAI = (await import("z-ai-web-dev-sdk")).default;
   const zai = await ZAI.create();
   const prompt = buildSceneImagePrompt(
     {
