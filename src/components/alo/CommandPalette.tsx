@@ -34,15 +34,9 @@ export default function CommandPalette({
 
   const navItems: PaletteItem[] = [
     { id: "nav-dashboard", label: "Dashboard", bn: "ড্যাশবোর্ড", group: "Navigate", icon: "📊", action: () => onNavigate("dashboard") },
-    { id: "nav-crm", label: "Admissions CRM", bn: "এনকোয়ারি", group: "Navigate", icon: "🧾", action: () => onNavigate("crm") },
-    { id: "nav-marketing-kits", label: "Marketing Kits", bn: "মার্কেটিং", group: "Navigate", icon: "📣", action: () => onNavigate("marketing-kits") },
-    { id: "nav-api-reference", label: "API Reference", bn: "API নথি", group: "Navigate", icon: "⌘", action: () => onNavigate("api-reference") },
     { id: "nav-agents", label: "AI Agents", bn: "এজেন্ট", group: "Navigate", icon: "🧠", action: () => onNavigate("agents") },
     { id: "nav-topics", label: "Topic Ideas", bn: "আইডিয়া", group: "Navigate", icon: "💡", action: () => onNavigate("topics") },
     { id: "nav-studio", label: "Content Studio", bn: "স্টুডিও", group: "Navigate", icon: "✨", action: () => onNavigate("studio") },
-    { id: "nav-media-audio", label: "Voice & Music Studio", bn: "ভয়েস ও গান", group: "Navigate", icon: "🎵", action: () => onNavigate("music") },
-    { id: "nav-diagrams", label: "Diagram & Button Studio", bn: "ডায়াগ্রাম ও বাটন", group: "Navigate", icon: "📐", keywords: "diagram svg architecture button design archify mermaid", action: () => onNavigate("diagrams") },
-    { id: "nav-video", label: "Video Pipeline", bn: "ভিডিও", group: "Navigate", icon: "🎬", action: () => onNavigate("video") },
     { id: "nav-approval", label: "Approval Queue", bn: "অনুমোদন", group: "Navigate", icon: "📋", action: () => onNavigate("approval") },
     { id: "nav-rag", label: "RAG Knowledge", bn: "জ্ঞান", group: "Navigate", icon: "📚", action: () => onNavigate("rag") },
     { id: "nav-social", label: "Social Connections", bn: "সংযোগ", group: "Navigate", icon: "📤", action: () => onNavigate("social") },
@@ -112,33 +106,30 @@ export default function CommandPalette({
 
   const flatFiltered = groups.flatMap((g) => g.items);
 
-  // Reset query and active index when opened; focus after the dialog commits.
+  // Reset query and active index when opened
   useEffect(() => {
-    if (!open) return;
-    const frame = window.requestAnimationFrame(() => {
+    if (open) {
       setQ("");
       setActiveIdx(0);
-      inputRef.current?.focus();
-    });
-    return () => window.cancelAnimationFrame(frame);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
   }, [open]);
 
-  const safeActiveIdx = Math.max(0, Math.min(activeIdx, flatFiltered.length - 1));
+  // Keep active index in range
+  useEffect(() => {
+    if (activeIdx >= flatFiltered.length) setActiveIdx(0);
+  }, [flatFiltered.length, activeIdx]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (flatFiltered.length === 0 && ["ArrowDown", "ArrowUp", "Enter"].includes(e.key)) {
-      e.preventDefault();
-      return;
-    }
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIdx((i) => Math.min(flatFiltered.length - 1, i + 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActiveIdx((i) => Math.max(0, Math.min(i, flatFiltered.length - 1) - 1));
+      setActiveIdx((i) => Math.max(0, i - 1));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const item = flatFiltered[safeActiveIdx];
+      const item = flatFiltered[activeIdx];
       if (item) {
         item.action();
         onOpenChange(false);
@@ -182,7 +173,7 @@ export default function CommandPalette({
                   </p>
                   {g.items.map((it) => {
                     const idx = runningIdx++;
-                    const isActive = idx === safeActiveIdx;
+                    const isActive = idx === activeIdx;
                     return (
                       <button
                         key={it.id}

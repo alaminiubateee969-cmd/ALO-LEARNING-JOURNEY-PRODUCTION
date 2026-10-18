@@ -1,65 +1,57 @@
-# syntax=docker/dockerfile:1
-# ALO Learning Journey — production image (Next.js standalone output).
-# Media is self-contained: FFmpeg/ffprobe ship from @ffmpeg-installer npm
-# packages; speech falls back to the built-in formant synthesizer when eSpeak
-# is absent. No paid AI APIs are used by the application.
+# ALO Learning Journey — Production Dockerfile (multi-stage)
+# Built for Ubuntu 24.04+ hosts. Uses Bun for install, Node for runtime.
 
-# ── deps: install with the exact lockfile ────────────────────────────────────
-FROM node:22-bookworm-slim AS deps
+# ---- Stage 1: deps ----
+FROM oven/bun:1 AS deps
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      openssl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
-# ── build: Prisma client + Next.js standalone output ────────────────────────
-FROM node:22-bookworm-slim AS build
+# ---- Stage 2: build ----
+FROM oven/bun:1 AS builder
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      openssl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Generate the Prisma client (needs binaries.prisma.sh at build time).
-RUN npx prisma generate
-# Build standalone output; the build script also copies static assets into
-# .next/standalone (see package.json "build").
-RUN npm run build
-
-# ── runtime: minimal, non-root ──────────────────────────────────────────────
-FROM node:22-bookworm-slim AS runner
-WORKDIR /app
-ENV NODE_ENV=production \
-    PORT=3017 \
-    HOSTNAME=0.0.0.0
+# Required binaries for the build/runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      openssl ca-certificates curl \
-      espeak-ng \
-      fonts-dejavu-core \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system alo \
-    && useradd --system --gid alo --create-home alo
+    ffmpeg \
+    fonts-dejavu-core \
+    ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+RUN bunx prisma generate
+RUN bun run build:prod
 
-# Standalone bundle (server.js + traced node_modules), static assets, public/.
-COPY --from=build --chown=alo:alo /app/.next/standalone ./
-COPY --from=build --chown=alo:alo /app/.next/static ./.next/static
-COPY --from=build --chown=alo:alo /app/public ./public
-# Full node_modules are also needed for the bundled ffmpeg binaries and
-# the native sharp module resolved outside the standalone trace.
-COPY --from=build --chown=alo:alo /app/node_modules/@ffmpeg-installer ./node_modules/@ffmpeg-installer
-COPY --from=build --chown=alo:alo /app/node_modules/@ffprobe-installer ./node_modules/@ffprobe-installer
-COPY --from=build --chown=alo:alo /app/node_modules/sharp ./node_modules/sharp
-COPY --from=build --chown=alo:alo /app/node_modules/@img ./node_modules/@img
+# ---- Stage 3: runtime ----
+FROM node:20-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3017
+ENV HOSTNAME=0.0.0.0
 
-# Persist generated media and encrypted backups across container updates.
-RUN mkdir -p storage/uploads storage/videos storage/scene-assets storage/audio storage/backups \
-    && chown -R alo:alo storage
-VOLUME ["/app/storage"]
+# Runtime system deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    fonts-dejavu-core \
+    ca-certificates \
+    curl \
+  && rm -rf /var/lib/apt/lists/* && \
+    useradd -r -u 1001 -g root alo
+
+# Copy standalone server + static + public
+COPY --from=builder --chown=alo:root /app/.next/standalone ./
+COPY --from=builder --chown=alo:root /app/.next/static ./.next/static
+COPY --from=builder --chown=alo:root /app/public ./public
+COPY --from=builder --chown=alo:root /app/prisma ./prisma
+COPY --from=builder --chown=alo:root /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=alo:root /app/node_modules/@prisma ./node_modules/@prisma
+
+# Storage volumes (mounted at runtime)
+RUN mkdir -p /app/db /app/storage && chown -R alo:root /app/db /app/storage
+VOLUME ["/app/db", "/app/storage", "/app/public/avatars", "/app/public/avatar-videos", "/app/public/avatar-audio", "/app/public/avatar-scenes", "/app/public/avatar-thumbs"]
 
 USER alo
 EXPOSE 3017
-HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 \
-  CMD curl -fsS "http://127.0.0.1:${PORT}/api/health" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -sf http://localhost:3017/api/health || exit 1
 
 CMD ["node", "server.js"]

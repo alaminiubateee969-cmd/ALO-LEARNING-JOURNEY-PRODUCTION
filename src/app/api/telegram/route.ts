@@ -5,45 +5,23 @@ import { TELEGRAM_COMMANDS } from "@/lib/platforms";
 import { generateIdeas } from "@/lib/ai";
 
 // Telegram allow-list — only these chat IDs may execute commands.
-// TELEGRAM_ALLOWED_CHAT_IDS is a comma-separated env allow-list (e.g. "8847234,4242").
-// Falls back to the seeded demo chat ID when unset. Never a public catch-all.
-function allowedChatIds(): Set<string> {
-  const raw = (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? "8847234").trim();
-  return new Set(
-    raw
-      .split(",")
-      .map((part) => part.trim())
-      .filter((part) => /^-?\d{1,20}$/.test(part))
-  );
-}
-
-// Optional shared-secret header check when TELEGRAM_BOT_TOKEN is configured.
-// Telegram webhook secrets are delivered as the X-Telegram-Bot-Api-Secret-Token
-// header; requests without a matching header are rejected before any command runs.
-function verifyWebhookSecret(req: Request): boolean {
-  const expected = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  if (!expected) return true; // secret not configured — allow-list alone governs
-  const provided = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
-  return provided.length > 0 && provided === expected;
-}
+// In production this would come from settings/DB. Here it's a constant.
+const ALLOWED_CHAT_IDS = new Set(["8847234"]);
 
 export async function GET() {
   await ensureSeeded();
   const commands = await db.telegramCommand.findMany({ orderBy: { createdAt: "desc" }, take: 20 });
-  return NextResponse.json({ commands, commandList: TELEGRAM_COMMANDS, allowedChatIds: Array.from(allowedChatIds()) });
+  return NextResponse.json({ commands, commandList: TELEGRAM_COMMANDS, allowedChatIds: Array.from(ALLOWED_CHAT_IDS) });
 }
 
 export async function POST(req: Request) {
   await ensureSeeded();
-  if (!verifyWebhookSecret(req)) {
-    return NextResponse.json({ error: "invalid_webhook_secret" }, { status: 401 });
-  }
   const { command, senderId } = await req.json().catch(() => ({ command: "", senderId: "" }));
   const cmd = (command || "").trim();
   const sender = (senderId || "").toString();
 
   // ACTUAL allow-list validation — reject unauthorized chat IDs
-  if (!allowedChatIds().has(sender)) {
+  if (!ALLOWED_CHAT_IDS.has(sender)) {
     const row = await db.telegramCommand.create({
       data: {
         command: cmd,

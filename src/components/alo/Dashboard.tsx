@@ -183,34 +183,6 @@ export default function Dashboard({ onNavigate }: { onNavigate: (s: string) => v
       {/* Sparkline mini-charts row */}
       <SparklineRow />
 
-      {/* Zero-cost media guarantee — live-verified 2026-10-17 */}
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Zero-Cost Media Guarantee
-            <Badge className="bg-emerald-600 text-white text-[10px]">$0 · no paid APIs · live-verified</Badge>
-          </h3>
-          <p className="text-[11px] text-muted-foreground">Every pipeline renders locally — image, voice, music, video, cinematic. No AI API key required.</p>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-          {[
-            { label: "Image", provider: "comfyui-local + sharp", out: "PNG 1024×1024" },
-            { label: "Voice", provider: "espeak-local", out: "WAV narration" },
-            { label: "Music", provider: "ollama lyrics + procedural synth", out: "WAV instrumental" },
-            { label: "Video", provider: "FFmpeg + local TTS", out: "MP4 1080×1920 + SRT" },
-            { label: "Cinematic", provider: "ollama scenes + FFmpeg", out: "MP4 + SRT" },
-          ].map((item) => (
-            <div key={item.label} className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-2.5">
-              <p className="flex items-center gap-1.5 text-xs font-semibold">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> {item.label}
-              </p>
-              <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{item.provider}</p>
-              <p className="mt-1 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">{item.out}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Pipeline overview */}
         <Card className="lg:col-span-2 p-5">
@@ -242,7 +214,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (s: string) => v
             </div>
             <Progress value={w.localModelUsage as number} className="h-2" />
             <p className="text-[11px] text-muted-foreground mt-2">
-              AI generation private/local model বা স্পষ্ট fallback-এ সীমাবদ্ধ; কোনো paid AI provider-এ পাঠানো হয় না।
+              Cost Router প্রথমে local মডেল ব্যবহার করে; paid provider শুধু প্রয়োজনে।
             </p>
           </div>
         </Card>

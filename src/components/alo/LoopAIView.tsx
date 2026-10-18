@@ -207,7 +207,9 @@ export default function LoopAIView() {
           <div className="text-xs text-amber-800 dark:text-amber-200">
             <p className="font-semibold">সত্যিকারের স্ট্যাটাস</p>
             <p className="mt-1">
-              ডিপার্টমেন্ট ও এজেন্ট সংখ্যা ডেটা মডেলে নিবন্ধিত। লেখার জন্য private Ollama, ছবির জন্য local ComfyUI, এবং media render-এর জন্য Piper/eSpeak + FFmpeg ইনস্টল করতে হবে। এখানে paid AI API fallback নেই; স্থানীয় মডেল অনুপস্থিত থাকলে কেবল স্পষ্টভাবে চিহ্নিত template/placeholder ব্যবহার হয়। স্থায়ী worker, SMS/কল ও social publishing পৃথকভাবে কনফিগার ও live-test করা হয়নি।
+              ডিপার্টমেন্ট ও এজেন্ট সংখ্যা ডেটা মডেলে নিবন্ধিত। বাস্তব এজেন্ট এক্সিকিউশনের জন্য
+              অর্কেস্ট্রেশন ইঞ্জিন (ওয়ার্কার প্রসেস) প্রয়োজন — এই স্যান্ডবক্সে স্থায়ী ওয়ার্কার নেই।
+              মূল AI ফাংশন (LLM, image-gen) কাজ করে। ভিডিও/ভয়েস/কল/SMS = BLOCKED_EXTERNAL_SETUP।
             </p>
           </div>
         </div>

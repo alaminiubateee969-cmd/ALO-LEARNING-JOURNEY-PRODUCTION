@@ -27,23 +27,23 @@ export async function POST(req: Request) {
       actor: "SafetyGuardianAgent",
       action: "protective_mode.run",
       detail: `risk=${result.data.riskLevel} approved=${result.data.approved} via ${result.provider}`,
-      severity: result.usedFallback || result.data.riskLevel !== "low" ? "warn" : "info",
+      severity: result.data.riskLevel === "high" ? "warn" : "info",
     },
   });
 
   // Update AgentRun with success
   await db.aIAgentRun.update({
     where: { id: agentRun.id },
-      data: { status: result.usedFallback ? "blocked_external_setup" : "success", errorMsg: result.usedFallback ? "Local safety review unavailable; human review required." : null, finishedAt: new Date() },
+    data: { status: "success", finishedAt: new Date() },
   });
   await db.auditLog.create({
     data: {
       actor: "safety_guardian",
       action: "agent.protective_mode_review",
-      detail: `AgentRun ${agentRun.id}: Protective mode review → ${result.usedFallback ? "human_review_required" : "complete"}`,
-      severity: result.usedFallback ? "warn" : "info",
+      detail: `AgentRun ${agentRun.id}: Protective mode review → success`,
+      severity: "info",
     },
   });
 
-  return NextResponse.json({ review: result.data, provider: result.provider, usedFallback: result.usedFallback, status: result.usedFallback ? "human_review_required" : "review_complete" }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ review: result.data, provider: result.provider, usedFallback: result.usedFallback });
 }

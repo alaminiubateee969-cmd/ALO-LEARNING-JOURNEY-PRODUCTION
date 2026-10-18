@@ -1,0 +1,960 @@
+     1→     1→     1→"use client";
+     2→     2→     2→
+     3→     3→     3→import { useCallback, useEffect, useMemo, useState } from "react";
+     4→     4→     4→import { SectionHeader } from "./primitives";
+     5→     5→     5→import { Card } from "@/components/ui/card";
+     6→     6→     6→import { Button } from "@/components/ui/button";
+     7→     7→     7→import { Badge } from "@/components/ui/badge";
+     8→     8→     8→import { Label } from "@/components/ui/label";
+     9→     9→     9→import { Textarea } from "@/components/ui/textarea";
+    10→    10→    10→import { Input } from "@/components/ui/input";
+    11→    11→    11→import { Skeleton } from "@/components/ui/skeleton";
+    12→    12→    12→import { ScrollArea } from "@/components/ui/scroll-area";
+    13→    13→    13→import {
+    14→    14→    14→  Select,
+    15→    15→    15→  SelectContent,
+    16→    16→    16→  SelectItem,
+    17→    17→    17→  SelectTrigger,
+    18→    18→    18→  SelectValue,
+    19→    19→    19→} from "@/components/ui/select";
+    20→    20→    20→import {
+    21→    21→    21→  Dialog,
+    22→    22→    22→  DialogContent,
+    23→    23→    23→  DialogTitle,
+    24→    24→    24→} from "@/components/ui/dialog";
+    25→    25→    25→import { useToast } from "@/hooks/use-toast";
+    26→    26→    26→import {
+    27→    27→    27→  Image as ImageIcon,
+    28→    28→    28→  Wand2,
+    29→    29→    29→  Download,
+    30→    30→    30→  Copy,
+    31→    31→    31→  Layers,
+    32→    32→    32→  Sparkles,
+    33→    33→    33→  RefreshCw,
+    34→    34→    34→  CheckCircle2,
+    35→    35→    35→  AlertTriangle,
+    36→    36→    36→  Clock,
+    37→    37→    37→  ImageOff,
+    38→    38→    38→  Maximize2,
+    39→    39→    39→  X,
+    40→    40→    40→  Palette,
+    41→    41→    41→  Frame,
+    42→    42→    42→  Database,
+    43→    43→    43→} from "lucide-react";
+    44→    44→    44→
+    45→    45→    45→// ---------- Types ----------
+    46→    46→    46→interface PresetInfo {
+    47→    47→    47→  id: string;
+    48→    48→    48→  label: string;
+    49→    49→    49→  samplePrompt: string;
+    50→    50→    50→}
+    51→    51→    51→
+    52→    52→    52→interface SizeInfo {
+    53→    53→    53→  size: string;
+    54→    54→    54→  purpose: string;
+    55→    55→    55→}
+    56→    56→    56→
+    57→    57→    57→interface GalleryFile {
+    58→    58→    58→  name: string;
+    59→    59→    59→  url: string;
+    60→    60→    60→  size: number;
+    61→    61→    61→  mtime: string;
+    62→    62→    62→}
+    63→    63→    63→
+    64→    64→    64→interface StudioMeta {
+    65→    65→    65→  presets: PresetInfo[];
+    66→    66→    66→  sizes: SizeInfo[];
+    67→    67→    67→  supportedSizes: string[];
+    68→    68→    68→  gallery: GalleryFile[];
+    69→    69→    69→  cacheSize: number;
+    70→    70→    70→}
+    71→    71→    71→
+    72→    72→    72→interface GenResult {
+    73→    73→    73→  index: number;
+    74→    74→    74→  prompt: string;
+    75→    75→    75→  enrichedPrompt?: string;
+    76→    76→    76→  url: string;
+    77→    77→    77→  size: string;
+    78→    78→    78→  bytes: number;
+    79→    79→    79→  cached: boolean;
+    80→    80→    80→  error?: string;
+    81→    81→    81→}
+    82→    82→    82→
+    83→    83→    83→interface GenResponse {
+    84→    84→    84→  ok: boolean;
+    85→    85→    85→  batchId?: string;
+    86→    86→    86→  preset?: string | null;
+    87→    87→    87→  size?: string;
+    88→    88→    88→  total?: number;
+    89→    89→    89→  succeeded?: number;
+    90→    90→    90→  failed?: number;
+    91→    91→    91→  cached?: number;
+    92→    92→    92→  results?: GenResult[];
+    93→    93→    93→  error?: string;
+    94→    94→    94→}
+    95→    95→    95→
+    96→    96→    96→// ---------- Constants ----------
+    97→    97→    97→const PRESET_TONES: Record<string, string> = {
+    98→    98→    98→  "parenting-warm": "from-amber-400/25 to-rose-400/15 text-amber-700 dark:text-amber-300 ring-amber-300/50",
+    99→    99→    99→  "education-clean": "from-emerald-400/25 to-teal-400/15 text-emerald-700 dark:text-emerald-300 ring-emerald-300/50",
+   100→   100→   100→  "marketing-bold": "from-fuchsia-500/25 to-pink-500/15 text-fuchsia-700 dark:text-fuchsia-300 ring-fuchsia-300/50",
+   101→   101→   101→  "social-square": "from-pink-400/25 to-rose-400/15 text-pink-700 dark:text-pink-300 ring-pink-300/50",
+   102→   102→   102→  cinematic: "from-violet-500/25 to-fuchsia-500/15 text-violet-700 dark:text-violet-300 ring-violet-300/50",
+   103→   103→   103→  "minimal-line": "from-slate-400/25 to-zinc-400/15 text-slate-700 dark:text-slate-300 ring-slate-300/50",
+   104→   104→   104→  "watercolor-soft": "from-rose-300/25 to-amber-300/15 text-rose-700 dark:text-rose-300 ring-rose-300/50",
+   105→   105→   105→  "isometric-3d": "from-cyan-400/25 to-emerald-400/15 text-cyan-700 dark:text-cyan-300 ring-cyan-300/50",
+   106→   106→   106→};
+   107→   107→   107→
+   108→   108→   108→const PRESENT_NONE = "__none__";
+   109→   109→   109→const MAX_PROMPTS = 8;
+   110→   110→   110→
+   111→   111→   111→// ---------- Helpers ----------
+   112→   112→   112→function formatBytes(bytes: number): string {
+   113→   113→   113→  if (!bytes) return "0 B";
+   114→   114→   114→  const units = ["B", "KB", "MB"];
+   115→   115→   115→  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+   116→   116→   116→  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+   117→   117→   117→}
+   118→   118→   118→
+   119→   119→   119→function timeAgo(iso: string): string {
+   120→   120→   120→  const diff = Date.now() - new Date(iso).getTime();
+   121→   121→   121→  const m = Math.floor(diff / 60000);
+   122→   122→   122→  if (m < 1) return "just now";
+   123→   123→   123→  if (m < 60) return `${m}m ago`;
+   124→   124→   124→  const h = Math.floor(m / 60);
+   125→   125→   125→  if (h < 24) return `${h}h ago`;
+   126→   126→   126→  return `${Math.floor(h / 24)}d ago`;
+   127→   127→   127→}
+   128→   128→   128→
+   129→   129→   129→// ---------- Component ----------
+   130→   130→   130→export default function ImageStudioView() {
+   131→   131→   131→  const { toast } = useToast();
+   132→   132→   132→
+   133→   133→   133→  // Meta state (from GET)
+   134→   134→   134→  const [meta, setMeta] = useState<StudioMeta | null>(null);
+   135→   135→   135→  const [metaLoading, setMetaLoading] = useState(true);
+   136→   136→   136→
+   137→   137→   137→  // Form state
+   138→   138→   138→  const [promptsText, setPromptsText] = useState(
+   139→   139→   139→    "a Bengali mother reading a storybook to her toddler at bedtime\na father and child planting a sapling in a sunny garden\na teacher helping a young student draw on a chalkboard"
+   140→   140→   140→  );
+   141→   141→   141→  const [preset, setPreset] = useState<string>("parenting-warm");
+   142→   142→   142→  const [size, setSize] = useState<string>("1024x1024");
+   143→   143→   143→
+   144→   144→   144→  // Generation state
+   145→   145→   145→  const [generating, setGenerating] = useState(false);
+   146→   146→   146→  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+   147→   147→   147→  const [results, setResults] = useState<GenResult[]>([]);
+   148→   148→   148→  const [lastBatch, setLastBatch] = useState<{
+   149→   149→   149→    batchId: string;
+   150→   150→   150→    total: number;
+   151→   151→   151→    succeeded: number;
+   152→   152→   152→    failed: number;
+   153→   153→   153→    cached: number;
+   154→   154→   154→  } | null>(null);
+   155→   155→   155→
+   156→   156→   156→  // Lightbox
+   157→   157→   157→  const [lightbox, setLightbox] = useState<GenResult | GalleryFile | null>(null);
+   158→   158→   158→
+   159→   159→   159→  const promptLines = useMemo(
+   160→   160→   160→    () =>
+   161→   161→   161→      promptsText
+   162→   162→   162→        .split("\n")
+   163→   163→   163→        .map((l) => l.trim())
+   164→   164→   164→        .filter((l) => l.length > 0),
+   165→   165→   165→    [promptsText]
+   166→   166→   166→  );
+   167→   167→   167→
+   168→   168→   168→  // Load metadata + gallery
+   169→   169→   169→  const loadMeta = useCallback(async () => {
+   170→   170→   170→    setMetaLoading(true);
+   171→   171→   171→    try {
+   172→   172→   172→      const res = await fetch("/api/image-studio?gallery=true", { cache: "no-store" });
+   173→   173→   173→      const data: StudioMeta = await res.json();
+   174→   174→   174→      setMeta(data);
+   175→   175→   175→    } catch (e) {
+   176→   176→   176→      toast({
+   177→   177→   177→        title: "Failed to load studio",
+   178→   178→   178→        description: String(e),
+   179→   179→   179→        variant: "destructive",
+   180→   180→   180→      });
+   181→   181→   181→    } finally {
+   182→   182→   182→      setMetaLoading(false);
+   183→   183→   183→    }
+   184→   184→   184→  }, [toast]);
+   185→   185→   185→
+   186→   186→   186→  useEffect(() => {
+   187→   187→   187→    loadMeta();
+   188→   188→   188→  }, [loadMeta]);
+   189→   189→   189→
+   190→   190→   190→  // Generate images
+   191→   191→   191→  const handleGenerate = async () => {
+   192→   192→   192→    if (promptLines.length === 0) {
+   193→   193→   193→      toast({
+   194→   194→   194→        title: "No prompts",
+   195→   195→   195→        description: "অন্তত একটি প্রম্পট লিখুন।",
+   196→   196→   196→        variant: "destructive",
+   197→   197→   197→      });
+   198→   198→   198→      return;
+   199→   199→   199→    }
+   200→   200→   200→    if (promptLines.length > MAX_PROMPTS) {
+   201→   201→   201→      toast({
+   202→   202→   202→        title: "Too many prompts",
+   203→   203→   203→        description: `সর্বোচ্চ ${MAX_PROMPTS}টি প্রম্পট অনুমোদিত।`,
+   204→   204→   204→        variant: "destructive",
+   205→   205→   205→      });
+   206→   206→   206→      return;
+   207→   207→   207→    }
+   208→   208→   208→
+   209→   209→   209→    setGenerating(true);
+   210→   210→   210→    setProgress({ done: 0, total: promptLines.length });
+   211→   211→   211→    setResults([]);
+   212→   212→   212→
+   213→   213→   213→    const batchId = `batch_${Date.now()}`;
+   214→   214→   214→    const body = {
+   215→   215→   215→      prompts: promptLines,
+   216→   216→   216→      size,
+   217→   217→   217→      preset: preset === PRESENT_NONE ? undefined : preset,
+   218→   218→   218→      batchId,
+   219→   219→   219→    };
+   220→   220→   220→
+   221→   221→   221→    try {
+   222→   222→   222→      const res = await fetch("/api/image-studio", {
+   223→   223→   223→        method: "POST",
+   224→   224→   224→        headers: { "Content-Type": "application/json" },
+   225→   225→   225→        body: JSON.stringify(body),
+   226→   226→   226→      });
+   227→   227→   227→      const data: GenResponse = await res.json();
+   228→   228→   228→
+   229→   229→   229→      if (!res.ok || !data.ok) {
+   230→   230→   230→        throw new Error(data.error || "Generation failed");
+   231→   231→   231→      }
+   232→   232→   232→
+   233→   233→   233→      // Animate results in one by one for perceived progress
+   234→   234→   234→      const out: GenResult[] = [];
+   235→   235→   235→      for (const r of data.results ?? []) {
+   236→   236→   236→        out.push(r);
+   237→   237→   237→        setResults([...out]);
+   238→   238→   238→        setProgress({ done: out.length, total: promptLines.length });
+   239→   239→   239→        // small delay for visual feedback
+   240→   240→   240→        await new Promise((resolve) => setTimeout(resolve, 120));
+   241→   241→   241→      }
+   242→   242→   242→
+   243→   243→   243→      setLastBatch({
+   244→   244→   244→        batchId: data.batchId ?? batchId,
+   245→   245→   245→        total: data.total ?? out.length,
+   246→   246→   246→        succeeded: data.succeeded ?? out.filter((r) => !!r.url).length,
+   247→   247→   247→        failed: data.failed ?? out.filter((r) => !r.url).length,
+   248→   248→   248→        cached: data.cached ?? out.filter((r) => r.cached).length,
+   249→   249→   249→      });
+   250→   250→   250→
+   251→   251→   251→      toast({
+   252→   252→   252→        title: `Generated ${data.succeeded ?? 0}/${data.total ?? 0} images`,
+   253→   253→   253→        description: `${data.cached ?? 0} cached · ${data.failed ?? 0} failed`,
+   254→   254→   254→      });
+   255→   255→   255→
+   256→   256→   256→      // Refresh gallery + cache count
+   257→   257→   257→      loadMeta();
+   258→   258→   258→    } catch (e) {
+   259→   259→   259→      toast({
+   260→   260→   260→        title: "Generation failed",
+   261→   261→   261→        description: String(e),
+   262→   262→   262→        variant: "destructive",
+   263→   263→   263→      });
+   264→   264→   264→    } finally {
+   265→   265→   265→      setGenerating(false);
+   266→   266→   266→      setProgress(null);
+   267→   267→   267→    }
+   268→   268→   268→  };
+   269→   269→   269→
+   270→   270→   270→  const copyPrompt = async (text: string) => {
+   271→   271→   271→    try {
+   272→   272→   272→      await navigator.clipboard.writeText(text);
+   273→   273→   273→      toast({ title: "Copied", description: "প্রম্পট কপি হয়েছে" });
+   274→   274→   274→    } catch {
+   275→   275→   275→      toast({ title: "Copy failed", variant: "destructive" });
+   276→   276→   276→    }
+   277→   277→   277→  };
+   278→   278→   278→
+   279→   279→   279→  const insertPromptLine = (sample: string) => {
+   280→   280→   280→    const trimmed = sample.replace(/\.\.\.$/, "").trim();
+   281→   281→   281→    setPromptsText((prev) => (prev.trim() ? `${prev}\n${trimmed}` : trimmed));
+   282→   282→   282→    toast({ title: "Sample prompt added", description: "নতুন লাইনে যোগ হয়েছে" });
+   283→   283→   283→  };
+   284→   284→   284→
+   285→   285→   285→  // ---------- Render ----------
+   286→   286→   286→  return (
+   287→   287→   287→    <div className="alo-fade-up space-y-5">
+   288→   288→   288→      <SectionHeader
+   289→   289→   289→        title="Image Studio Pro"
+   290→   290→   290→        bn="ইমেজ স্টুডিও প্রো"
+   291→   291→   291→        desc="৮টি স্টাইল প্রিসেট, ৭টি সাইজ, ব্যাচ জেনারেশন — প্রম্পট+সাইজ হ্যাশ দিয়ে ক্যাশিং।"
+   292→   292→   292→        icon={<ImageIcon className="h-5 w-5" />}
+   293→   293→   293→        action={
+   294→   294→   294→          <Button
+   295→   295→   295→            onClick={loadMeta}
+   296→   296→   296→            disabled={metaLoading}
+   297→   297→   297→            variant="outline"
+   298→   298→   298→            size="sm"
+   299→   299→   299→            className="h-8"
+   300→   300→   300→          >
+   301→   301→   301→            <RefreshCw
+   302→   302→   302→              className={`h-3.5 w-3.5 mr-1.5 ${metaLoading ? "animate-spin" : ""}`}
+   303→   303→   303→            />
+   304→   304→   304→            Refresh
+   305→   305→   305→          </Button>
+   306→   306→   306→        }
+   307→   307→   307→      />
+   308→   308→   308→
+   309→   309→   309→      {/* Header card with stats badges */}
+   310→   310→   310→      <Card className="p-4 sm:p-5 bg-gradient-to-br from-fuchsia-500/10 via-rose-500/5 to-amber-500/10 border-0 shadow-sm">
+   311→   311→   311→        <div className="flex flex-wrap items-center justify-between gap-3">
+   312→   312→   312→          <div className="min-w-0">
+   313→   313→   313→            <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
+   314→   314→   314→              <Sparkles className="h-4 w-4 text-fuchsia-600" />
+   315→   315→   315→              Image Studio Pro
+   316→   316→   316→              <span className="alo-text-grad text-sm font-semibold">
+   317→   317→   317→                / ইমেজ স্টুডিও প্রো
+   318→   318→   318→              </span>
+   319→   319→   319→            </h2>
+   320→   320→   320→            <p className="text-xs text-muted-foreground mt-1">
+   321→   321→   321→              ৮টি স্টাইল প্রিসেট, ৭টি সাইজ, ব্যাচ জেনারেশন
+   322→   322→   322→            </p>
+   323→   323→   323→          </div>
+   324→   324→   324→          <div className="flex flex-wrap items-center gap-2">
+   325→   325→   325→            <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
+   326→   326→   326→              <Database className="h-3 w-3 mr-1" />
+   327→   327→   327→              {metaLoading ? "…" : meta?.cacheSize ?? 0} cached
+   328→   328→   328→            </Badge>
+   329→   329→   329→            <Badge className="bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-100">
+   330→   330→   330→              <Palette className="h-3 w-3 mr-1" />
+   331→   331→   331→              {meta?.presets.length ?? 8} presets
+   332→   332→   332→            </Badge>
+   333→   333→   333→            <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">
+   334→   334→   334→              <Frame className="h-3 w-3 mr-1" />
+   335→   335→   335→              {meta?.sizes.length ?? 7} sizes
+   336→   336→   336→            </Badge>
+   337→   337→   337→            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+   338→   338→   338→              <Layers className="h-3 w-3 mr-1" />
+   339→   339→   339→              batch up to {MAX_PROMPTS}
+   340→   340→   340→            </Badge>
+   341→   341→   341→          </div>
+   342→   342→   342→        </div>
+   343→   343→   343→      </Card>
+   344→   344→   344→
+   345→   345→   345→      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+   346→   346→   346→        {/* LEFT — Generation form */}
+   347→   347→   347→        <div className="lg:col-span-3 space-y-4">
+   348→   348→   348→          <Card className="p-4 sm:p-5">
+   349→   349→   349→            <h3 className="font-semibold flex items-center gap-2 mb-3">
+   350→   350→   350→              <Wand2 className="h-4 w-4 text-fuchsia-600" />
+   351→   351→   351→              Generation Form
+   352→   352→   352→              <span className="text-xs text-muted-foreground font-normal">
+   353→   353→   353→                / জেনারেশন ফর্ম
+   354→   354→   354→              </span>
+   355→   355→   355→            </h3>
+   356→   356→   356→
+   357→   357→   357→            {/* Prompts textarea */}
+   358→   358→   358→            <div className="space-y-2">
+   359→   359→   359→              <div className="flex items-center justify-between">
+   360→   360→   360→                <Label className="text-xs flex items-center gap-1.5">
+   361→   361→   361→                  <ImageIcon className="h-3 w-3" />
+   362→   362→   362→                  Prompts
+   363→   363→   363→                  <span className="text-muted-foreground font-normal">
+   364→   364→   364→                    / প্রম্পট তালিকা
+   365→   365→   365→                  </span>
+   366→   366→   366→                </Label>
+   367→   367→   367→                <Badge
+   368→   368→   368→                  variant="outline"
+   369→   369→   369→                  className={`text-[10px] ${
+   370→   370→   370→                    promptLines.length > MAX_PROMPTS
+   371→   371→   371→                      ? "border-rose-400 text-rose-700 bg-rose-50"
+   372→   372→   372→                      : "bg-muted/40"
+   373→   373→   373→                  }`}
+   374→   374→   374→                >
+   375→   375→   375→                  {promptLines.length}/{MAX_PROMPTS} lines
+   376→   376→   376→                </Badge>
+   377→   377→   377→              </div>
+   378→   378→   378→              <Textarea
+   379→   379→   379→                value={promptsText}
+   380→   380→   380→                onChange={(e) => setPromptsText(e.target.value)}
+   381→   381→   381→                rows={6}
+   382→   382→   382→                placeholder="এক লাইনে একটি প্রম্পট। সর্বোচ্চ ৮টি।&#10;a mother reading to her child&#10;a teacher helping a student"
+   383→   383→   383→                className="text-xs sm:text-sm font-mono resize-y"
+   384→   384→   384→              />
+   385→   385→   385→              <p className="text-[10px] text-muted-foreground">
+   386→   386→   386→                এক লাইনে একটি প্রম্পট। সর্বোচ্চ ৮টি। প্রতিটি লাইন আলাদা ছবি তৈরি করবে।
+   387→   387→   387→              </p>
+   388→   388→   388→            </div>
+   389→   389→   389→
+   390→   390→   390→            {/* Style preset picker */}
+   391→   391→   391→            <div className="mt-4 space-y-2">
+   392→   392→   392→              <Label className="text-xs flex items-center gap-1.5">
+   393→   393→   393→                <Palette className="h-3 w-3" />
+   394→   394→   394→                Style Preset
+   395→   395→   395→                <span className="text-muted-foreground font-normal">
+   396→   396→   396→                  / স্টাইল প্রিসেট
+   397→   397→   397→                </span>
+   398→   398→   398→              </Label>
+   399→   399→   399→              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+   400→   400→   400→                {/* None (raw prompt) card */}
+   401→   401→   401→                <button
+   402→   402→   402→                  type="button"
+   403→   403→   403→                  onClick={() => setPreset(PRESENT_NONE)}
+   404→   404→   404→                  className={`rounded-lg border p-2 text-left transition-all hover:shadow-md ${
+   405→   405→   405→                    preset === PRESENT_NONE
+   406→   406→   406→                      ? "border-fuchsia-400 ring-2 ring-fuchsia-300/60 bg-fuchsia-50 dark:bg-fuchsia-950/30"
+   407→   407→   407→                      : "border-border/60 hover:border-fuchsia-300 bg-muted/30"
+   408→   408→   408→                  }`}
+   409→   409→   409→                >
+   410→   410→   410→                  <div className="flex items-center gap-1.5">
+   411→   411→   411→                    <ImageOff className="h-3 w-3 text-muted-foreground" />
+   412→   412→   412→                    <p className="text-[11px] font-semibold">None</p>
+   413→   413→   413→                  </div>
+   414→   414→   414→                  <p className="text-[9px] text-muted-foreground mt-1 line-clamp-2">
+   415→   415→   415→                    Raw prompt — কোনো স্টাইল যোগ করবেন না
+   416→   416→   416→                  </p>
+   417→   417→   417→                </button>
+   418→   418→   418→
+   419→   419→   419→                {metaLoading
+   420→   420→   420→                  ? Array.from({ length: 8 }).map((_, i) => (
+   421→   421→   421→                      <Skeleton key={i} className="h-[58px] rounded-lg" />
+   422→   422→   422→                    ))
+   423→   423→   423→                  : meta?.presets.map((p) => {
+   424→   424→   424→                      const isSelected = preset === p.id;
+   425→   425→   425→                      const tone =
+   426→   426→   426→                        PRESET_TONES[p.id] ??
+   427→   427→   427→                        "from-slate-400/20 to-slate-400/10 text-slate-700 ring-slate-300/50";
+   428→   428→   428→                      return (
+   429→   429→   429→                        <button
+   430→   430→   430→                          key={p.id}
+   431→   431→   431→                          type="button"
+   432→   432→   432→                          onClick={() => setPreset(p.id)}
+   433→   433→   433→                          className={`rounded-lg border bg-gradient-to-br p-2 text-left transition-all hover:shadow-md hover:-translate-y-0.5 ${
+   434→   434→   434→                            isSelected
+   435→   435→   435→                              ? `ring-2 ${tone} border-transparent`
+   436→   436→   436→                              : "border-border/60 hover:border-fuchsia-300 bg-muted/30"
+   437→   437→   437→                          }`}
+   438→   438→   438→                          title={p.samplePrompt}
+   439→   439→   439→                        >
+   440→   440→   440→                          <p className="text-[11px] font-semibold capitalize truncate">
+   441→   441→   441→                            {p.label}
+   442→   442→   442→                          </p>
+   443→   443→   443→                          <p className="text-[9px] text-muted-foreground mt-0.5 line-clamp-2 leading-tight">
+   444→   444→   444→                            {p.samplePrompt}
+   445→   445→   445→                          </p>
+   446→   446→   446→                        </button>
+   447→   447→   447→                      );
+   448→   448→   448→                    })}
+   449→   449→   449→              </div>
+   450→   450→   450→            </div>
+   451→   451→   451→
+   452→   452→   452→            {/* Size picker */}
+   453→   453→   453→            <div className="mt-4 space-y-2">
+   454→   454→   454→              <Label className="text-xs flex items-center gap-1.5">
+   455→   455→   455→                <Frame className="h-3 w-3" />
+   456→   456→   456→                Output Size
+   457→   457→   457→                <span className="text-muted-foreground font-normal">
+   458→   458→   458→                  / সাইজ
+   459→   459→   459→                </span>
+   460→   460→   460→              </Label>
+   461→   461→   461→              {metaLoading ? (
+   462→   462→   462→                <Skeleton className="h-9 w-full" />
+   463→   463→   463→              ) : (
+   464→   464→   464→                <Select value={size} onValueChange={setSize}>
+   465→   465→   465→                  <SelectTrigger className="h-9 text-xs">
+   466→   466→   466→                    <SelectValue />
+   467→   467→   467→                  </SelectTrigger>
+   468→   468→   468→                  <SelectContent>
+   469→   469→   469→                    {meta?.sizes.map((s) => (
+   470→   470→   470→                      <SelectItem key={s.size} value={s.size}>
+   471→   471→   471→                        <span className="font-mono font-semibold">{s.size}</span>
+   472→   472→   472→                        <span className="text-muted-foreground"> — {s.purpose}</span>
+   473→   473→   473→                      </SelectItem>
+   474→   474→   474→                    ))}
+   475→   475→   475→                  </SelectContent>
+   476→   476→   476→                </Select>
+   477→   477→   477→              )}
+   478→   478→   478→              <div className="flex flex-wrap gap-1.5 mt-1">
+   479→   479→   479→                {meta?.sizes.slice(0, 4).map((s) => (
+   480→   480→   480→                  <button
+   481→   481→   481→                    key={s.size}
+   482→   482→   482→                    type="button"
+   483→   483→   483→                    onClick={() => setSize(s.size)}
+   484→   484→   484→                    className={`text-[9px] font-mono px-1.5 py-0.5 rounded border transition-colors ${
+   485→   485→   485→                      size === s.size
+   486→   486→   486→                        ? "border-fuchsia-400 bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300"
+   487→   487→   487→                        : "border-border/60 bg-muted/30 hover:border-fuchsia-300"
+   488→   488→   488→                    }`}
+   489→   489→   489→                  >
+   490→   490→   490→                    {s.size}
+   491→   491→   491→                  </button>
+   492→   492→   492→                ))}
+   493→   493→   493→              </div>
+   494→   494→   494→            </div>
+   495→   495→   495→
+   496→   496→   496→            {/* Generate button + progress */}
+   497→   497→   497→            <div className="mt-5 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+   498→   498→   498→              <Button
+   499→   499→   499→                onClick={handleGenerate}
+   500→   500→   500→                disabled={generating || promptLines.length === 0}
+   501→   501→   501→                className="bg-gradient-to-r from-fuchsia-600 to-rose-500 hover:from-fuchsia-700 hover:to-rose-600 text-white h-10 sm:w-auto"
+   502→   502→   502→              >
+   503→   503→   503→                {generating ? (
+   504→   504→   504→                  <>
+   505→   505→   505→                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+   506→   506→   506→                    Generating…
+   507→   507→   507→                  </>
+   508→   508→   508→                ) : (
+   509→   509→   509→                  <>
+   510→   510→   510→                    <Wand2 className="h-4 w-4 mr-2" />
+   511→   511→   511→                    Generate Images
+   512→   512→   512→                    <span className="ml-1 opacity-80 text-xs">
+   513→   513→   513→                      ({promptLines.length})
+   514→   514→   514→                    </span>
+   515→   515→   515→                  </>
+   516→   516→   516→                )}
+   517→   517→   517→              </Button>
+   518→   518→   518→
+   519→   519→   519→              {progress && (
+   520→   520→   520→                <div className="flex-1 min-w-0">
+   521→   521→   521→                  <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+   522→   522→   522→                    <span>
+   523→   523→   523→                      Batch progress / ব্যাচ প্রগ্রেস
+   524→   524→   524→                    </span>
+   525→   525→   525→                    <span className="font-mono">
+   526→   526→   526→                      {progress.done}/{progress.total}
+   527→   527→   527→                    </span>
+   528→   528→   528→                  </div>
+   529→   529→   529→                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+   530→   530→   530→                    <div
+   531→   531→   531→                      className="h-full bg-gradient-to-r from-fuchsia-500 to-rose-400 transition-all duration-300"
+   532→   532→   532→                      style={{
+   533→   533→   533→                        width: `${
+   534→   534→   534→                          progress.total > 0
+   535→   535→   535→                            ? (progress.done / progress.total) * 100
+   536→   536→   536→                            : 0
+   537→   537→   537→                        }%`,
+   538→   538→   538→                      }}
+   539→   539→   539→                    />
+   540→   540→   540→                  </div>
+   541→   541→   541→                </div>
+   542→   542→   542→              )}
+   543→   543→   543→            </div>
+   544→   544→   544→
+   545→   545→   545→            {/* Last batch summary */}
+   546→   546→   546→            {lastBatch && (
+   547→   547→   547→              <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px]">
+   548→   548→   548→                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+   549→   549→   549→                  <CheckCircle2 className="h-3 w-3 mr-1" />
+   550→   550→   550→                  {lastBatch.succeeded} succeeded
+   551→   551→   551→                </Badge>
+   552→   552→   552→                <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
+   553→   553→   553→                  <Database className="h-3 w-3 mr-1" />
+   554→   554→   554→                  {lastBatch.cached} cached
+   555→   555→   555→                </Badge>
+   556→   556→   556→                {lastBatch.failed > 0 && (
+   557→   557→   557→                  <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">
+   558→   558→   558→                    <AlertTriangle className="h-3 w-3 mr-1" />
+   559→   559→   559→                    {lastBatch.failed} failed
+   560→   560→   560→                  </Badge>
+   561→   561→   561→                )}
+   562→   562→   562→                <span className="text-muted-foreground font-mono truncate">
+   563→   563→   563→                  {lastBatch.batchId}
+   564→   564→   564→                </span>
+   565→   565→   565→              </div>
+   566→   566→   566→            )}
+   567→   567→   567→          </Card>
+   568→   568→   568→
+   569→   569→   569→          {/* Results grid */}
+   570→   570→   570→          <Card className="p-4 sm:p-5">
+   571→   571→   571→            <div className="flex items-center justify-between mb-3">
+   572→   572→   572→              <h3 className="font-semibold flex items-center gap-2">
+   573→   573→   573→                <Layers className="h-4 w-4 text-fuchsia-600" />
+   574→   574→   574→                Results
+   575→   575→   575→                <span className="text-xs text-muted-foreground font-normal">
+   576→   576→   576→                  / ফলাফল
+   577→   577→   577→                </span>
+   578→   578→   578→              </h3>
+   579→   579→   579→              {results.length > 0 && (
+   580→   580→   580→                <Badge variant="outline" className="text-[10px]">
+   581→   581→   581→                  {results.length} image{results.length === 1 ? "" : "s"}
+   582→   582→   582→                </Badge>
+   583→   583→   583→              )}
+   584→   584→   584→            </div>
+   585→   585→   585→
+   586→   586→   586→            {generating && results.length === 0 ? (
+   587→   587→   587→              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+   588→   588→   588→                {Array.from({ length: Math.max(3, promptLines.length || 3) }).map(
+   589→   589→   589→                  (_, i) => (
+   590→   590→   590→                    <div key={i} className="space-y-2">
+   591→   591→   591→                      <Skeleton className="aspect-square w-full rounded-lg" />
+   592→   592→   592→                      <Skeleton className="h-3 w-3/4" />
+   593→   593→   593→                      <Skeleton className="h-3 w-1/2" />
+   594→   594→   594→                    </div>
+   595→   595→   595→                  )
+   596→   596→   596→                )}
+   597→   597→   597→              </div>
+   598→   598→   598→            ) : results.length === 0 ? (
+   599→   599→   599→              <div className="text-center py-12 text-muted-foreground">
+   600→   600→   600→                <ImageIcon className="h-12 w-12 mx-auto mb-3 opacity-20" />
+   601→   601→   601→                <p className="text-sm font-medium">No images yet</p>
+   602→   602→   602→                <p className="text-xs">
+   603→   603→   603→                  প্রম্পট লিখে &quot;Generate Images&quot; চাপুন।
+   604→   604→   604→                </p>
+   605→   605→   605→              </div>
+   606→   606→   606→            ) : (
+   607→   607→   607→              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+   608→   608→   608→                {results.map((r) => (
+   609→   609→   609→                  <div
+   610→   610→   610→                    key={r.index}
+   611→   611→   611→                    className="rounded-xl border border-border/60 bg-card overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5"
+   612→   612→   612→                  >
+   613→   613→   613→                    <div className="relative aspect-square bg-muted/40 overflow-hidden group">
+   614→   614→   614→                      {r.url ? (
+   615→   615→   615→                        <img
+   616→   616→   616→                          src={r.url}
+   617→   617→   617→                          alt={r.prompt}
+   618→   618→   618→                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+   619→   619→   619→                        />
+   620→   620→   620→                      ) : (
+   621→   621→   621→                        <div className="w-full h-full flex flex-col items-center justify-center text-rose-500">
+   622→   622→   622→                          <ImageOff className="h-8 w-8 mb-1 opacity-60" />
+   623→   623→   623→                          <p className="text-[10px] font-medium">Failed</p>
+   624→   624→   624→                        </div>
+   625→   625→   625→                      )}
+   626→   626→   626→                      <div className="absolute top-2 left-2">
+   627→   627→   627→                        {r.cached ? (
+   628→   628→   628→                          <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 text-[9px]">
+   629→   629→   629→                            <Database className="h-2.5 w-2.5 mr-0.5" />
+   630→   630→   630→                            Cached
+   631→   631→   631→                          </Badge>
+   632→   632→   632→                        ) : (
+   633→   633→   633→                          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 text-[9px]">
+   634→   634→   634→                            <Sparkles className="h-2.5 w-2.5 mr-0.5" />
+   635→   635→   635→                            New
+   636→   636→   636→                          </Badge>
+   637→   637→   637→                        )}
+   638→   638→   638→                      </div>
+   639→   639→   639→                      {r.url && (
+   640→   640→   640→                        <button
+   641→   641→   641→                          type="button"
+   642→   642→   642→                          onClick={() => setLightbox(r)}
+   643→   643→   643→                          className="absolute top-2 right-2 rounded-md bg-black/40 hover:bg-black/60 text-white p-1.5 transition-colors"
+   644→   644→   644→                          aria-label="View full"
+   645→   645→   645→                        >
+   646→   646→   646→                          <Maximize2 className="h-3 w-3" />
+   647→   647→   647→                        </button>
+   648→   648→   648→                      )}
+   649→   649→   649→                    </div>
+   650→   650→   650→                    <div className="p-2.5 space-y-2">
+   651→   651→   651→                      <p
+   652→   652→   652→                        className="text-[11px] leading-tight line-clamp-2"
+   653→   653→   653→                        title={r.prompt}
+   654→   654→   654→                      >
+   655→   655→   655→                        {r.prompt}
+   656→   656→   656→                      </p>
+   657→   657→   657→                      {r.enrichedPrompt && r.enrichedPrompt !== r.prompt && (
+   658→   658→   658→                        <p
+   659→   659→   659→                          className="text-[9px] text-muted-foreground line-clamp-2 italic"
+   660→   660→   660→                          title={r.enrichedPrompt}
+   661→   661→   661→                        >
+   662→   662→   662→                          ✦ {r.enrichedPrompt}
+   663→   663→   663→                        </p>
+   664→   664→   664→                      )}
+   665→   665→   665→                      {r.error && (
+   666→   666→   666→                        <div className="text-[9px] text-rose-600 bg-rose-50 dark:bg-rose-950/30 rounded px-1.5 py-1 flex items-start gap-1">
+   667→   667→   667→                          <AlertTriangle className="h-2.5 w-2.5 mt-0.5 shrink-0" />
+   668→   668→   668→                          <span className="break-words">{r.error}</span>
+   669→   669→   669→                        </div>
+   670→   670→   670→                      )}
+   671→   671→   671→                      <div className="flex items-center justify-between gap-1">
+   672→   672→   672→                        <span className="text-[9px] text-muted-foreground font-mono">
+   673→   673→   673→                          {r.size}
+   674→   674→   674→                          {r.bytes > 0 && ` · ${formatBytes(r.bytes)}`}
+   675→   675→   675→                        </span>
+   676→   676→   676→                        <div className="flex items-center gap-0.5">
+   677→   677→   677→                          <Button
+   678→   678→   678→                            size="sm"
+   679→   679→   679→                            variant="ghost"
+   680→   680→   680→                            className="h-7 w-7 p-0 text-muted-foreground hover:text-fuchsia-600"
+   681→   681→   681→                            onClick={() => copyPrompt(r.prompt)}
+   682→   682→   682→                            disabled={!r.prompt}
+   683→   683→   683→                            title="Copy prompt"
+   684→   684→   684→                          >
+   685→   685→   685→                            <Copy className="h-3 w-3" />
+   686→   686→   686→                          </Button>
+   687→   687→   687→                          {r.url && (
+   688→   688→   688→                            <a
+   689→   689→   689→                              href={r.url}
+   690→   690→   690→                              download={`${r.prompt.slice(0, 30).replace(/[^a-z0-9]+/gi, "_") || "image"}.png`}
+   691→   691→   691→                              className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-fuchsia-600 hover:bg-fuchsia-50 dark:hover:bg-fuchsia-950/30 transition-colors"
+   692→   692→   692→                              title="Download"
+   693→   693→   693→                            >
+   694→   694→   694→                              <Download className="h-3 w-3" />
+   695→   695→   695→                            </a>
+   696→   696→   696→                          )}
+   697→   697→   697→                        </div>
+   698→   698→   698→                      </div>
+   699→   699→   699→                    </div>
+   700→   700→   700→                  </div>
+   701→   701→   701→                ))}
+   702→   702→   702→              </div>
+   703→   703→   703→            )}
+   704→   704→   704→          </Card>
+   705→   705→   705→        </div>
+   706→   706→   706→
+   707→   707→   707→        {/* RIGHT — Gallery + Presets reference */}
+   708→   708→   708→        <div className="lg:col-span-2 space-y-4">
+   709→   709→   709→          {/* Gallery */}
+   710→   710→   710→          <Card className="p-4 sm:p-5">
+   711→   711→   711→            <div className="flex items-center justify-between mb-3">
+   712→   712→   712→              <h3 className="font-semibold flex items-center gap-2">
+   713→   713→   713→                <ImageIcon className="h-4 w-4 text-rose-500" />
+   714→   714→   714→                Recent Gallery
+   715→   715→   715→                <span className="text-xs text-muted-foreground font-normal">
+   716→   716→   716→                  / সাম্প্রতিক
+   717→   717→   717→                </span>
+   718→   718→   718→              </h3>
+   719→   719→   719→              <Badge variant="outline" className="text-[10px]">
+   720→   720→   720→                {meta?.gallery.length ?? 0} / 24
+   721→   721→   721→              </Badge>
+   722→   722→   722→            </div>
+   723→   723→   723→
+   724→   724→   724→            {metaLoading ? (
+   725→   725→   725→              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+   726→   726→   726→                {Array.from({ length: 8 }).map((_, i) => (
+   727→   727→   727→                  <Skeleton key={i} className="aspect-square rounded-md" />
+   728→   728→   728→                ))}
+   729→   729→   729→              </div>
+   730→   730→   730→            ) : !meta?.gallery || meta.gallery.length === 0 ? (
+   731→   731→   731→              <div className="text-center py-10 text-muted-foreground">
+   732→   732→   732→                <ImageIcon className="h-10 w-10 mx-auto mb-2 opacity-20" />
+   733→   733→   733→                <p className="text-xs">কোনো ছবি নেই।</p>
+   734→   734→   734→                <p className="text-[10px]">Generate করুন — এখানে দেখা যাবে।</p>
+   735→   735→   735→              </div>
+   736→   736→   736→            ) : (
+   737→   737→   737→              <ScrollArea className="max-h-[420px] alo-scrollbar pr-2">
+   738→   738→   738→                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+   739→   739→   739→                  {meta.gallery.map((g) => (
+   740→   740→   740→                    <button
+   741→   741→   741→                      key={g.name}
+   742→   742→   742→                      type="button"
+   743→   743→   743→                      onClick={() => setLightbox(g)}
+   744→   744→   744→                      className="relative aspect-square rounded-md overflow-hidden bg-muted/40 group"
+   745→   745→   745→                      title={`${g.name} · ${formatBytes(g.size)}`}
+   746→   746→   746→                    >
+   747→   747→   747→                      <img
+   748→   748→   748→                        src={g.url}
+   749→   749→   749→                        alt={g.name}
+   750→   750→   750→                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+   751→   751→   751→                        loading="lazy"
+   752→   752→   752→                      />
+   753→   753→   753→                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+   754→   754→   754→                        <p className="text-[8px] text-white flex items-center gap-0.5">
+   755→   755→   755→                          <Clock className="h-2 w-2" />
+   756→   756→   756→                          {timeAgo(g.mtime)}
+   757→   757→   757→                        </p>
+   758→   758→   758→                      </div>
+   759→   759→   759→                    </button>
+   760→   760→   760→                  ))}
+   761→   761→   761→                </div>
+   762→   762→   762→              </ScrollArea>
+   763→   763→   763→            )}
+   764→   764→   764→          </Card>
+   765→   765→   765→
+   766→   766→   766→          {/* Presets reference */}
+   767→   767→   767→          <Card className="p-4 sm:p-5">
+   768→   768→   768→            <div className="flex items-center justify-between mb-3">
+   769→   769→   769→              <h3 className="font-semibold flex items-center gap-2">
+   770→   770→   770→                <Palette className="h-4 w-4 text-fuchsia-600" />
+   771→   771→   771→                Presets Reference
+   772→   772→   772→                <span className="text-xs text-muted-foreground font-normal">
+   773→   773→   773→                  / প্রিসেট তালিকা
+   774→   774→   774→                </span>
+   775→   775→   775→              </h3>
+   776→   776→   776→            </div>
+   777→   777→   777→
+   778→   778→   778→            {metaLoading ? (
+   779→   779→   779→              <div className="space-y-2">
+   780→   780→   780→                {Array.from({ length: 6 }).map((_, i) => (
+   781→   781→   781→                  <Skeleton key={i} className="h-12 w-full rounded-md" />
+   782→   782→   782→                ))}
+   783→   783→   783→              </div>
+   784→   784→   784→            ) : (
+   785→   785→   785→              <ScrollArea className="max-h-[360px] alo-scrollbar pr-2">
+   786→   786→   786→                <div className="space-y-1.5">
+   787→   787→   787→                  {meta?.presets.map((p) => {
+   788→   788→   788→                    const tone =
+   789→   789→   789→                      PRESET_TONES[p.id] ??
+   790→   790→   790→                      "from-slate-400/15 to-slate-400/5 text-slate-700";
+   791→   791→   791→                    const isActive = preset === p.id;
+   792→   792→   792→                    return (
+   793→   793→   793→                      <div
+   794→   794→   794→                        key={p.id}
+   795→   795→   795→                        className={`rounded-lg border p-2 transition-all ${
+   796→   796→   796→                          isActive
+   797→   797→   797→                            ? "border-fuchsia-400 ring-1 ring-fuchsia-300/50 bg-fuchsia-50/50 dark:bg-fuchsia-950/20"
+   798→   798→   798→                            : "border-border/60 hover:border-fuchsia-300"
+   799→   799→   799→                        }`}
+   800→   800→   800→                      >
+   801→   801→   801→                        <div className="flex items-center justify-between gap-2">
+   802→   802→   802→                          <div className="flex items-center gap-2 min-w-0">
+   803→   803→   803→                            <div
+   804→   804→   804→                              className={`h-2 w-2 rounded-full bg-gradient-to-br ${tone.split(" ")[0]} ${
+   805→   805→   805→                                tone.split(" ")[1]
+   806→   806→   806→                              } shrink-0`}
+   807→   807→   807→                            />
+   808→   808→   808→                            <p className="text-xs font-semibold capitalize truncate">
+   809→   809→   809→                              {p.label}
+   810→   810→   810→                            </p>
+   811→   811→   811→                          </div>
+   812→   812→   812→                          <div className="flex items-center gap-1 shrink-0">
+   813→   813→   813→                            <Button
+   814→   814→   814→                              size="sm"
+   815→   815→   815→                              variant="ghost"
+   816→   816→   816→                              className="h-6 w-6 p-0 text-muted-foreground hover:text-fuchsia-600"
+   817→   817→   817→                              onClick={() => copyPrompt(p.samplePrompt)}
+   818→   818→   818→                              title="Copy sample"
+   819→   819→   819→                            >
+   820→   820→   820→                              <Copy className="h-2.5 w-2.5" />
+   821→   821→   821→                            </Button>
+   822→   822→   822→                            <Button
+   823→   823→   823→                              size="sm"
+   824→   824→   824→                              variant="ghost"
+   825→   825→   825→                              className="h-6 w-6 p-0 text-muted-foreground hover:text-fuchsia-600"
+   826→   826→   826→                              onClick={() => insertPromptLine(p.samplePrompt)}
+   827→   827→   827→                              title="Use as prompt"
+   828→   828→   828→                            >
+   829→   829→   829→                              <Wand2 className="h-2.5 w-2.5" />
+   830→   830→   830→                            </Button>
+   831→   831→   831→                          </div>
+   832→   832→   832→                        </div>
+   833→   833→   833→                        <p className="text-[9px] text-muted-foreground mt-1 line-clamp-2 leading-tight">
+   834→   834→   834→                          {p.samplePrompt}
+   835→   835→   835→                        </p>
+   836→   836→   836→                      </div>
+   837→   837→   837→                    );
+   838→   838→   838→                  })}
+   839→   839→   839→                </div>
+   840→   840→   840→              </ScrollArea>
+   841→   841→   841→            )}
+   842→   842→   842→          </Card>
+   843→   843→   843→        </div>
+   844→   844→   844→      </div>
+   845→   845→   845→
+   846→   846→   846→      {/* Footer note */}
+   847→   847→   847→      <Card className="p-3 bg-muted/30 border-dashed">
+   848→   848→   848→        <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 justify-center text-center">
+   849→   849→   849→          <Database className="h-3 w-3 shrink-0" />
+   850→   850→   850→          Images cached by prompt+size hash. Same prompt+size returns instantly.
+   851→   851→   851→          <span className="hidden sm:inline">
+   852→   852→   852→            — প্রম্পট+সাইজ হ্যাশ দিয়ে ক্যাশ হয়। একই প্রম্পট+সাইজ তাৎক্ষণিক ফেরত আসে।
+   853→   853→   853→          </span>
+   854→   854→   854→        </p>
+   855→   855→   855→      </Card>
+   856→   856→   856→
+   857→   857→   857→      {/* Lightbox */}
+   858→   858→   858→      <Dialog
+   859→   859→   859→        open={!!lightbox}
+   860→   860→   860→        onOpenChange={(open) => !open && setLightbox(null)}
+   861→   861→   861→      >
+   862→   862→   862→        <DialogContent className="max-w-3xl p-0 overflow-hidden bg-background/95">
+   863→   863→   863→          <DialogTitle className="sr-only">
+   864→   864→   864→            Image preview
+   865→   865→   865→          </DialogTitle>
+   866→   866→   866→          <button
+   867→   867→   867→            type="button"
+   868→   868→   868→            onClick={() => setLightbox(null)}
+   869→   869→   869→            className="absolute top-2 right-2 z-10 rounded-full bg-black/50 hover:bg-black/70 text-white p-1.5 transition-colors"
+   870→   870→   870→            aria-label="Close"
+   871→   871→   871→          >
+   872→   872→   872→            <X className="h-4 w-4" />
+   873→   873→   873→          </button>
+   874→   874→   874→          {lightbox && (
+   875→   875→   875→            <div className="flex flex-col">
+   876→   876→   876→              <div className="bg-black flex items-center justify-center max-h-[70vh]">
+   877→   877→   877→                <img
+   878→   878→   878→                  src={"url" in lightbox ? lightbox.url : lightbox.url}
+   879→   879→   879→                  alt={"prompt" in lightbox ? lightbox.prompt : lightbox.name}
+   880→   880→   880→                  className="max-h-[70vh] w-auto object-contain"
+   881→   881→   881→                />
+   882→   882→   882→              </div>
+   883→   883→   883→              <div className="p-3 space-y-1.5">
+   884→   884→   884→                {"prompt" in lightbox ? (
+   885→   885→   885→                  <>
+   886→   886→   886→                    <p className="text-xs font-medium line-clamp-2">
+   887→   887→   887→                      {lightbox.prompt}
+   888→   888→   888→                    </p>
+   889→   889→   889→                    {lightbox.enrichedPrompt &&
+   890→   890→   890→                      lightbox.enrichedPrompt !== lightbox.prompt && (
+   891→   891→   891→                        <p className="text-[10px] text-muted-foreground italic line-clamp-3">
+   892→   892→   892→                          ✦ {lightbox.enrichedPrompt}
+   893→   893→   893→                        </p>
+   894→   894→   894→                      )}
+   895→   895→   895→                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+   896→   896→   896→                      <span className="font-mono">{lightbox.size}</span>
+   897→   897→   897→                      {lightbox.bytes > 0 && (
+   898→   898→   898→                        <span>· {formatBytes(lightbox.bytes)}</span>
+   899→   899→   899→                      )}
+   900→   900→   900→                      {lightbox.cached && (
+   901→   901→   901→                        <Badge className="bg-amber-100 text-amber-800 text-[9px] py-0 h-4">
+   902→   902→   902→                          Cached
+   903→   903→   903→                        </Badge>
+   904→   904→   904→                      )}
+   905→   905→   905→                    </div>
+   906→   906→   906→                    <div className="flex gap-2 pt-1">
+   907→   907→   907→                      <Button
+   908→   908→   908→                        size="sm"
+   909→   909→   909→                        variant="outline"
+   910→   910→   910→                        className="h-7 text-xs"
+   911→   911→   911→                        onClick={() =>
+   912→   912→   912→                          copyPrompt(lightbox.prompt)
+   913→   913→   913→                        }
+   914→   914→   914→                      >
+   915→   915→   915→                        <Copy className="h-3 w-3 mr-1" /> Copy prompt
+   916→   916→   916→                      </Button>
+   917→   917→   917→                      {lightbox.url && (
+   918→   918→   918→                        <a
+   919→   919→   919→                          href={lightbox.url}
+   920→   920→   920→                          download={`${
+   921→   921→   921→                            lightbox.prompt
+   922→   922→   922→                              .slice(0, 30)
+   923→   923→   923→                              .replace(/[^a-z0-9]+/gi, "_") || "image"
+   924→   924→   924→                          }.png`}
+   925→   925→   925→                          className="inline-flex items-center h-7 px-3 rounded-md bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs transition-colors"
+   926→   926→   926→                        >
+   927→   927→   927→                          <Download className="h-3 w-3 mr-1" /> Download
+   928→   928→   928→                        </a>
+   929→   929→   929→                      )}
+   930→   930→   930→                    </div>
+   931→   931→   931→                  </>
+   932→   932→   932→                ) : (
+   933→   933→   933→                  <>
+   934→   934→   934→                    <p className="text-xs font-mono truncate">
+   935→   935→   935→                      {lightbox.name}
+   936→   936→   936→                    </p>
+   937→   937→   937→                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+   938→   938→   938→                      <span>{formatBytes(lightbox.size)}</span>
+   939→   939→   939→                      <span>· {timeAgo(lightbox.mtime)}</span>
+   940→   940→   940→                    </div>
+   941→   941→   941→                    {lightbox.url && (
+   942→   942→   942→                      <a
+   943→   943→   943→                        href={lightbox.url}
+   944→   944→   944→                        download={lightbox.name}
+   945→   945→   945→                        className="inline-flex items-center h-7 px-3 rounded-md bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs transition-colors mt-1"
+   946→   946→   946→                      >
+   947→   947→   947→                        <Download className="h-3 w-3 mr-1" /> Download
+   948→   948→   948→                      </a>
+   949→   949→   949→                    )}
+   950→   950→   950→                  </>
+   951→   951→   951→                )}
+   952→   952→   952→              </div>
+   953→   953→   953→            </div>
+   954→   954→   954→          )}
+   955→   955→   955→        </DialogContent>
+   956→   956→   956→      </Dialog>
+   957→   957→   957→    </div>
+   958→   958→   958→  );
+   959→   959→   959→}
+   960→   960→   960→
