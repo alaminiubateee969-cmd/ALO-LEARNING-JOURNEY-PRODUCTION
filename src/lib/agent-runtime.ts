@@ -1,8 +1,8 @@
 // ALO Learning Journey — Agent Runtime
-// This is the MISSING LINK: wraps every AI/media operation in an agent-owned
-// execution context. Every operation that an "ALO Agent" performs must go
-// through this runtime, creating an AgentRun record with full traceability:
-// agentId, task, status, provider, result, audit.
+// This wrapper persists an AgentRun/audit record around the callback supplied
+// by a route. It does not schedule background work or execute AgentTask.tools;
+// those are declarations only. Callbacks may return fallback drafts, so status
+// and provider fields must reflect what actually ran.
 
 import { db } from "./db";
 
@@ -38,16 +38,13 @@ export interface AgentRunResult<T = any> {
 }
 
 /**
- * Execute a task as an ALO Agent — creates an AgentRun record before
- * execution, runs the task function, then updates the record with
- * the result. Every execution is fully traceable.
- *
- * This is what makes an operation "ALO-owned agent work" rather than
- * just "a direct API call to a provider".
+ * Run the caller-supplied callback and persist its actual outcome.
+ * AgentTask.tools is descriptive metadata only; this function does not execute
+ * tools, provide an autonomous worker, or validate model output.
  */
 export async function executeAsAgent<T>(
   task: AgentTask,
-  fn: () => Promise<{ data: T; provider?: string; error?: string }>
+  fn: () => Promise<{ data: T; provider?: string; error?: string; usedFallback?: boolean }>
 ): Promise<AgentRunResult<T>> {
   const startTime = Date.now();
 
@@ -66,12 +63,21 @@ export async function executeAsAgent<T>(
     const execResult = await fn();
     const durationMs = Date.now() - startTime;
 
-    // 3. UPDATE AgentRun with success
+    const dataReportsFallback = Boolean(
+      execResult.data && typeof execResult.data === "object" &&
+      "usedFallback" in execResult.data && (execResult.data as { usedFallback?: unknown }).usedFallback === true
+    );
+    const usedFallback = execResult.usedFallback === true || dataReportsFallback;
+    const persistedStatus = usedFallback ? "blocked_external_setup" : "success";
+
+    // A deterministic/template fallback can return useful draft data, but it is
+    // not evidence that the configured agent or provider completed the task.
     await db.aIAgentRun.update({
       where: { id: run.id },
       data: {
-        status: "success",
+        status: persistedStatus,
         outputJson: JSON.stringify(execResult.data).slice(0, 2000),
+        errorMsg: usedFallback ? (execResult.error ?? "Configured local provider unavailable; fallback output requires human review.").slice(0, 500) : null,
         finishedAt: new Date(),
         costEstUsd: 0, // paid AI APIs are disabled; infrastructure costs are not measured here
       },
@@ -82,8 +88,8 @@ export async function executeAsAgent<T>(
       data: {
         actor: task.agentId,
         action: `agent.${task.task.slice(0, 50).replace(/\s+/g, "_").toLowerCase()}`,
-        detail: `AgentRun ${run.id}: ${task.task} → success via ${execResult.provider ?? "local"} (${durationMs}ms)`,
-        severity: "info",
+        detail: `AgentRun ${run.id}: ${task.task} → ${usedFallback ? "blocked_external_setup (fallback output)" : "success"} via ${execResult.provider ?? "local"} (${durationMs}ms)`,
+        severity: usedFallback ? "warn" : "info",
       },
     });
 
@@ -104,8 +110,9 @@ export async function executeAsAgent<T>(
     return {
       runId: run.id,
       agentId: task.agentId,
-      status: "success",
+      status: usedFallback ? "blocked" : "success",
       result: execResult.data,
+      error: usedFallback ? execResult.error ?? "Fallback output is not a verified agent completion." : undefined,
       provider: execResult.provider,
       durationMs,
       auditId: audit.id,
@@ -209,7 +216,7 @@ export async function getAgentHealth(agentId: string) {
 
   return {
     agentId,
-    status: lastRun.status === "failed" ? "warning" : "active",
+    status: lastRun.status === "failed" || lastRun.status === "blocked_external_setup" ? "warning" : "active",
     successRate: Math.round((successes / runs.length) * 100),
     lastRun: lastRun.createdAt,
     avgDurationMs: Math.round(avgDuration),

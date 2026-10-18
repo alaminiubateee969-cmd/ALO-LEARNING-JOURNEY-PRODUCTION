@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { QualityPipelineSummary } from "./PipelineRunner";
 import type { QualityAgentPass } from "@/lib/ai";
 import { useToast } from "@/hooks/use-toast";
-import { Video, Film, Plus, Trash2, Clock, Users, ImageIcon, Mic, Play, Loader2, Clapperboard, Download, Sparkles, ShieldCheck } from "lucide-react";
+import { Video, Film, Plus, Trash2, Clock, Users, ImageIcon, Mic, Play, Loader2, Clapperboard, Download, Sparkles } from "lucide-react";
 
 interface Scene {
   id: string;
@@ -151,14 +151,17 @@ export default function VideoPipelineView() {
       });
       const data = await response.json();
       if (!response.ok || !Array.isArray(data.scenes)) {
-        throw new Error(data.error ?? "Own AI Agent storyboard generation failed");
+        throw new Error(data.error ?? "Storyboard generation failed");
       }
       setScenes(data.scenes);
       setSelected(data.scenes[0] ?? null);
       setStoryboardPasses(data.qualityPipeline ?? []);
+      const usedFallback = data.usedFallback !== false;
       toast({
-        title: "Own AI Agent Storyboard Ready ($0 Paid API)",
-        description: `${data.scenes.length}টি দৃশ্য · ${data.totalDuration}s · VideoDirectorAgent + ImagePromptAgent + QualityCriticAgent`,
+        title: usedFallback ? "Template storyboard ready" : "Local-model storyboard ready",
+        description: usedFallback
+          ? `${data.scenes.length}টি দৃশ্য · ${data.totalDuration}s · Built-in template fallback; no model-based review was run.`
+          : `${data.scenes.length}টি দৃশ্য · ${data.totalDuration}s · Provider: ${String(data.provider ?? "local model")}. No separate critic or child-safety review was run.`,
       });
       return data.scenes;
     } catch (error) {
@@ -200,7 +203,7 @@ export default function VideoPipelineView() {
       const data = await response.json();
       if (!response.ok || data.status === "FAILED") throw new Error(data.error ?? data.message ?? "Local video render failed");
       setRenderedVideo({ ...data, qualityPipeline: data.qualityPipeline ?? [] });
-      toast({ title: "Local video rendered ($0 Paid API)", description: `${data.video?.duration ?? activeDuration}s · ${data.visualAssetStatus ?? mode}` });
+      toast({ title: "Local video render completed", description: `${data.video?.duration ?? activeDuration}s · ${data.visualAssetStatus ?? mode}` });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Local video render failed";
       setRenderError(message);
@@ -222,7 +225,7 @@ export default function VideoPipelineView() {
       <SectionHeader
         title="Video Pipeline"
         bn="ভিডিও স্টোরিবোর্ড"
-        desc="VideoDirectorAgent স্ক্রিপ্ট থেকে দৃশ্য-ভিত্তিক স্টোরিবোর্ড তৈরি করে — চরিত্র, শট, ভিজ্যুয়াল প্রম্পট, ভয়েসওভার ও সময় সহ।"
+        desc="লোকাল মডেল পাওয়া গেলে storyboard draft তৈরি হয়; না হলে built-in template fallback ব্যবহৃত হয়। প্রকাশের আগে তথ্য ও ভিজ্যুয়াল যাচাই করুন।"
         icon={<Video className="h-5 w-5" />}
         action={
           <div className="flex gap-2">
@@ -236,15 +239,15 @@ export default function VideoPipelineView() {
         }
       />
 
-      {/* Own AI Agent Zero-Paid-API Banner + Title + Export Bar */}
+      {/* Local rendering path, title, and export controls */}
       <Card className="p-4 alo-card-grad border-0 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 pb-2.5">
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-              <ShieldCheck className="h-3 w-3 mr-1" /> 100% Own Local AI Agents · $0.00 Paid API
+            <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
+              <Film className="h-3 w-3 mr-1" /> Local rendering path · runtime availability not checked
             </Badge>
             <span className="text-muted-foreground">
-              VideoDirectorAgent → ImagePromptAgent → Sharp/ComfyUI Scene Renderer → Local eSpeak/Piper Voice → Procedural Synth → FFmpeg H.264 + SRT
+              Storyboard: local model or built-in template · images: ComfyUI or placeholder · speech, music, and video: local tools
             </span>
           </div>
         </div>
@@ -264,9 +267,9 @@ export default function VideoPipelineView() {
               className="h-9 border-amber-300 text-amber-800 hover:bg-amber-50"
             >
               {directing ? (
-                <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> AI Directing…</>
+                <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Generating storyboard…</>
               ) : (
-                <><Sparkles className="h-3.5 w-3.5 mr-1.5" /> AI Auto-Storyboard</>
+                <><Sparkles className="h-3.5 w-3.5 mr-1.5" /> Generate storyboard draft</>
               )}
             </Button>
             <Button
@@ -306,7 +309,7 @@ export default function VideoPipelineView() {
               {directing || rendering ? (
                 <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Working…</>
               ) : (
-                <><Sparkles className="h-3.5 w-3.5 mr-1.5" /> 1-Click AI Direct & Render MP4</>
+                <><Sparkles className="h-3.5 w-3.5 mr-1.5" /> Storyboard + Render MP4</>
               )}
             </Button>
           </div>

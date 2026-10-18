@@ -120,31 +120,31 @@ export default function SettingsView() {
         {/* Pipeline status overview */}
         <Card className="p-5">
           <h3 className="font-semibold mb-3 flex items-center gap-2">
-            <Activity className="h-4 w-4 text-violet-600" /> পাইপলাইন নীতি
+            <Activity className="h-4 w-4 text-violet-600" /> Implementation limits
           </h3>
           <div className="space-y-3 text-xs">
             <div className="rounded-lg bg-muted/40 p-3">
-              <p className="font-semibold mb-1">Own AI Agent নীতি</p>
+              <p className="font-semibold mb-1">Local model routing (source-level)</p>
               <p className="text-muted-foreground">
-                AI inference routes only to private Ollama/ComfyUI endpoints or clearly reported local fallbacks. No OpenAI/Gemini/Claude/ElevenLabs or other paid AI APIs are called by content/media generation.
+                Reviewed content and image generation routes use configured Ollama/ComfyUI endpoints or labelled local fallbacks. This page does not probe provider availability; infrastructure cost is not measured.
               </p>
             </div>
             <div className="rounded-lg bg-muted/40 p-3">
-              <p className="font-semibold mb-1">cPanel-safe queue</p>
+              <p className="font-semibold mb-1">Background queue (not configured)</p>
               <p className="text-muted-foreground">
-                প্রতি cron run: সর্বোচ্চ ১০টি light job + ১–৩টি heavy media job। Lock, timeout, backoff সহ। Permanent worker নেই।
+                No cron queue or background worker is implemented or scheduled in this checkout. Concurrency locks, retry backoff, and job limits are not operational.
               </p>
             </div>
             <div className="rounded-lg bg-muted/40 p-3">
-              <p className="font-semibold mb-1">Protective Mode</p>
+              <p className="font-semibold mb-1">Automated safety coverage (not verified)</p>
               <p className="text-muted-foreground">
-                প্রতিটি content/image/voice/video/reply/post অনুমোদনের আগে child safety, medical claims, parent shaming, fear, brand tone যাচাই।
+                No single automated safety check covers every content, image, voice, video, reply, and post route. Some model reviews may be unavailable or return a fallback; human review is required before use.
               </p>
             </div>
             <div className="rounded-lg bg-muted/40 p-3">
-              <p className="font-semibold mb-1">সৎ স্ট্যাটাস</p>
+              <p className="font-semibold mb-1">Stored status labels</p>
               <p className="text-muted-foreground">
-                শুধু চারটি অবস্থা: <code className="bg-muted px-1 rounded">COMPLETE</code>, <code className="bg-muted px-1 rounded">PARTIAL</code>, <code className="bg-muted px-1 rounded">BLOCKED_EXTERNAL_SETUP</code>, <code className="bg-muted px-1 rounded">FAILED</code>। কখনো fake success নয়।
+                Status values vary by route and persisted labels are not independent proof of execution, safety review, or external delivery. Verify each output and provider result before relying on it.
               </p>
             </div>
           </div>

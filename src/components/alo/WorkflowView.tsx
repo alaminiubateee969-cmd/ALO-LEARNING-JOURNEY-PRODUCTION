@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { AGENTS, AGENT_CATEGORIES, type AgentCategory } from "@/lib/agents";
 import { Workflow, ArrowRight, ZoomIn, ZoomOut, Maximize2, Layers } from "lucide-react";
 
-// Pipeline stages — each stage is a group of agents that run together
+// Illustrative workflow stages — configured definitions grouped by category; this view executes nothing.
 const PIPELINE_STAGES: {
   id: string;
   label: string;
@@ -17,16 +17,16 @@ const PIPELINE_STAGES: {
   category: AgentCategory;
   description: string;
 }[] = [
-  { id: "stage-1", label: "Trend Research", bn: "গবেষণা", icon: "🔍", category: "research", description: "TrendResearchAgent ও TopicIdeationAgent ট্রেন্ডিং ও নিরাপদ টপিক খুঁজে বের করে।" },
-  { id: "stage-2", label: "RAG Retrieval", bn: "জ্ঞান", icon: "📚", category: "research", description: "RAGMemoryAgent কোম্পানি-প্রাইভেট জ্ঞান থেকে প্রাসঙ্গিক তথ্য সংগ্রহ করে।" },
-  { id: "stage-3", label: "Content Writing", bn: "লেখা", icon: "✍️", category: "content", description: "ContentWriterAgent + HookOptimizerAgent স্ক্রিপ্ট ও হুক তৈরি করে।" },
-  { id: "stage-4", label: "SEO & Captions", bn: "SEO", icon: "🏷️", category: "content", description: "SEOAgent, CaptionAgent, HashtagAgent প্ল্যাটফর্ম-নির্দিষ্ট কনটেন্ট তৈরি করে।" },
-  { id: "stage-5", label: "Media Generation", bn: "মিডিয়া", icon: "🎨", category: "media", description: "ImagePromptAgent, ImageGeneratorAgent, VoiceAgent মিডিয়া তৈরি করে।" },
-  { id: "stage-6", label: "Protective Mode", bn: "নিরাপত্তা", icon: "🛡️", category: "safety", description: "SafetyGuardianAgent + FactCheckAgent নিরাপত্তা যাচাই করে।" },
-  { id: "stage-7", label: "Quality Review", bn: "মান", icon: "⭐", category: "safety", description: "QualityCriticAgent কোয়ালিটি স্কোর দেয়।" },
-  { id: "stage-8", label: "Approval", bn: "অনুমোদন", icon: "📋", category: "ops", description: "ApprovalPreparerAgent অ্যাডমিনের জন্য প্যাকেজ তৈরি করে।" },
-  { id: "stage-9", label: "Publishing", bn: "প্রকাশনা", icon: "📤", category: "publishing", description: "PublisherAgent অনুমোদিত কনটেন্ট প্রকাশ করে।" },
-  { id: "stage-10", label: "Analytics & Learning", bn: "শেখা", icon: "📈", category: "learning", description: "AnalyticsAgent + WeeklyLearningAgent পারফরম্যান্স বিশ্লেষণ করে।" },
+  { id: "stage-1", label: "Trend Research", bn: "গবেষণা", icon: "🔍", category: "research", description: "Intended role only: configured research agents could draft topic ideas; this diagram does not fetch trends or run agents." },
+  { id: "stage-2", label: "RAG Retrieval", bn: "জ্ঞান", icon: "📚", category: "research", description: "Intended role only: retrieve configured knowledge; this diagram does not call RAG or execute tools." },
+  { id: "stage-3", label: "Content Writing", bn: "লেখা", icon: "✍️", category: "content", description: "Intended role only: draft content; no writer agent is invoked by this workflow diagram." },
+  { id: "stage-4", label: "SEO & Captions", bn: "SEO", icon: "🏷️", category: "content", description: "Intended role only: prepare SEO and caption drafts; this stage is not run by the diagram." },
+  { id: "stage-5", label: "Media Generation", bn: "মিডিয়া", icon: "🎨", category: "media", description: "Intended role only: request media drafts; no media job is launched by this diagram." },
+  { id: "stage-6", label: "Protective Mode", bn: "নিরাপত্তা", icon: "🛡️", category: "safety", description: "Intended role only: support human safety review; no automated safety pass runs here." },
+  { id: "stage-7", label: "Quality Review", bn: "মান", icon: "⭐", category: "safety", description: "Intended role only: critique a candidate; no critic or quality score is produced by this diagram." },
+  { id: "stage-8", label: "Approval", bn: "অনুমোদন", icon: "📋", category: "ops", description: "Intended role only: prepare an approval item; the diagram creates no content or approval record." },
+  { id: "stage-9", label: "Publishing", bn: "প্রকাশনা", icon: "📤", category: "publishing", description: "Intended role only: external publishing is not implemented; no provider post is sent." },
+  { id: "stage-10", label: "Analytics & Learning", bn: "শেখা", icon: "📈", category: "learning", description: "Intended role only: summarize stored metrics; no platform analytics or learning job is run here." },
 ];
 
 const catColor: Record<string, { bg: string; border: string; text: string; dot: string }> = {
@@ -64,7 +64,7 @@ export default function WorkflowView() {
       <SectionHeader
         title="Agent Workflow"
         bn="এজেন্ট ওয়ার্কফ্লো"
-        desc="৪০টি এজেন্ট কীভাবে সংযুক্ত — MasterOrchestratorAgent পাইপলাইন পরিচালনা করে। প্রতিটি ধাপে কোন এজেন্টগুলো কাজ করে দেখুন।"
+        desc="Illustrative architecture only: configured agent definitions are grouped into 10 planned stages. This diagram does not execute agents, connect stages, invoke tools, or schedule background work."
         icon={<Workflow className="h-5 w-5" />}
         action={
           <div className="flex items-center gap-2">
@@ -86,8 +86,8 @@ export default function WorkflowView() {
       <Card className="p-4 sm:p-6 overflow-x-auto alo-scrollbar">
         <div className="flex items-center gap-2 mb-4">
           <Layers className="h-4 w-4 text-amber-600" />
-          <h3 className="font-semibold text-sm">কনটেন্ট পাইপলাইন ফ্লো</h3>
-          <Badge variant="outline" className="text-[9px]">১০ ধাপ</Badge>
+          <h3 className="font-semibold text-sm">Illustrative workflow layout · not executed</h3>
+          <Badge variant="outline" className="text-[9px]">10 planned stages</Badge>
         </div>
         <div className="flex items-stretch gap-1 min-w-max" style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}>
           {PIPELINE_STAGES.map((stage, i) => {
@@ -148,9 +148,10 @@ export default function WorkflowView() {
                     <p className="text-xs text-muted-foreground">{stage.description}</p>
                   </div>
                   <Badge className={`ml-auto ${c.bg} ${c.border} ${c.text} border`} variant="outline">
-                    {agents.length} এজেন্ট
+                    {agents.length} configured definitions
                   </Badge>
                 </div>
+                <p className="mb-3 text-[11px] text-muted-foreground">These are configured definitions only. Listed tools are declarations (not executed); provider availability and infrastructure cost are not measured here.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                   {agents.map((a, i) => (
                     <div
@@ -169,8 +170,8 @@ export default function WorkflowView() {
                         ))}
                       </div>
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30">
-                        <span className="text-[9px] text-muted-foreground">{a.provider}</span>
-                        <span className="text-[9px] font-medium">${a.estimatedCostUsd.toFixed(4)}</span>
+                        <span className="text-[9px] text-muted-foreground">Configured provider: {a.provider}</span>
+                        <span className="text-[9px] font-medium">Cost not metered</span>
                       </div>
                     </div>
                   ))}
@@ -207,18 +208,18 @@ export default function WorkflowView() {
       {/* Operating principle */}
       <Card className="p-5 alo-card-grad border-0">
         <h3 className="font-semibold mb-3 flex items-center gap-2">
-          <Workflow className="h-4 w-4 text-amber-600" /> পরিচালনা নীতি
+          <Workflow className="h-4 w-4 text-amber-600" /> Illustrative operating sequence · not executed
         </h3>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {[
-            "Own AI তৈরি করে",
-            "RAG জ্ঞান দেয়",
-            "Protective Mode যাচাই করে",
-            "Quality Agent উন্নত করে",
-            "Admin অনুমোদন দেয়",
-            "Official API প্রকাশ করে",
-            "Analytics সংগ্রহ করে",
-            "Self-Learning সুপারিশ করে",
+            "Planned: local-model drafts",
+            "Planned: knowledge lookup",
+            "Human safety review",
+            "Human quality review",
+            "Admin approval record",
+            "External publishing unavailable",
+            "Stored analytics only",
+            "No learning job configured",
           ].map((step, i, arr) => (
             <div key={step} className="flex items-center gap-2">
               <span className="rounded-lg bg-white/60 dark:bg-white/10 px-2.5 py-1 text-xs font-medium">
@@ -229,7 +230,7 @@ export default function WorkflowView() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground mt-3">
-          Admin সবসময় নিয়ন্ত্রণে থাকেন। কোনো কনটেন্ট অনুমোদন ছাড়া প্রকাশিত হয় না।
+          Approval changes are stored in ALO. This illustrative view does not approve, schedule, or publish content; external delivery is not implemented.
         </p>
       </Card>
     </div>

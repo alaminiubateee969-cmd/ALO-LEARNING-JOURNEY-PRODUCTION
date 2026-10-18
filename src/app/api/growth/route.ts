@@ -12,11 +12,13 @@ export async function GET() {
     db.campaign.findMany({ orderBy: { createdAt: "desc" }, take: 10 }),
   ]);
 
+  const evaluatedOpportunities = opportunities.filter((opportunity) => opportunity.provider !== "local-fallback");
   const stats = {
     totalOpportunities: opportunities.length,
+    evaluatedOpportunities: evaluatedOpportunities.length,
     approvedOpportunities: opportunities.filter((o) => o.approved).length,
-    avgScore: opportunities.length > 0
-      ? Math.round(opportunities.reduce((s, o) => s + o.finalScore, 0) / opportunities.length)
+    avgScore: evaluatedOpportunities.length > 0
+      ? Math.round(evaluatedOpportunities.reduce((sum, opportunity) => sum + opportunity.finalScore, 0) / evaluatedOpportunities.length)
       : 0,
     activeHookTests: hookTests.filter((h) => h.status === "testing").length,
     hookWinners: hookTests.filter((h) => h.isWinner).length,
@@ -36,12 +38,16 @@ export async function POST(req: Request) {
   await ensureSeeded();
   const body = await req.json().catch(() => ({}));
 
-  // Score a topic for content opportunity — uses executeAsAgent
+  // Score a topic for content opportunity — this is a model estimate, not live search analytics.
   if (body.action === "score_topic") {
+    if (typeof body.topic !== "string" || !body.topic.trim() || body.topic.trim().length > 200) {
+      return NextResponse.json({ error: "topic must contain 1–200 characters" }, { status: 400 });
+    }
+    const topic = body.topic.trim();
     const agentResult = await executeAsAgent(
-      { agentId: "trend_research", task: `Score topic: ${body.topic?.slice(0, 40)}`, tools: ["llm.score"] },
+      { agentId: "trend_research", task: `Score topic: ${topic.slice(0, 40)}`, tools: ["llm.score"] },
       async () => {
-        const result = await scoreContentOpportunity(body.topic);
+        const result = await scoreContentOpportunity(topic);
         const score = await db.contentOpportunityScore.create({
           data: {
             topic: body.topic,
@@ -53,7 +59,7 @@ export async function POST(req: Request) {
             brandFit: result.data.brandFit,
             finalScore: result.data.finalScore,
             rationale: result.data.rationale,
-            approved: result.data.finalScore >= 80,
+            approved: false, // scoring is advisory; only the explicit admin action below can approve
             provider: result.provider,
           },
         });
@@ -69,6 +75,28 @@ export async function POST(req: Request) {
     });
   }
 
+  // Human approval is explicit; an opportunity score never approves itself.
+  if (body.action === "approve_opportunity") {
+    if (typeof body.id !== "string" || !body.id.trim()) {
+      return NextResponse.json({ error: "opportunity id required" }, { status: 400 });
+    }
+    const existing = await db.contentOpportunityScore.findUnique({ where: { id: body.id.trim() } });
+    if (!existing) return NextResponse.json({ error: "opportunity_not_found" }, { status: 404 });
+    const approved = await db.contentOpportunityScore.update({
+      where: { id: existing.id },
+      data: { approved: true },
+    });
+    await db.auditLog.create({
+      data: {
+        actor: "admin",
+        action: "content_opportunity.approve",
+        detail: `Manually approved content opportunity ${approved.id} after administrator review.`,
+        severity: "info",
+      },
+    });
+    return NextResponse.json({ opportunity: approved });
+  }
+
   // Generate hook variants — uses executeAsAgent
   if (body.action === "generate_hooks") {
     const agentResult = await executeAsAgent(
@@ -80,7 +108,7 @@ export async function POST(req: Request) {
           const ht = await db.hookTest.create({
             data: { topic: body.topic, hookText: hook.text, variant: hook.variant, status: "draft" },
           });
-          created.push({ ...ht, strategy: hook.strategy, predictedRetention: hook.predictedRetention });
+          created.push({ ...ht, strategy: hook.strategy });
         }
         return { data: { hooks: created, provider: result.provider, usedFallback: result.usedFallback }, provider: result.provider };
       }
@@ -129,8 +157,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ winner });
   }
 
-  // Create a campaign — no LLM, just DB
+  // Create a campaign — linked opportunities must first be manually approved.
   if (body.action === "create_campaign") {
+    if (body.opportunityId != null) {
+      const opportunity = await db.contentOpportunityScore.findUnique({ where: { id: String(body.opportunityId) } });
+      if (!opportunity) return NextResponse.json({ error: "opportunity_not_found" }, { status: 404 });
+      if (!opportunity.approved) {
+        return NextResponse.json({ error: "opportunity_requires_manual_approval" }, { status: 409 });
+      }
+    }
     const campaign = await db.campaign.create({
       data: {
         title: body.title || body.topic?.slice(0, 40) || "Untitled Campaign",

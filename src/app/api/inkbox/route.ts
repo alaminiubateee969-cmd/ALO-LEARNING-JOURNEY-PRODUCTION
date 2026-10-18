@@ -16,10 +16,10 @@ export async function GET() {
     identities,
     messages,
     architecture: {
-      core: "ALO AI Agents + Orchestrator + Database",
-      adapter: "Inkbox (OPTIONAL communication/identity layer)",
-      fallback: "Internal DB channel (active when Inkbox unavailable)",
-      principle: "If Inkbox is disconnected, ALO continues operating. Only communication capabilities become BLOCKED_EXTERNAL_SETUP.",
+      core: "ALO application and database",
+      adapter: "Inkbox settings are metadata only; no verified API client is implemented",
+      fallback: "Messages may be stored as pending in the internal database; no dispatcher is configured",
+      principle: "A message is not reported delivered until a verified external or internal worker confirms delivery.",
     },
   });
 }
@@ -44,8 +44,8 @@ export async function POST(req: Request) {
       data: {
         actor: body.senderAgentId || "system",
         action: "inkbox.a2a_message",
-        detail: `${body.senderAgentId} → ${body.recipientAgentId}: "${body.objective?.slice(0, 50)}" via ${result.channel}${result.fallbackUsed ? " (fallback)" : ""}`,
-        severity: "info",
+        detail: `${body.senderAgentId} → ${body.recipientAgentId}: "${String(body.objective ?? "").slice(0, 50)}" status=${result.status} via ${result.channel}; delivery is not confirmed.`,
+        severity: result.status === "delivered" ? "info" : "warn",
       },
     });
 
@@ -84,9 +84,11 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ...result,
       test: "graceful_degradation",
-      message: result.fallbackUsed
-        ? "ALO continued operating without Inkbox. Message delivered via internal fallback channel."
-        : "Inkbox was available. Message delivered via Inkbox.",
+      message: result.status === "pending"
+        ? "Message was stored as pending in the internal database. No Inkbox request, dispatcher, or delivery occurred."
+        : result.status === "escalated"
+          ? "Message was escalated in the internal database; no notification was sent."
+          : "Delivery status came from a configured transport.",
     });
   }
 

@@ -69,20 +69,11 @@ function synthesizeBuiltInLocalChatJson(system: string, user: string, model: str
     return {
       model: `${model} (built-in-local)`,
       content: JSON.stringify({
-        score: 92,
-        strengths: [
-          "উষ্ণ ও সংবেদনশীল বাংলা ভাষা ব্যবহার করা হয়েছে",
-          "শিশু ও পিতামাতার জন্য নিরাপদ এবং ব্র্যান্ড-সম্মত কাঠামো",
-          "কোনো অপ্রমাণিত মেডিক্যাল বা গ্যারান্টি দাবি নেই",
-        ],
-        issues: [
-          "কল-টু-অ্যাকশন এবং ছন্দ আরও স্পষ্ট ও প্রাঞ্জল করা যেতে পারে",
-        ],
-        revisionPlan: [
-          "বাক্যগুলো আরও সাবলীল বাংলায় সাজিয়ে পঠনযোগ্যতা বাড়ান",
-          "পিতামাতার প্রতি সহমর্মিতা ও ইতিবাচক উৎসাহ আরও স্পষ্ট করুন",
-        ],
-        safetyFlags: [],
+        score: 0,
+        strengths: [],
+        issues: ["The local model was unavailable; no independent review was performed."],
+        revisionPlan: ["Human review required."],
+        safetyFlags: ["not_evaluated"],
       }),
     };
   }
@@ -237,41 +228,29 @@ function synthesizeBuiltInLocalChatJson(system: string, user: string, model: str
 
   // 8. Protective Mode safety review
   if (sysLower.includes("safetyguardianagent")) {
-    const unsafe = /guaranteed|100% cure|নিশ্চিত সারবে|ভয় পান|লজ্জা/i.test(user);
     return {
       model: `${model} (built-in-local)`,
       content: JSON.stringify({
-        approved: !unsafe,
-        riskLevel: unsafe ? "high" : "low",
-        blockedReasons: unsafe ? ["অপ্রমাণিত গ্যারান্টি বা ভয়-ভিত্তিক ভাষা শনাক্ত হয়েছে।"] : [],
-        requiredEdits: unsafe ? ["গ্যারান্টি বা ভীতিকর শব্দ সরিয়ে সহানুভূতিশীল ভাষা ব্যবহার করুন।"] : [],
+        approved: false,
+        riskLevel: "medium",
+        blockedReasons: ["Local safety model unavailable; no automated safety decision was made."],
+        requiredEdits: ["A human reviewer must check this item before approval or publication."],
         finalDisclaimer: "প্রয়োজনে pediatrician, child specialist বা speech therapist-এর পরামর্শ নিন 💛",
-        needsHumanReview: unsafe,
-        checksPassed: unsafe
-          ? ["child_privacy", "no_deepfake"]
-          : ["child_safety", "no_medical_guarantee", "no_parent_shaming", "warm_brand_tone", "bengali_disclaimer_ready"],
+        needsHumanReview: true,
+        checksPassed: [],
       }),
     };
   }
 
   // 9. Comment classification
   if (sysLower.includes("commentmoderationagent")) {
-    const isMedical = /ডাক্তার|কথা বলে না|অটিজম|ওষুধ|রোগ|চিকিৎসা|medical|doctor/i.test(user);
-    const isSpam = /http:\/\/|https:\/\/|লাখ টাকা|জিতে যান|click here/i.test(user);
-    const isQuestion = /\?|কিভাবে|কখন|কী করব/i.test(user);
-    const category = isSpam ? "spam" : isMedical ? "development_sensitive" : isQuestion ? "question" : "praise";
-    const riskLevel = isMedical ? "high" : isSpam ? "medium" : "low";
     return {
       model: `${model} (built-in-local)`,
       content: JSON.stringify({
-        category,
-        riskLevel,
-        rationale: isMedical
-          ? "শিশুর বিকাশ বা স্বাস্থ্য সংক্রান্ত সংবেদনশীল প্রশ্ন—মানব পর্যালোচনা ও বিশেষজ্ঞ পরামর্শের ডিসক্লেইমার প্রয়োজন।"
-          : isSpam
-            ? "প্রচারমূলক বা স্প্যাম লিংক শনাক্ত হয়েছে।"
-            : "নিরাপদ ও ইতিবাচক মন্তব্য; উষ্ণ উত্তর দেওয়া যাবে।",
-        autoReplyAllowed: !isMedical && !isSpam,
+        category: "review_required",
+        riskLevel: "medium",
+        rationale: "Local moderation model unavailable; human review is required before any reply.",
+        autoReplyAllowed: false,
       }),
     };
   }
@@ -293,14 +272,14 @@ function synthesizeBuiltInLocalChatJson(system: string, user: string, model: str
     return {
       model: `${model} (built-in-local)`,
       content: JSON.stringify({
-        searchDemand: 84,
-        parentRelevance: 92,
-        bangladeshRelevance: 89,
-        competition: 44,
-        videoPotential: 90,
-        brandFit: 95,
-        finalScore: 86,
-        rationale: `"${topic}" বাংলাদেশি পিতামাতাদের কাছে অত্যন্ত প্রাসঙ্গিক এবং শর্ট-ফর্ম ভিডিও ও রিলসের জন্য উচ্চ এনগেজমেন্ট সম্ভাবনাময়।`,
+        searchDemand: 0,
+        parentRelevance: 0,
+        bangladeshRelevance: 0,
+        competition: 0,
+        videoPotential: 0,
+        brandFit: 0,
+        finalScore: 0,
+        rationale: `স্থানীয় মডেল অনুপলব্ধ; "${topic}"-এর কোনো অনুসন্ধান-চাহিদা বা বাজার মূল্যায়ন করা হয়নি।`,
       }),
     };
   }
@@ -312,11 +291,11 @@ function synthesizeBuiltInLocalChatJson(system: string, user: string, model: str
       model: `${model} (built-in-local)`,
       content: JSON.stringify({
         hooks: [
-          { variant: "A", text: `${topic} — ৯০% পিতামাতা এই সহজ বিষয়টি খেয়াল করেন না 💛`, strategy: "curiosity", predictedRetention: 74 },
-          { variant: "B", text: `মাত্র ৫ মিনিটে ${topic} করার কার্যকর কৌশল ✨`, strategy: "benefit", predictedRetention: 78 },
-          { variant: "C", text: `আপনার শিশু কি এই সংকেত দিচ্ছে? ${topic} নিয়ে জানুন 🌱`, strategy: "question", predictedRetention: 71 },
-          { variant: "D", text: `তুলনা নয়, ভালোবাসায় ${topic} — ৩টি সহজ ধাপ 💛`, strategy: "story", predictedRetention: 76 },
-          { variant: "E", text: `আজ থেকেই বদলে ফেলুন ${topic}-এর প্রতিদিনের রুটিন ✨`, strategy: "action", predictedRetention: 69 },
+          { variant: "A", text: `${topic} — আপনার কী জানা দরকার? 💛`, strategy: "curiosity" },
+          { variant: "B", text: `${topic} শুরু করার একটি সহজ উপায় ✨`, strategy: "benefit" },
+          { variant: "C", text: `${topic} নিয়ে আপনার প্রশ্ন কী?`, strategy: "question" },
+          { variant: "D", text: `পরিবারের শেখার পথে ${topic} 🌱`, strategy: "story" },
+          { variant: "E", text: `আজ ঘরে ${topic} চেষ্টা করে দেখুন 💛`, strategy: "action" },
         ],
       }),
     };
@@ -350,7 +329,7 @@ function synthesizeBuiltInLocalChatJson(system: string, user: string, model: str
         schemaType: "Article",
         internalLinks: ["/rag/parenting-handbook", "/studio/bonding-routine"],
         estimatedReadTime: 4,
-        qualityScore: 91,
+        qualityScore: 0,
       }),
     };
   }

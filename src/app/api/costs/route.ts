@@ -1,63 +1,36 @@
 import { NextResponse } from "next/server";
-import { ensureSeeded } from "@/lib/seed";
 import { AGENTS } from "@/lib/agents";
 
-// CostRouterAgent: per-agent cost breakdown + provider usage stats.
+// This endpoint exposes static configuration counts, not cost or usage telemetry.
 export async function GET() {
-  await ensureSeeded();
-
-  // Per-agent cost
-  const agentCosts = AGENTS.map((a) => ({
-    id: a.id,
-    name: a.name,
-    category: a.category,
-    provider: a.provider,
-    model: a.model,
-    estimatedCostUsd: a.estimatedCostUsd,
-    status: a.status,
+  const agentConfigs = AGENTS.map((agent) => ({
+    id: agent.id,
+    name: agent.name,
+    category: agent.category,
+    provider: agent.provider,
+    model: agent.model,
+    status: agent.status,
   }));
 
-  // Provider breakdown
-  const providers: Record<string, { count: number; cost: number; label: string }> = {};
-  for (const a of AGENTS) {
-    const key = a.provider;
-    if (!providers[key]) {
-      providers[key] = { count: 0, cost: 0, label: a.provider };
-    }
-    providers[key].count++;
-    providers[key].cost += a.estimatedCostUsd;
-  }
+  const providers = Array.from(new Set(AGENTS.map((agent) => agent.provider)))
+    .map((label) => ({ label, count: AGENTS.filter((agent) => agent.provider === label).length }))
+    .sort((a, b) => b.count - a.count);
 
-  // Category breakdown
-  const categories: Record<string, { count: number; cost: number }> = {};
-  for (const a of AGENTS) {
-    if (!categories[a.category]) categories[a.category] = { count: 0, cost: 0 };
-    categories[a.category].count++;
-    categories[a.category].cost += a.estimatedCostUsd;
-  }
-
-  const totalCost = AGENTS.reduce((s, a) => s + a.estimatedCostUsd, 0);
-  const localCount = AGENTS.filter((a) => a.provider === "local").length;
-  const externalCount = AGENTS.filter((a) => a.provider === "external-optional").length;
-  // AI generation uses only private Ollama/ComfyUI or deterministic local fallbacks.
-  // This is estimated paid-AI API spend; hardware, storage, and electricity are excluded.
-  const paidApiCount = 0;
-  const localPct = Math.round((localCount / AGENTS.length) * 100);
-  const blockedCount = AGENTS.filter((a) => a.status === "blocked_external_setup").length;
+  const categories = Array.from(new Set(AGENTS.map((agent) => agent.category)))
+    .map((category) => ({ category, count: AGENTS.filter((agent) => agent.category === category).length }))
+    .sort((a, b) => b.count - a.count);
 
   return NextResponse.json({
-    agentCosts,
-    providers: Object.values(providers).sort((a, b) => b.cost - a.cost),
-    categories: Object.entries(categories).map(([k, v]) => ({ category: k, ...v })).sort((a, b) => b.cost - a.cost),
+    agentConfigs,
+    providers,
+    categories,
     summary: {
-      totalAgents: AGENTS.length,
-      totalCost: Number(totalCost.toFixed(4)),
-      localCount,
-      externalCount,
-      paidApiCount,
-      localPct,
-      blockedCount,
-      avgCostPerAgent: Number((totalCost / AGENTS.length).toFixed(4)),
+      totalDefinitions: AGENTS.length,
+      localCount: AGENTS.filter((agent) => agent.provider === "local").length,
+      externalOptionalCount: AGENTS.filter((agent) => agent.provider === "external-optional").length,
+      paidApiRoutesConfigured: 0,
+      costTelemetry: "not_metered",
     },
+    message: "Provider and category totals count static definitions only. This endpoint does not meter API calls, provider invoices, infrastructure, storage, or electricity.",
   });
 }

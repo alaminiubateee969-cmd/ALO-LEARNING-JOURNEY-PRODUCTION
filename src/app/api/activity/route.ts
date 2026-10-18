@@ -54,9 +54,11 @@ export async function GET() {
       id: `post-${p.id}`,
       kind: "publish",
       title: `${p.platform} পোস্ট`,
-      detail: p.status === "published" ? `প্রকাশিত · ${p.providerPostId}` : p.status,
+      detail: p.status === "published"
+        ? `Marked published · stored provider ID: ${p.providerPostId ?? "none"} · delivery unverified`
+        : p.status,
       icon: "📤",
-      tone: p.status === "published" ? "success" : p.status === "failed" ? "danger" : "info",
+      tone: p.status === "published" ? "info" : p.status === "failed" ? "danger" : "info",
       timestamp: (p.publishedAt ?? p.createdAt).toISOString(),
     });
   }

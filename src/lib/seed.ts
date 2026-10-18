@@ -1,6 +1,6 @@
 // ALO Learning Journey — DB seed (server-only)
 // Seeds a single demo company + sample operational data if DB is empty.
-// The 40-agent roster is static (src/lib/agents.ts) — not stored in DB.
+// The agent roster is static (src/lib/agents.ts) — not stored in DB.
 
 import { db } from "./db";
 import { PLATFORMS } from "./platforms";
@@ -8,7 +8,9 @@ import { PLATFORMS } from "./platforms";
 let seeded = false;
 
 export async function ensureSeeded() {
-  if (seeded) return;
+  // Sample companies, contacts, analytics, and posts are local preview data.
+  // Never seed or backfill that sample content into the production database.
+  if (process.env.NODE_ENV === "production" || seeded) return;
   seeded = true;
   const companyCount = await db.company.count();
   if (companyCount > 0) {

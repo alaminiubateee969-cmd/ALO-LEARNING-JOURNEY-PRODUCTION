@@ -1,5 +1,5 @@
 // ALO Learning Journey — Prisma schema (MySQL)
-// Operational data layer. The 40-agent roster is a static config module
+// Operational data layer. The agent roster is a static config module
 // (src/lib/agents.ts) so it stays richly typed and always available even
 // before the DB is seeded. Runs, content, approvals, RAG, analytics etc.
 // are persisted here.

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Loader2, FileText, CheckCircle2, Code2, Copy, Globe, ShieldCheck } from "lucide-react";
+import { Search, Loader2, FileText, Code2, Copy, Globe, ShieldCheck } from "lucide-react";
 import { CATEGORIES, AGE_GROUPS, SEO_CLUSTERS } from "@/lib/content-categories";
 
 interface Brief {
@@ -70,8 +70,10 @@ export default function SeoView() {
       setBrief(data.brief);
       setProvider(data.provider);
       toast({
-        title: data.publishReady ? "SEO Brief তৈরি ✅ (publish-ready)" : `স্কোর: ${data.brief.qualityScore}/100`,
-        description: `Provider: ${data.provider}`,
+        title: data.usedFallback ? "Fallback SEO brief draft created — not evaluated" : "SEO brief draft created — manual review required",
+        description: data.usedFallback
+          ? "Configured local model unavailable; this brief is not scored or publication-ready."
+          : "Any model self-rating is not a fact-check, approval, or publication readiness decision.",
       });
     } finally {
       setLoading(false);
@@ -236,15 +238,13 @@ export default function SeoView() {
                 </h3>
                 <div className="flex items-center gap-2">
                   <ProviderTag provider={provider} fallback={provider === "local-fallback"} />
-                  <Badge className={brief.qualityScore >= 85 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
-                    {brief.qualityScore >= 85 ? (
-                      <>
-                        <CheckCircle2 className="h-3 w-3 mr-0.5" />
-                        Publish-ready
-                      </>
-                    ) : (
-                      `Score: ${brief.qualityScore}`
-                    )}
+                  <Badge variant="outline" title="This brief has not been approved for publication.">
+                    Draft · manual review required
+                  </Badge>
+                  <Badge variant="outline">
+                    {provider === "local-fallback" || brief.qualityScore <= 0
+                      ? "Quality not evaluated"
+                      : `Model self-rating: ${brief.qualityScore}/100`}
                   </Badge>
                 </div>
               </div>

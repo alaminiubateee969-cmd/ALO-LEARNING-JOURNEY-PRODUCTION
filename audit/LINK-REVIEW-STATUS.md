@@ -1,5 +1,14 @@
 # Reference link review — complete evidence pass (2026-10-17)
 
+> **Historical snapshot — not current production evidence.** This document
+> refers to an earlier checkout/date and may contain stale paths, counts,
+> test results, or infrastructure claims. Use the current repository
+> baseline at `../COMPLETE-AUDIT-REPORT.md`, deployment blockers at
+> `../DEPLOYMENT.md`, and migration procedure at
+> `../MIGRATION-RECOVERY-PLAN.md`. Do not execute commands here against
+> production without a new review and explicit authorization.
+
+
 > This pass covers **every link supplied in the 2026-10-17 message**, one row per unique link. Each row records: how the source was inspected, what implementable elements it contained, and where those elements landed in this repository (or why the source is a documented boundary). Earlier 2026-10-10 evidence (metadata + README sampling) is preserved in the "Prior review" section at the bottom.
 
 ## Inspection methods used this pass

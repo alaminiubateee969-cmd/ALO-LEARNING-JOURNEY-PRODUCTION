@@ -22,6 +22,21 @@ jobs:
     name: validate
     runs-on: ubuntu-22.04
     timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root
+          MYSQL_DATABASE: ci
+          MYSQL_USER: ci
+          MYSQL_PASSWORD: ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-root"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
     steps:
       - name: Checkout
@@ -43,15 +58,27 @@ jobs:
           npx prisma validate
           npx prisma generate
 
+      - name: Verify the checked-in migration contract
+        run: npm run verify:migrations
+
+      - name: Apply migrations twice to isolated MySQL and verify tables/columns
+        env:
+          DATABASE_URL: "mysql://ci:ci@127.0.0.1:3306/ci"
+        run: |
+          npx prisma migrate deploy
+          npx prisma migrate deploy
+          npx prisma migrate status
+          npm run test:migrations:integration
+
       - name: Lint
         run: npm run lint
 
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Tests (incl. Sharp lazy-load regression)
+      - name: Unit tests and deploy rollback test
         run: |
-          node --test tests/image-processing.test.mjs
+          npm test
           bash scripts/test-deploy-rollback.sh
 
       - name: Production build

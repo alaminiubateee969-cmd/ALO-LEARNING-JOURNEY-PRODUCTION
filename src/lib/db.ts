@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { createLocalPrismaFallback, MODEL_NAMES } from "./local-db-fallback";
+import { mayFallbackAfterPrismaError, shouldStartInFallback as shouldStartInFallbackPolicy } from "./db-fallback-policy.mjs";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -7,17 +8,40 @@ const globalForPrisma = globalThis as unknown as {
   useFallback: boolean | undefined;
 };
 
-const rawPrisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: process.env.ALO_PRISMA_LOG === "true" ? ["query"] : [],
-  });
-
-const localFallback = globalForPrisma.localFallback ?? createLocalPrismaFallback();
+let rawPrisma: PrismaClient | undefined = globalForPrisma.prisma;
+// Do not even read/create the local JSON store in production.
+const localFallback: Record<string, any> = process.env.NODE_ENV === "production"
+  ? {}
+  : globalForPrisma.localFallback ?? createLocalPrismaFallback();
 
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = rawPrisma;
   globalForPrisma.localFallback = localFallback;
+}
+
+function getRawPrisma(): PrismaClient {
+  if (!rawPrisma) {
+    rawPrisma = new PrismaClient({
+      log: process.env.ALO_PRISMA_LOG === "true" ? ["query"] : [],
+    });
+    if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = rawPrisma;
+  }
+  return rawPrisma;
+}
+
+function shouldStartInFallback(): boolean {
+  const enabled = shouldStartInFallbackPolicy({
+    nodeEnv: process.env.NODE_ENV,
+    databaseUrl: process.env.DATABASE_URL,
+    configuredFallback: globalForPrisma.useFallback,
+  });
+  globalForPrisma.useFallback = enabled;
+  return enabled;
+}
+
+function shouldFallbackAfterError(error: unknown): boolean {
+  if (!mayFallbackAfterPrismaError(process.env.NODE_ENV) || !isEngineOrConnectionError(error)) return false;
+  globalForPrisma.useFallback = true;
+  return true;
 }
 
 function isEngineOrConnectionError(error: unknown): boolean {
@@ -27,6 +51,8 @@ function isEngineOrConnectionError(error: unknown): boolean {
     msg.includes("PrismaClientKnownRequestError") ||
     msg.includes("Query engine") ||
     msg.includes("engine=none") ||
+    msg.includes("did not initialize yet") ||
+    msg.includes("Please run `prisma generate`") ||
     msg.includes("Can't reach database server") ||
     msg.includes("Connection refused") ||
     msg.includes("Environment variable not found: DATABASE_URL") ||
@@ -39,35 +65,34 @@ function isEngineOrConnectionError(error: unknown): boolean {
   );
 }
 
-function shouldStartInFallback(): boolean {
-  if (globalForPrisma.useFallback !== undefined) return globalForPrisma.useFallback;
-  const url = process.env.DATABASE_URL?.trim() || "";
-  if (!url || url.includes("REPLACE_WITH_NEW") || url.includes("user:placeholder@")) {
-    globalForPrisma.useFallback = true;
-    return true;
+function getFallbackMethod(target: Record<string, any>, name: string): (...args: any[]) => any {
+  const method = target[name];
+  if (typeof method !== "function") {
+    throw new Error(`Local database fallback is disabled; ${name} cannot be served without Prisma/MySQL.`);
   }
-  return false;
+  return method.bind(target);
 }
 
 function wrapModelDelegate(modelName: string) {
-  const prismaDelegate = (rawPrisma as unknown as Record<string, any>)[modelName];
   const fallbackDelegate = localFallback[modelName];
 
-  return new Proxy(fallbackDelegate, {
+  return new Proxy(fallbackDelegate ?? {}, {
     get(_target, prop: string) {
       return async (...args: any[]) => {
-        if (!shouldStartInFallback() && prismaDelegate && typeof prismaDelegate[prop] === "function") {
+        if (!shouldStartInFallback()) {
           try {
-            return await prismaDelegate[prop](...args);
-          } catch (error) {
-            if (isEngineOrConnectionError(error)) {
-              globalForPrisma.useFallback = true;
-            } else {
-              throw error;
+            const prismaDelegate = (getRawPrisma() as unknown as Record<string, any>)[modelName];
+            const method = prismaDelegate?.[prop];
+            if (typeof method === "function") return await method.apply(prismaDelegate, args);
+            if (process.env.NODE_ENV === "production") {
+              throw new Error(`Prisma delegate ${modelName}.${prop} is unavailable; regenerate the Prisma Client.`);
             }
+            globalForPrisma.useFallback = true;
+          } catch (error) {
+            if (!shouldFallbackAfterError(error)) throw error;
           }
         }
-        return fallbackDelegate[prop](...args);
+        return getFallbackMethod(fallbackDelegate ?? {}, prop)(...args);
       };
     },
   });
@@ -79,45 +104,60 @@ function createResilientDb(): PrismaClient {
     delegates[model] = wrapModelDelegate(model);
   }
 
-  return new Proxy(rawPrisma, {
-    get(target, prop: string) {
-      if (prop in delegates) {
-        return delegates[prop];
-      }
+  return new Proxy({} as PrismaClient, {
+    get(_target, prop: string) {
+      if (prop in delegates) return delegates[prop];
+
       if (prop === "$queryRaw") {
         return async (...args: any[]) => {
           if (!shouldStartInFallback()) {
             try {
-              return await (target.$queryRaw as any)(...args);
+              const client = getRawPrisma();
+              return await (client.$queryRaw as any).apply(client, args);
             } catch (error) {
-              if (isEngineOrConnectionError(error)) {
-                globalForPrisma.useFallback = true;
-              } else {
-                throw error;
-              }
+              if (!shouldFallbackAfterError(error)) throw error;
             }
           }
-          return localFallback.$queryRaw(...args);
+          return getFallbackMethod(localFallback, "$queryRaw")(...args);
         };
       }
+
       if (prop === "$transaction") {
         return async (fnOrArray: any, options?: any) => {
           if (!shouldStartInFallback()) {
             try {
-              return await (target.$transaction as any)(fnOrArray, options);
+              const client = getRawPrisma();
+              return await (client.$transaction as any).call(client, fnOrArray, options);
             } catch (error) {
-              if (isEngineOrConnectionError(error)) {
-                globalForPrisma.useFallback = true;
-              } else {
-                throw error;
-              }
+              if (!shouldFallbackAfterError(error)) throw error;
             }
           }
-          return localFallback.$transaction(fnOrArray);
+          return getFallbackMethod(localFallback, "$transaction")(fnOrArray);
         };
       }
-      const val = (target as any)[prop];
-      return typeof val === "function" ? val.bind(target) : val;
+
+      if (prop === "$connect" || prop === "$disconnect") {
+        return async (...args: any[]) => {
+          if (!shouldStartInFallback()) {
+            try {
+              const client = getRawPrisma() as unknown as Record<string, any>;
+              return await client[prop](...args);
+            } catch (error) {
+              if (!shouldFallbackAfterError(error)) throw error;
+            }
+          }
+          return getFallbackMethod(localFallback, prop)(...args);
+        };
+      }
+
+      if (prop in localFallback) {
+        const value = localFallback[prop];
+        return typeof value === "function" ? value.bind(localFallback) : value;
+      }
+
+      const client = getRawPrisma() as unknown as Record<string, any>;
+      const value = client[prop];
+      return typeof value === "function" ? value.bind(client) : value;
     },
   });
 }

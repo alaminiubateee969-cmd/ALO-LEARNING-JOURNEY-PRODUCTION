@@ -37,6 +37,16 @@ async function chatJSON<T>(
   const start = Date.now();
   try {
     const completion = await generateLocalChatJson(system, user, opts?.timeoutMs ?? 18_000);
+    if (completion.model.includes("(built-in-local)")) {
+      return {
+        ok: false,
+        data: fallback,
+        provider: "local-fallback",
+        usedFallback: true,
+        error: "Configured Ollama model was unavailable; deterministic built-in output was not treated as a model result.",
+        latencyMs: Date.now() - start,
+      };
+    }
     const raw = completion.content;
     const jsonMatch = raw.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
     const cleaned = (jsonMatch ? jsonMatch[0] : raw)
@@ -62,11 +72,13 @@ async function chatJSON<T>(
       merged = fallback;
     }
 
+    const usedFallback = completion.model.includes("(built-in-local)");
     return {
-      ok: true,
+      ok: !usedFallback,
       data: merged,
-      provider: "ollama-local",
-      usedFallback: false,
+      provider: usedFallback ? "local-fallback" : "ollama-local",
+      usedFallback,
+      error: usedFallback ? "Configured Ollama model was unavailable; deterministic built-in content is not a verified model result." : undefined,
       latencyMs: Date.now() - start,
     };
   } catch (error) {
@@ -785,35 +797,35 @@ export async function scoreContentOpportunity(
   const sys = `You are the SEO AI + Audience AI + TrendResearchAgent for ALO Learning Journey, a Bengali parenting & child-education brand. Score the given topic on a 0-100 scale across 6 dimensions. Return ONLY JSON: {searchDemand, parentRelevance, bangladeshRelevance, competition, videoPotential, brandFit, finalScore, rationale}. competition: higher = harder to rank. finalScore: weighted average favoring parentRelevance, brandFit, and videoPotential. rationale: 1-2 sentences in Bengali explaining the score.`;
   const user = `Topic: "${topic}"\n\nConsider: Bangladesh parenting search demand, relevance to parents of young children, Bangladesh cultural context, existing competition, video format potential, and ALO brand fit (warm, educational, non-judgmental).`;
   const fallback: OpportunityScore = {
-    searchDemand: 75,
-    parentRelevance: 85,
-    bangladeshRelevance: 80,
-    competition: 50,
-    videoPotential: 85,
-    brandFit: 90,
-    finalScore: 78,
-    rationale: "প্যারেন্টিং টপিক — বাবা-মায়েদের জন্য প্রাসঙ্গিক, বাংলাদেশি প্রেক্ষাপটে উপযুক্ত।",
+    searchDemand: 0,
+    parentRelevance: 0,
+    bangladeshRelevance: 0,
+    competition: 0,
+    videoPotential: 0,
+    brandFit: 0,
+    finalScore: 0,
+    rationale: "স্থানীয় মডেল অনুপলব্ধ; কোনো অনুসন্ধান-চাহিদা বা বাজার মূল্যায়ন করা হয়নি।",
   };
   return chatJSON<OpportunityScore>(sys, user, fallback, { timeoutMs: 15000 });
 }
 
 export interface HookVariants {
-  hooks: { variant: string; text: string; strategy: string; predictedRetention: number }[];
+  hooks: { variant: string; text: string; strategy: string }[];
 }
 
 export async function generateHookVariants(
   topic: string,
   count = 5
 ): Promise<AIResult<HookVariants>> {
-  const sys = `You are the HookOptimizerAgent for ALO Learning Journey. Generate ${count} distinct 3-second hook variants for a Bengali parenting video about "${topic}". Each hook must use a different psychological strategy (curiosity, shock, question, benefit, story). Return ONLY JSON: {hooks: [{variant: "A", text: "...", strategy: "curiosity", predictedRetention: 65}]}. Text in Bengali. predictedRetention: estimated 3-sec retention % (50-80).`;
+  const sys = `You are the HookOptimizerAgent for ALO Learning Journey. Generate ${count} distinct hook drafts for a Bengali parenting video about "${topic}". Use varied approaches such as curiosity, question, benefit, and story, without fabricated statistics, fear, shame, or guarantees. Return ONLY JSON {hooks: [{variant: "A", text: "...", strategy: "curiosity"}]}. Do not invent retention predictions; only measured performance data is reported after a real test.`;
   const user = `Topic: "${topic}". Generate ${count} hook variants.`;
   const fallback: HookVariants = {
     hooks: [
-      { variant: "A", text: `${topic} — আপনি কি জানেন? 💛`, strategy: "curiosity", predictedRetention: 65 },
-      { variant: "B", text: `৯০% বাবা-মা এই ভুল করেন ${topic}-এ`, strategy: "shock", predictedRetention: 72 },
-      { variant: "C", text: `${topic} কীভাবে করবেন?`, strategy: "question", predictedRetention: 60 },
-      { variant: "D", text: `মাত্র ৩ ধাপে ${topic} ✨`, strategy: "benefit", predictedRetention: 68 },
-      { variant: "E", text: `আমার মেয়ে যখন প্রথম... ${topic} 💛`, strategy: "story", predictedRetention: 70 },
+      { variant: "A", text: `${topic} — আপনার কী জানা দরকার? 💛`, strategy: "curiosity" },
+      { variant: "B", text: `${topic} শুরু করার একটি সহজ উপায় ✨`, strategy: "benefit" },
+      { variant: "C", text: `${topic} নিয়ে আপনার প্রশ্ন কী?`, strategy: "question" },
+      { variant: "D", text: `পরিবারের শেখার পথে ${topic} 🌱`, strategy: "story" },
+      { variant: "E", text: `আজ ঘরে ${topic} চেষ্টা করে দেখুন 💛`, strategy: "action" },
     ],
   };
   return chatJSON<HookVariants>(sys, user, fallback, { timeoutMs: 15000 });
@@ -865,7 +877,7 @@ export async function generateContentBrief(
     schemaType: "Article",
     internalLinks: [],
     estimatedReadTime: 3,
-    qualityScore: 82,
+    qualityScore: 0,
   };
   return chatJSON<ContentBrief>(sys, user, fallback, { timeoutMs: 20000 });
 }

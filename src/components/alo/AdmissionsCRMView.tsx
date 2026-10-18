@@ -146,11 +146,11 @@ const COUNTRY_GUIDES: CountryGuide[] = [
   },
 ];
 
-const WATERFALL_STAGES = [
-  { step: 1, name: "Local Cache & Duplicate Ledger", provider: "storage/local-db.json", cost: "$0.00 (cached)", latency: "1ms" },
-  { step: 2, name: "Email, Phone & Consent Validation", provider: "crm-validation.ts", cost: "$0.00 (local)", latency: "2ms" },
-  { step: 3, name: "Country Pathway & Intake Alignment", provider: "Studytra 5-Country Matrix", cost: "$0.00 (local)", latency: "4ms" },
-  { step: 4, name: "RAG Knowledge Base Citation Match", provider: "ALO Local RAG Index", cost: "$0.00 (local)", latency: "6ms" },
+const LOCAL_REVIEW_STEPS = [
+  { step: 1, name: "Workspace record lookup", detail: "Stored CRM lead record; no duplicate search" },
+  { step: 2, name: "Stored contact and consent fields", detail: "CRM fields only; no external verification" },
+  { step: 3, name: "Configured country-guide lookup", detail: "Static guide list; no portal fetch" },
+  { step: 4, name: "Recorded intake and follow-up fields", detail: "CRM fields only; no reminder scheduler" },
 ];
 
 const selectClass = "h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40";
@@ -320,13 +320,13 @@ export default function AdmissionsCRMView() {
   const [selectedQuote, setSelectedQuote] = useState<QuotationRecord | null>(null);
   const [quotePreviewOpen, setQuotePreviewOpen] = useState(false);
 
-  // Studytra 5-Country Execution Planner state
+  // Static country-guide browsing and checklist state
   const [selectedCountryId, setSelectedCountryId] = useState("uk");
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
   const [attachLeadId, setAttachLeadId] = useState("");
   const [attachingChecklist, setAttachingChecklist] = useState(false);
 
-  // OpenProspector Waterfall Enrichment state
+  // Local CRM review-summary state
   const [enrichLeadId, setEnrichLeadId] = useState("");
   const [enriching, setEnriching] = useState(false);
   const [enrichmentReport, setEnrichmentReport] = useState<null | {
@@ -335,7 +335,7 @@ export default function AdmissionsCRMView() {
     course: string;
     consentStatus: string;
     matchedGuide: string;
-    officialUrl: string;
+    officialUrl: string | null;
     steps: Array<{ step: number; name: string; status: string; detail: string }>;
   }>(null);
 
@@ -428,7 +428,7 @@ export default function AdmissionsCRMView() {
     if (!attachLeadId) return;
     setAttachingChecklist(true);
     try {
-      const summary = `[${activeCountry.country} Readiness Checklist — ${activeCountry.keyMilestoneDoc}] Official source: ${activeCountry.officialUrl} | Steps: ${activeCountry.checklist.join(" • ")}`;
+      const summary = `[${activeCountry.country} Readiness Checklist draft — ${activeCountry.keyMilestoneDoc}] Configured source link (not fetched or verified): ${activeCountry.officialUrl} | Steps: ${activeCountry.checklist.join(" • ")}`;
       const response = await crmFetch(`/api/crm/leads/${encodeURIComponent(attachLeadId)}/activities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -437,7 +437,7 @@ export default function AdmissionsCRMView() {
       if (!response.ok) throw new Error(await getApiError(response, "Could not attach checklist note."));
       toast({
         title: `${activeCountry.country} checklist logged to enquiry`,
-        description: "Saved as a verified counselling note in the enquiry timeline.",
+        description: "Saved as a checklist draft with a configured source link. Confirm current requirements on the linked official site before advising.",
       });
       void load();
     } catch (err) {
@@ -451,65 +451,77 @@ export default function AdmissionsCRMView() {
     }
   };
 
-  const runEnrichmentWaterfall = async () => {
-    const target = leads.find((l) => l.id === enrichLeadId) ?? leads[0];
+  const buildLocalCrmReviewSummary = async () => {
+    const target = leads.find((lead) => lead.id === enrichLeadId) ?? leads[0];
     if (!target) return;
     setEnriching(true);
     try {
-      const matchedCountry =
-        COUNTRY_GUIDES.find((g) => target.targetCountry?.toLowerCase().includes(g.country.toLowerCase()) || g.id === target.targetCountry?.toLowerCase()) ??
-        COUNTRY_GUIDES[0];
+      const normalizedCountry = target.targetCountry?.trim().toLowerCase() ?? "";
+      const matchedCountry = COUNTRY_GUIDES.find((guide) =>
+        normalizedCountry === guide.id ||
+        normalizedCountry === guide.country.toLowerCase() ||
+        normalizedCountry.includes(guide.country.toLowerCase())
+      ) ?? null;
 
       const steps = [
         {
           step: 1,
-          name: "Local Cache & Duplicate Check",
-          status: "VERIFIED ($0.00)",
-          detail: `Record ${target.id.slice(0, 10)} verified in workspace; 0 duplicate phone/email collisions.`,
+          name: "Workspace record lookup",
+          status: "RECORD FOUND",
+          detail: `Loaded CRM record ${target.id.slice(0, 10)}; no duplicate phone/email search was run.`,
         },
         {
           step: 2,
-          name: "Contact & Consent Hygiene",
-          status: target.consentStatus === "consented" ? "OPT-IN CONFIRMED" : "REVIEW CONSENT",
-          detail: `Email: ${target.email || "not set"} · Phone: ${target.phone || "not set"} · Marketing status: ${target.consentStatus}.`,
+          name: "Stored contact and consent fields",
+          status: target.consentStatus === "consented" && target.consentRecordedAt ? "CONSENT DATE RECORDED" : "REVIEW CONSENT RECORD",
+          detail: `Stored email: ${target.email || "not set"} · stored phone: ${target.phone || "not set"} · consent: ${target.consentStatus} · consent date: ${target.consentRecordedAt || "not recorded"}. No contact or consent verification was performed.`,
         },
         {
           step: 3,
-          name: "Destination & Official Portal Match",
-          status: "MATCHED",
-          detail: `Matched ${matchedCountry.country} (${matchedCountry.keyMilestoneDoc}) → ${matchedCountry.officialUrl}`,
+          name: "Configured country-guide lookup",
+          status: matchedCountry ? "CONFIGURED GUIDE MATCH" : "NO CONFIGURED GUIDE MATCH",
+          detail: matchedCountry
+            ? `Matched the configured ${matchedCountry.country} guide (${matchedCountry.keyMilestoneDoc}) and source link ${matchedCountry.officialUrl}; the site was not fetched or verified.`
+            : `No configured guide matched ${target.targetCountry || "the unspecified country"}; no external lookup was performed.`,
         },
         {
           step: 4,
-          name: "Intake & Follow-Up SLA Check",
-          status: target.nextFollowUp ? "SCHEDULED" : "ACTION NEEDED",
-          detail: `Target intake: ${target.intake || "TBD"} · Course: ${target.courseInterest || "TBD"}.`,
+          name: "Recorded intake and follow-up fields",
+          status: target.nextFollowUp ? "FOLLOW-UP DATE RECORDED" : "NO FOLLOW-UP DATE",
+          detail: `Stored intake: ${target.intake || "not set"} · course: ${target.courseInterest || "not set"} · next follow-up: ${target.nextFollowUp || "not set"}. No calendar event or reminder was scheduled.`,
         },
       ];
-
-      setEnrichmentReport({
+      const report = {
         leadName: target.fullName,
-        country: target.targetCountry || matchedCountry.country,
-        course: target.courseInterest || "General Study Plan",
+        country: target.targetCountry || "Not specified",
+        course: target.courseInterest || "Not specified",
         consentStatus: target.consentStatus,
-        matchedGuide: matchedCountry.keyMilestoneDoc,
-        officialUrl: matchedCountry.officialUrl,
+        matchedGuide: matchedCountry?.keyMilestoneDoc ?? "No configured guide match",
+        officialUrl: matchedCountry?.officialUrl ?? null,
         steps,
-      });
-
-      await crmFetch(`/api/crm/leads/${encodeURIComponent(target.id)}/activities`, {
+      };
+      const note = `[Local CRM review summary] Country: ${report.country}. Configured guide: ${report.matchedGuide}. Source link: ${report.officialUrl ?? "none"}. No duplicate search, external verification, portal fetch, or follow-up scheduling was performed.`;
+      const response = await crmFetch(`/api/crm/leads/${encodeURIComponent(target.id)}/activities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "note",
-          body: `[Waterfall Enrichment Pass] Matched ${matchedCountry.country} (${matchedCountry.keyMilestoneDoc}). Official portal: ${matchedCountry.officialUrl}`,
-        }),
+        body: JSON.stringify({ type: "note", body: note }),
       });
+      if (!response.ok) throw new Error(await getApiError(response, "Could not save the CRM review note."));
+
+      setEnrichmentReport(report);
       toast({
-        title: "Local Waterfall Enrichment complete",
-        description: `${target.fullName} matched with ${matchedCountry.country} readiness checklist ($0 vendor cost).`,
+        title: "CRM review summary saved",
+        description: matchedCountry
+          ? `${target.fullName}: configured ${matchedCountry.country} guide matched; its portal and current requirements were not checked.`
+          : `${target.fullName}: no configured country guide matched. No external service was called; infrastructure cost is not measured.`,
       });
       void load();
+    } catch (err) {
+      toast({
+        title: "CRM review summary not saved",
+        description: err instanceof Error ? err.message : "Try again.",
+        variant: "destructive",
+      });
     } finally {
       setEnriching(false);
     }
@@ -582,7 +594,7 @@ export default function AdmissionsCRMView() {
       <SectionHeader
         title="Admissions CRM"
         bn="এনকোয়ারি ও স্টাডি অ্যাব্রোড"
-        desc="Enquiry records, Kanban pipeline, Card/Table view toggle, printable BDT/GBP quotations, 5-Country Studytra Execution Planner, and OpenProspector Waterfall Enrichment."
+        desc="Enquiry records, a Kanban pipeline, printable BDT/GBP quotations, static 5-country study-planning guides, and a local CRM review summary. Country guides and follow-up dates are not live-verified or automatically scheduled."
         icon={<UsersRound className="h-5 w-5" />}
         action={<div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" onClick={() => void refresh()} disabled={refreshing}>{refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Refresh</Button><Button type="button" size="sm" onClick={() => setNewLeadOpen(true)} className="bg-amber-500 text-white hover:bg-amber-600"><UserRoundPlus className="h-4 w-4" />New enquiry</Button></div>}
       />
@@ -604,8 +616,8 @@ export default function AdmissionsCRMView() {
             <TabsTrigger value="pipeline" className="gap-1.5 text-xs"><Workflow className="h-3.5 w-3.5" />Pipeline board</TabsTrigger>
             <TabsTrigger value="enquiries" className="gap-1.5 text-xs"><UsersRound className="h-3.5 w-3.5" />Enquiries ({leads.length})</TabsTrigger>
             <TabsTrigger value="quotations" className="gap-1.5 text-xs"><FileText className="h-3.5 w-3.5" />Quotations ({quotes.length})</TabsTrigger>
-            <TabsTrigger value="destinations" className="gap-1.5 text-xs"><Compass className="h-3.5 w-3.5" />5-Country Planner</TabsTrigger>
-            <TabsTrigger value="enrichment" className="gap-1.5 text-xs"><Radar className="h-3.5 w-3.5" />Waterfall Enrich</TabsTrigger>
+            <TabsTrigger value="destinations" className="gap-1.5 text-xs"><Compass className="h-3.5 w-3.5" />Country Guides</TabsTrigger>
+            <TabsTrigger value="enrichment" className="gap-1.5 text-xs"><Radar className="h-3.5 w-3.5" />CRM Review</TabsTrigger>
           </TabsList>
           {tab === "quotations" ? (
             <Button type="button" size="sm" onClick={openQuotePicker} className="bg-emerald-600 text-white hover:bg-emerald-700"><CircleDollarSign className="h-4 w-4" />New quotation</Button>
@@ -830,20 +842,20 @@ export default function AdmissionsCRMView() {
           </div>
         </TabsContent>
 
-        {/* 5. OPENPROSPECTOR WATERFALL LEAD ENRICHMENT & SIGNAL RADAR */}
+        {/* Local CRM review summary; no external verification or scheduling */}
         <TabsContent value="enrichment" className="mt-4 space-y-4">
           <Card className="p-4 sm:p-5 space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold">Local Waterfall Enrichment & Signal Verification</h3>
+                <h3 className="text-base font-semibold">Local CRM Review Summary</h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Orchestrates a 4-stage zero-markup verification waterfall: checks local cache first ($0), validates contact/consent hygiene, aligns with official country milestones, and logs the verified trace to the enquiry record.
+                  Summarizes stored CRM fields and may match a static country-guide list. It does not search for duplicates, verify contact or consent, fetch official portals, or schedule follow-ups. Review all details before advising.
                 </p>
               </div>
               {leads.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
                   <select
-                    aria-label="Select enquiry for waterfall enrichment"
+                    aria-label="Select enquiry for CRM review summary"
                     value={enrichLeadId}
                     onChange={(e) => setEnrichLeadId(e.target.value)}
                     className="h-9 rounded-md border border-input bg-background px-3 text-xs"
@@ -857,26 +869,26 @@ export default function AdmissionsCRMView() {
                   <Button
                     type="button"
                     size="sm"
-                    onClick={() => void runEnrichmentWaterfall()}
+                    onClick={() => void buildLocalCrmReviewSummary()}
                     disabled={enriching}
                     className="bg-amber-500 text-white hover:bg-amber-600"
                   >
                     {enriching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ListFilter className="h-3.5 w-3.5" />}
-                    Run Waterfall Pass
+                    Build review summary
                   </Button>
                 </div>
               )}
             </div>
 
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-              {WATERFALL_STAGES.map((stage) => (
+              {LOCAL_REVIEW_STEPS.map((stage) => (
                 <Card key={stage.step} className="p-3.5">
-                  <div className="flex items-center justify-between text-[10px] font-mono text-amber-600">
-                    <span>STAGE 0{stage.step}</span>
-                    <span>{stage.cost}</span>
+                  <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
+                    <span>CHECK 0{stage.step}</span>
+                    <span>CRM DATA ONLY</span>
                   </div>
                   <p className="mt-1 font-semibold text-xs">{stage.name}</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">{stage.provider}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{stage.detail}</p>
                 </Card>
               ))}
             </div>
@@ -886,13 +898,13 @@ export default function AdmissionsCRMView() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-xs font-semibold">
-                      Waterfall Trace for {enrichmentReport.leadName} ({enrichmentReport.country} · {enrichmentReport.course})
+                      CRM review summary for {enrichmentReport.leadName} ({enrichmentReport.country} · {enrichmentReport.course})
                     </p>
                     <p className="text-[11px] text-muted-foreground">
-                      Matched milestone: {enrichmentReport.matchedGuide} · Source: {enrichmentReport.officialUrl}
+                      Stored consent status: {enrichmentReport.consentStatus} · Configured guide: {enrichmentReport.matchedGuide} · Source link: {enrichmentReport.officialUrl ?? "none"} · not fetched/verified
                     </p>
                   </div>
-                  <Badge className="bg-emerald-600 text-white text-[10px]">4/4 STAGES COMPLETE</Badge>
+                  <Badge variant="outline" className="text-[10px]">Local summary · not independently verified</Badge>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {enrichmentReport.steps.map((s) => (
@@ -901,7 +913,7 @@ export default function AdmissionsCRMView() {
                         <span className="font-semibold">
                           #{s.step} {s.name}
                         </span>
-                        <span className="text-emerald-600 font-bold">{s.status}</span>
+                        <span className="text-amber-700 font-bold">{s.status}</span>
                       </div>
                       <p className="mt-1 text-[11px] text-muted-foreground">{s.detail}</p>
                     </div>

@@ -3,15 +3,14 @@
 import { useState } from "react";
 import { SectionHeader, StatusPill } from "./primitives";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Phone, MessageSquare, Mail, Send, AlertTriangle, Lock } from "lucide-react";
+import { Phone, MessageSquare, Mail, Send, Lock } from "lucide-react";
 
 const CHANNELS = [
-  { id: "calls", label: "AI Calls", bn: "কল", icon: <Phone className="h-4 w-4" />, status: "BLOCKED_EXTERNAL_SETUP" },
-  { id: "sms", label: "SMS", bn: "এসএমএস", icon: <MessageSquare className="h-4 w-4" />, status: "BLOCKED_EXTERNAL_SETUP" },
-  { id: "whatsapp", label: "WhatsApp", bn: "হোয়াটসঅ্যাপ", icon: <Send className="h-4 w-4" />, status: "BLOCKED_EXTERNAL_SETUP" },
-  { id: "email", label: "Email", bn: "ইমেইল", icon: <Mail className="h-4 w-4" />, status: "BLOCKED_EXTERNAL_SETUP" },
+  { id: "calls", label: "AI Calls", bn: "কল", icon: <Phone className="h-4 w-4" /> },
+  { id: "sms", label: "SMS", bn: "এসএমএস", icon: <MessageSquare className="h-4 w-4" /> },
+  { id: "whatsapp", label: "WhatsApp", bn: "হোয়াটসঅ্যাপ", icon: <Send className="h-4 w-4" /> },
+  { id: "email", label: "Email", bn: "ইমেইল", icon: <Mail className="h-4 w-4" /> },
 ];
 
 export default function CommunicationsView() {
@@ -20,9 +19,9 @@ export default function CommunicationsView() {
   return (
     <div className="alo-fade-up space-y-5">
       <SectionHeader
-        title="Communications Command Center"
+        title="Communications readiness · not implemented"
         bn="যোগাযোগ কমান্ড সেন্টার"
-        desc="AI কল, SMS, WhatsApp, ইমেইল — সকল চ্যানেল। প্রতিটির জন্য প্রদানকারী ক্রেডেনশিয়াল প্রয়োজন (BLOCKED_EXTERNAL_SETUP)। কখনো অননুমোদিত অ্যাকাউন্ট ব্যবহার করা হবে না।"
+        desc="These are planned channels and potential setup requirements only. No call, SMS, WhatsApp, or email integration, consent enforcement, or outbound message delivery is configured here; this checklist is not a compliance certification."
         icon={<Phone className="h-5 w-5" />}
       />
 
@@ -50,15 +49,15 @@ export default function CommunicationsView() {
                     <StatusPill status="blocked_external_setup" />
                   </div>
                   <p className="text-sm text-muted-foreground mb-4">
-                    {channel.id === "calls" && "AI voice calling এর জন্য Twilio/Vonage ক্রেডেনশিয়াল প্রয়োজন। AI নিজেকে AI হিসেবে পরিচয় দেবে — কখনো মানুষের ছদ্মবেশ করবে না।"}
-                    {channel.id === "sms" && "SMS প্রেরণের জন্য Twilio/MessageBird ক্রেডেনশিয়াল প্রয়োজন। Opt-out ব্যবস্থাপনা বাধ্যতামূলক।"}
-                    {channel.id === "whatsapp" && "অফিশিয়াল WhatsApp Business API প্রয়োজন। অননুমোদিত অ্যাকাউন্ট ব্যবহার কঠোরভাবে নিষিদ্ধ।"}
-                    {channel.id === "email" && "SMTP কনফিগারেশন প্রয়োজন (Settings-এ কনফিগার করুন)। এই স্যান্ডবক্সে sendmail উপলব্ধ নয়।"}
+                    {channel.id === "calls" && "Not implemented. Any future voice integration would require a reviewed provider, consent controls, AI disclosure, and human handoff; no call can be placed here."}
+                    {channel.id === "sms" && "Not implemented. No SMS provider or consent/opt-out enforcement is connected; no message can be sent here."}
+                    {channel.id === "whatsapp" && "Not implemented. No WhatsApp Business API or message-delivery client is connected."}
+                    {channel.id === "email" && "Not implemented. No SMTP sender or email settings integration is connected."}
                   </p>
 
                   {/* Requirements */}
                   <div className="rounded-lg bg-muted/40 p-3 mb-3">
-                    <p className="text-xs font-semibold mb-2">প্রয়োজনীয়তা:</p>
+                    <p className="text-xs font-semibold mb-2">Potential setup requirements (not verified):</p>
                     <ul className="text-xs text-muted-foreground space-y-1">
                       {channel.id === "calls" && (
                         <>
@@ -101,9 +100,7 @@ export default function CommunicationsView() {
                     <div className="flex items-start gap-2">
                       <Lock className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
                       <p className="text-xs text-rose-800 dark:text-rose-200">
-                        <strong>নিরাপত্তা নীতি:</strong> কখনো অননুমোদিত অ্যাকাউন্ট ব্যবহার করা হবে না।
-                        কখনো spam করা হবে না। প্রতিটি বার্তায় consent যাচাই হবে।
-                        AI কলে নিজেকে AI হিসেবে পরিচয় দিতে হবে।
+                        <strong>Proposed safeguards only:</strong> This page does not enforce consent, opt-out, sender verification, or AI disclosure. Verify these controls before any external integration.
                       </p>
                     </div>
                   </div>

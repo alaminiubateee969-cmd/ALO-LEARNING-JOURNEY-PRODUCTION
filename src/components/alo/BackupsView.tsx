@@ -7,16 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Database, HardDriveDownload, RotateCcw, Trash2, Loader2, ShieldCheck, Clock, HardDrive } from "lucide-react";
+import { Database, HardDriveDownload, Trash2, Loader2, ShieldCheck, Clock, HardDrive } from "lucide-react";
 
 interface Backup {
   id: string;
   filename: string;
   createdAt: string;
   sizeBytes: number;
-  tables: Record<string, number>;
+  tables: Record<string, number | null>;
   status: "complete" | "partial" | "failed";
   encrypted: boolean;
+  failedModels: string[];
+  excludedModels: string[];
 }
 
 interface Stats {
@@ -52,45 +54,56 @@ export default function BackupsView() {
         body: JSON.stringify({ action: "create" }),
       });
       const data = await res.json();
+      if (!res.ok || !data.backup) throw new Error(data.error ?? "backup_create_failed");
       toast({
-        title: "ব্যাকআপ তৈরি হয়েছে ✅",
-        description: `${data.backup.id} · ${data.backup.status} · ${Object.keys(data.backup.tables).length} tables`,
+        title: data.backup.status === "complete" ? "Snapshot created" : "Partial snapshot created",
+        description: `${data.backup.id} · ${data.backup.status} · ${data.backup.failedModels.length} failed · ${data.backup.excludedModels.length} excluded. This is not a restorable database backup.`,
       });
       load();
+    } catch (error) {
+      toast({ title: "Snapshot creation failed", description: error instanceof Error ? error.message : "backup_create_failed", variant: "destructive" });
     } finally {
       setBusy(null);
     }
   };
 
-  const restore = async (id: string) => {
-    setBusy(`restore-${id}`);
+  const verifyBackup = async (id: string) => {
+    setBusy(`verify-${id}`);
     try {
-      await fetch("/api/backups", {
+      const res = await fetch("/api/backups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "restore", id }),
+        body: JSON.stringify({ action: "verify", id }),
       });
+      const data = await res.json();
       toast({
-        title: "রিস্টোর অনুরোধ পাঠানো হয়েছে",
-        description: "ডেমো মোডে লাইভ DB ওভাররাইট করা হয় না।",
-        variant: "default",
+        title: data.integrityVerified ? "Backup integrity verified" : "Backup integrity check failed",
+        description: data.message ?? data.error ?? "No database restore was performed.",
+        variant: data.integrityVerified ? "default" : "destructive",
       });
       load();
+    } catch (error) {
+      toast({ title: "Backup verification failed", description: error instanceof Error ? error.message : "backup_verify_failed", variant: "destructive" });
     } finally {
       setBusy(null);
     }
   };
 
   const remove = async (id: string) => {
+    if (!window.confirm("Delete this local snapshot file? This cannot be undone and does not delete or restore database rows.")) return;
     setBusy(`delete-${id}`);
     try {
-      await fetch("/api/backups", {
+      const res = await fetch("/api/backups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "delete", id }),
       });
-      toast({ title: "ব্যাকআপ মুছে ফেলা হয়েছে" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "backup_delete_failed");
+      toast({ title: "Local snapshot deleted" });
       load();
+    } catch (error) {
+      toast({ title: "Snapshot deletion failed", description: error instanceof Error ? error.message : "backup_delete_failed", variant: "destructive" });
     } finally {
       setBusy(null);
     }
@@ -107,7 +120,7 @@ export default function BackupsView() {
       <SectionHeader
         title="Backups & Restore"
         bn="ব্যাকআপ ও রিস্টোর"
-        desc="BackupAgent এনক্রিপ্টেড DB + storage স্ন্যাপশট তৈরি করে। রিটেনশন উইন্ডো অনুযায়ী পুরোনো ব্যাকআপ স্বয়ংক্রিয়ভাবে মুছে যায়।"
+        desc="ম্যানুয়াল encrypted database-table snapshot. OTP challenge rows ও media/uploads বাদ থাকে; এটি live database restore করে না এবং scheduled/off-site backup নয়।"
         icon={<Database className="h-5 w-5" />}
         action={
           <Button onClick={create} disabled={busy === "create"} className="bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white">
@@ -142,7 +155,7 @@ export default function BackupsView() {
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-sky-600" />
               <div>
-                <p className="text-[10px] uppercase text-muted-foreground">রিটেনশন</p>
+                <p className="text-[10px] uppercase text-muted-foreground">Review threshold</p>
                 <p className="text-xl font-bold">{stats.retentionDays} দিন</p>
               </div>
             </div>
@@ -174,13 +187,14 @@ export default function BackupsView() {
           <div className="text-center py-12">
             <Database className="h-12 w-12 mx-auto mb-3 text-amber-400" />
             <p className="font-medium text-sm">কোনো ব্যাকআপ নেই</p>
-            <p className="text-xs text-muted-foreground mt-1">&quot;নতুন ব্যাকআপ&quot; বাটন চেপে প্রথম ব্যাকআপ তৈরি করুন।</p>
+            <p className="text-xs text-muted-foreground mt-1">Create a local encrypted table snapshot; it is not a database restore point.</p>
           </div>
         ) : (
           <ScrollArea className="max-h-[500px] alo-scrollbar pr-2">
             <div className="space-y-2">
               {backups.map((b, i) => {
-                const totalRows = Object.values(b.tables).reduce((s, n) => s + n, 0);
+                const totalRows = Object.values(b.tables).reduce<number>((sum, count) => sum + (count ?? 0), 0);
+                const unreadableTables = Object.values(b.tables).filter((count) => count === null).length;
                 return (
                   <div
                     key={b.id}
@@ -201,13 +215,13 @@ export default function BackupsView() {
                         <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
                           <span>📅 {new Date(b.createdAt).toLocaleString()}</span>
                           <span>💾 {fmtSize(b.sizeBytes)}</span>
-                          <span>📊 {Object.keys(b.tables).length} tables · {totalRows} rows</span>
+                          <span>📊 {Object.keys(b.tables).length} table reads · {totalRows} observed rows{unreadableTables ? ` · ${unreadableTables} unreadable` : ""}</span>
                         </div>
                         {/* Table breakdown */}
                         <div className="mt-2 flex flex-wrap gap-1">
                           {Object.entries(b.tables).slice(0, 8).map(([t, n]) => (
                             <Badge key={t} variant="outline" className="text-[9px] font-mono">
-                              {t}: {n}
+                              {t}: {n === null ? "unavailable" : n}
                             </Badge>
                           ))}
                           {Object.keys(b.tables).length > 8 && (
@@ -220,11 +234,11 @@ export default function BackupsView() {
                           size="sm"
                           variant="outline"
                           className="h-8 text-xs"
-                          onClick={() => restore(b.id)}
-                          disabled={busy === `restore-${b.id}`}
+                          onClick={() => verifyBackup(b.id)}
+                          disabled={busy === `verify-${b.id}`}
                         >
-                          {busy === `restore-${b.id}` ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RotateCcw className="h-3 w-3 mr-1" />}
-                          Restore
+                          {busy === `verify-${b.id}` ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <ShieldCheck className="h-3 w-3 mr-1" />}
+                          Verify
                         </Button>
                         <Button
                           size="sm"
@@ -249,10 +263,9 @@ export default function BackupsView() {
         <div className="flex items-start gap-3">
           <ShieldCheck className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-800">
-            <p className="font-semibold">ব্যাকআপ নোট</p>
+            <p className="font-semibold">Snapshot limitations</p>
             <p className="mt-1">
-              এই ডেমোতে ব্যাকআপ ফাইলগুলো XOR-obfuscation সহ সংরক্ষিত হয় (মার্কার মাত্র — প্রোডাকশনে sodium crypto ব্যবহৃত হবে)।
-              রিস্টোর ডেমো মোডে লাইভ DB ওভাররাইট করে না, শুধু অডিট লগে রেকর্ড করে।
+              Snapshot payloads are encrypted with AES-256-GCM. This endpoint excludes OTP challenges and uploaded/media files, does not automatically delete items after the 14-day review threshold, and only verifies payload integrity—it does not restore a database. Use an independently stored MySQL dump and a tested isolated restore procedure for recovery.
             </p>
           </div>
         </div>

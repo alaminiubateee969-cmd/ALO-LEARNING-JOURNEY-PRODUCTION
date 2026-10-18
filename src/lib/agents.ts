@@ -8,7 +8,8 @@ export type AgentStatus =
   | "idle"
   | "running"
   | "blocked_external_setup"
-  | "error";
+  | "error"
+  | "configured";
 
 export type AgentCategory =
   | "orchestration"
@@ -43,7 +44,7 @@ export interface AIAgent {
 
 const bn = "Bengali-first, warm, parenting-safe tone.";
 
-export const AGENTS: AIAgent[] = [
+const AGENT_DEFINITIONS: AIAgent[] = [
   {
     id: "master_orchestrator",
     name: "MasterOrchestratorAgent",
@@ -865,6 +866,16 @@ export const AGENTS: AIAgent[] = [
     estimatedCostUsd: 0.0,
   },
 ];
+
+// These entries are definitions, not live workers. Do not expose sample
+// last-run timestamps or mark unexecuted agents as active.
+export const AGENTS: AIAgent[] = AGENT_DEFINITIONS.map((agent) => ({
+  ...agent,
+  status: "configured",
+  lastRunAt: null,
+  lastError: null,
+  retryCount: 0,
+}));
 
 export const AGENT_CATEGORIES: { id: AgentCategory; label: string; bn: string }[] = [
   { id: "orchestration", label: "Orchestration", bn: "অর্কেস্ট্রেশন" },

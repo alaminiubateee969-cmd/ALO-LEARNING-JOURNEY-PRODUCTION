@@ -1,10 +1,22 @@
-# Local-only AI and media generation
+# Local AI and media generation — source behavior and limitations
 
-## Provider boundary
+> Earlier sandbox reports dated 2026-10-17 described media pipeline executions.
+> Those executions were not repeated in the current repair pass and do not
+> verify production models, providers, hardware, quality, or billing.
 
-The application source does not call OpenAI, Gemini, Claude, ElevenLabs, RunningHub, or another hosted AI provider. Text/chat requests go only to a private Ollama endpoint; image requests go only to a private ComfyUI endpoint. The endpoint guard rejects public hostnames/IP addresses. If a local model is unavailable, the API reports a deterministic fallback instead of silently switching to a cloud service. No AI API keys are required.
+## Provider boundary (source inspection)
 
-**Live-verified 2026-10-17 (sandbox):** every media pipeline was run end-to-end with **zero paid APIs and zero external AI hosts**, and all outputs are real media files:
+The inspected media adapters target private Ollama and ComfyUI endpoints; the
+local endpoint guard rejects public hosts. Missing local models use explicitly
+marked template/placeholder fallbacks rather than silently switching to a
+cloud provider. This is a source-level boundary, not live provider or billing
+verification. No hosted AI API key is required by those paths, but non-AI
+services such as SMS may require separately configured credentials.
+
+**Prior sandbox evidence (historical, not rerun in this audit):** earlier work
+reported end-to-end generation attempts with no paid AI APIs and local output
+files. Treat the table below as historical test output only, not a guarantee of
+current runtime or production availability.
 
 | Pipeline | Provider chain | Verified output |
 |---|---|---|
@@ -14,7 +26,7 @@ The application source does not call OpenAI, Gemini, Claude, ElevenLabs, Running
 | Video | `espeak-local` + procedural instrumental + FFmpeg | 1080×1920 H.264+AAC MP4 + Bengali SRT in `storage/videos/` |
 | Cinematic | `ollama-local` script + scene stills + FFmpeg | H.264 MP4 + SRT, 3-scene render |
 
-A source scan of every media route (`images/generate`, `voice/generate`, `music/generate`, `video/generate`, `video/cinematic` and their libs) found **no** `fetch`/`axios` call to OpenAI, Anthropic, Gemini, ElevenLabs, Replicate, Stability, or any other hosted AI service — only loopback/private Ollama and ComfyUI. `GET /api/ai/local-status` reports `mode: local-only` and `paidApiCalls: false`. No AI API key is needed for any of these; the optional `HTTPSMS_API_KEY` / `INKBOX_API_KEY` entries in `.env.example` cover SMS OTP delivery and a notes integration only, and the app runs fully without them.
+`GET /api/ai/local-status` reports local model/binary availability from configuration and includes a static `noPaidApis` note; it does not measure provider billing or independently prove that a configured service is local. The inspected media adapter calls are to private Ollama/ComfyUI URLs guarded by `getPrivateLocalBaseUrl`. This statement is source-level only. SMS OTP is a separate external service and may require `HTTPSMS_API_KEY`; the optional Inkbox adapter is also separate. Neither integration is AI-provider verification.
 
 ## Text and Bengali copy
 
@@ -64,7 +76,7 @@ Piper/eSpeak synthesize spoken narration, not singing. Do not clone or imitate a
 
 ## Operations and limitations
 
-- Local inference still consumes the host's RAM/VRAM, CPU/GPU, disk, power, and operator time. The Cost & Usage view reports paid AI API estimate as zero and does **not** price that infrastructure.
+- Local inference still consumes the host's RAM/VRAM, CPU/GPU, disk, power, and operator time. Dashboard cost figures are stored estimates, not verified invoices or provider telemetry; missing/zero values do not prove a service is free.
 - Model downloads, model-license compliance, GPU performance, accessibility, output quality, moderation effectiveness, and production concurrency have not been independently verified here.
 - Content packages, email drafts, song lyrics, narration scripts, and image prompts can run sequential local writer → critic → finalist passes. Actual pass states are returned/logged; if Ollama is unavailable, downstream passes are marked skipped and the template fallback remains visible. These passes and structural/editorial rubric scores are not factual verification and do not establish a measured “10×” improvement.
 - The email endpoint only creates a draft and logs its agent stages. No email sender, consent/suppression system, unsubscribe endpoint, or SMTP/Resend integration is available.

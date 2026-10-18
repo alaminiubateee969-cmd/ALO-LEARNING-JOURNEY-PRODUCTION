@@ -1,4 +1,13 @@
-# Full Project Audit — 2026-10-17 (pre-change)
+# Historical Full Project Audit — 2026-10-17 (superseded baseline)
+
+> **Historical snapshot — not current production evidence.** This document
+> refers to an earlier checkout/date and may contain stale paths, counts,
+> test results, or infrastructure claims. Use the current repository
+> baseline at `../COMPLETE-AUDIT-REPORT.md`, deployment blockers at
+> `../DEPLOYMENT.md`, and migration procedure at
+> `../MIGRATION-RECOVERY-PLAN.md`. Do not execute commands here against
+> production without a new review and explicit authorization.
+
 
 Method: exhaustive filesystem walk, source scans, dependency-usage analysis, schema↔migration diff, env-var diff, shell syntax checks, secrets scan, import resolution across all TS files, build/typecheck/lint runs, runtime smoke of every route class, doc-link resolution. **No item below is estimated; each was executed.**
 

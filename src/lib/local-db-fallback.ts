@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-const DB_FILE = path.join(process.cwd(), "storage", "local-db.json");
+const DB_FILE = process.env.ALO_LOCAL_DB_FILE?.trim()
+  ? path.resolve(process.env.ALO_LOCAL_DB_FILE.trim())
+  : path.join(process.cwd(), "storage", "local-db.json");
 
 export const MODEL_NAMES = [
   "company",

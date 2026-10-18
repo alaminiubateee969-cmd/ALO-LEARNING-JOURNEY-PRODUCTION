@@ -29,24 +29,11 @@ function record(
 async function checkDatabase(results: Check[]) {
   try {
     const { db } = await import("@/lib/db");
-    const { ensureSeeded } = await import("@/lib/seed");
     const started = Date.now();
     await db.$queryRaw`SELECT 1`;
-    await ensureSeeded();
+    const companies = String(await db.company.count());
     const ms = Date.now() - started;
-
-    try {
-      const companies = String(await db.company.count());
-      record(results, "Database", true, true, `query ok in ${ms}ms; Company rows=${companies}`);
-    } catch (error) {
-      record(
-        results,
-        "Database schema",
-        true,
-        false,
-        `connection ok but Company.count() failed — schema likely not pushed: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300)
-      );
-    }
+    record(results, "Database", true, true, `query and Company schema check ok in ${ms}ms; Company rows=${companies}`);
   } catch (error) {
     record(
       results,
@@ -61,7 +48,16 @@ async function checkDatabase(results: Check[]) {
 function checkEnv(results: Check[]) {
   const url = process.env.DATABASE_URL;
   if (!url) {
-    record(results, "DATABASE_URL", true, true, "local persistent database store active (set DATABASE_URL for external MySQL)");
+    const developmentFallback = process.env.NODE_ENV !== "production";
+    record(
+      results,
+      "DATABASE_URL",
+      true,
+      developmentFallback,
+      developmentFallback
+        ? "unset; local JSON persistence is a development-only fallback"
+        : "missing in production; a configured MySQL connection is required"
+    );
     return;
   }
   const scheme = url.split(":")[0] || "unknown";

@@ -26,7 +26,7 @@ export class ImageProcessingUnavailableError extends Error {
   }
 }
 
-type SharpFactory = typeof import("sharp");
+type SharpFactory = (typeof import("sharp"))["default"];
 
 let cached: SharpFactory | null = null;
 let cachedError: ImageProcessingUnavailableError | null = null;
@@ -36,10 +36,10 @@ export async function loadSharp(): Promise<SharpFactory> {
   if (cached) return cached;
   if (cachedError) throw cachedError;
   try {
-    const mod = (await import("sharp")) as unknown as { default: SharpFactory };
+    const sharp = (await import("sharp")).default;
     // Probe actual usability — some binaries load but fail on first op.
-    mod.default(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>')).png();
-    cached = mod.default;
+    sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>')).png();
+    cached = sharp;
     return cached;
   } catch (error) {
     cachedError = new ImageProcessingUnavailableError(error);

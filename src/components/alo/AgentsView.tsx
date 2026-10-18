@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AGENTS, AGENT_CATEGORIES, type AgentCategory } from "@/lib/agents";
-import { SectionHeader, StatusPill, ProviderTag } from "./primitives";
+import { SectionHeader, StatusPill } from "./primitives";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -32,13 +32,16 @@ const catIcon: Record<AgentCategory, string> = {
 
 interface AgentRunResponse {
   ok: boolean;
+  status: string;
+  usedFallback: boolean;
   runId: string;
   auditId: string;
   agentId: string;
   agentName: string;
   model: string;
   latencyMs: number;
-  estimatedCostUsd: number;
+  estimatedCostUsd: number | null;
+  costTelemetry: "not_metered";
   output: Record<string, unknown>;
 }
 
@@ -86,8 +89,11 @@ export default function AgentsView() {
       if (!res.ok) throw new Error(data.error ?? "Agent execution failed");
       setLastResult(data);
       toast({
-        title: `${data.agentName} executed ($0.00 Paid API)`,
-        description: `Completed in ${data.latencyMs}ms · Run ID ${data.runId.slice(0, 12)}`,
+        title: data.status === "success" && !data.usedFallback
+          ? `${data.agentName} returned a local model response`
+          : `${data.agentName} returned fallback output — human review required`,
+        description: `Run ${data.runId.slice(0, 12)} · ${data.model} · declared tools are not executed by this route`,
+        variant: data.status === "success" && !data.usedFallback ? "default" : "destructive",
       });
     } catch (err) {
       toast({
@@ -103,17 +109,17 @@ export default function AgentsView() {
   return (
     <div className="alo-fade-up">
       <SectionHeader
-        title="Own AI Agents (100% Local Kernel · $0 Paid API)"
-        bn="নিজস্ব এআই এজেন্ট"
-        desc="আমাদের নিজস্ব মাল্টি-এজেন্ট কার্নেল — স্ক্রিপ্ট, স্টোরিবোর্ড, ইমেজ, ভয়েস, মিউজিক, ভিডিও (FFmpeg + SRT) এবং সেফটি রিভিউ সবই পেইড API ছাড়া এই সার্ভারেই চলে।"
+        title="Agent Catalog · On-demand Local Models"
+        bn="এআই এজেন্ট ক্যাটালগ"
+        desc="These are configured agent definitions, not autonomous background workers. The generic run endpoint calls a local model only; it does not execute declared tools. Unavailable-model responses are labeled as fallback and require human review."
         icon={<Brain className="h-5 w-5" />}
         action={
           <div className="flex flex-wrap gap-2">
-            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-              {AGENTS.filter((a) => a.status === "active").length}/{AGENTS.length} Active
+            <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
+              {AGENTS.length} configured · no worker probe
             </Badge>
             <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
-              $0.00 Paid API Cost
+              No paid AI API calls
             </Badge>
           </div>
         }
@@ -175,8 +181,8 @@ export default function AgentsView() {
               {a.description}
             </p>
             <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/50">
-              <ProviderTag provider={a.provider} fallback={false} />
-              <span className="text-[10px] font-medium text-emerald-700">$0.000 Local</span>
+              <Badge variant="outline" className="text-[10px]">Configured: {a.provider}</Badge>
+              <span className="text-[10px] font-medium text-muted-foreground">On-demand · infrastructure cost not measured</span>
             </div>
           </Card>
         ))}
@@ -214,20 +220,21 @@ export default function AgentsView() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-lg bg-muted/50 p-3">
                     <p className="text-[10px] uppercase text-muted-foreground">Provider / Model</p>
-                    <p className="font-medium text-xs mt-0.5">{selected.provider} ($0 Paid API)</p>
+                    <p className="font-medium text-xs mt-0.5">{selected.provider}</p>
                     <p className="text-[11px] text-muted-foreground">{selected.model}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">Configured only; provider availability is checked on a run, and infrastructure cost is not measured.</p>
                   </div>
                   <div className="rounded-lg bg-muted/50 p-3">
                     <p className="text-[10px] uppercase text-muted-foreground">Status / Last run</p>
                     <div className="font-medium text-xs mt-0.5">
                       <StatusPill status={selected.status} />
                     </div>
-                    <p className="text-[11px] text-muted-foreground">{selected.lastRunAt ?? "just now"}</p>
+                    <p className="text-[11px] text-muted-foreground">{selected.lastRunAt ?? "No verified run recorded"}</p>
                   </div>
                 </div>
 
                 <div>
-                  <p className="text-xs font-semibold mb-1">Description</p>
+                  <p className="text-xs font-semibold mb-1">Intended role (not executed by generic route)</p>
                   <p className="text-muted-foreground">{selected.description}</p>
                 </div>
 
@@ -240,7 +247,7 @@ export default function AgentsView() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-xs font-semibold mb-1">Tools</p>
+                    <p className="text-xs font-semibold mb-1">Declared tools (not executed here)</p>
                     <div className="flex flex-wrap gap-1">
                       {selected.tools.map((t) => (
                         <Badge key={t} variant="outline" className="text-[9px]">
@@ -250,7 +257,7 @@ export default function AgentsView() {
                     </div>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold mb-1">Permissions</p>
+                    <p className="text-xs font-semibold mb-1">Declared permissions (not enforced here)</p>
                     <div className="flex flex-wrap gap-1">
                       {selected.permissions.map((p) => (
                         <Badge
@@ -267,7 +274,7 @@ export default function AgentsView() {
 
                 <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3 space-y-2.5">
                   <p className="text-xs font-semibold text-amber-900">
-                    Run {selected.name} Live (Built-in Local Kernel · $0.00 Paid API)
+                    Run {selected.name} on demand (local model; declared tools not executed)
                   </p>
                   <Input
                     value={taskPrompt}
@@ -292,21 +299,23 @@ export default function AgentsView() {
                         </>
                       )}
                     </Button>
-                    <span className="text-[11px] text-emerald-700 font-medium">
-                      Cost: $0.0000 · Local-Only
+                    <span className="text-[11px] text-muted-foreground font-medium">
+                      Local-only model route · infrastructure cost not measured
                     </span>
                   </div>
                 </div>
 
                 {lastResult && (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-2">
+                  <div className={`rounded-xl border p-3 space-y-2 ${lastResult.status === "success" && !lastResult.usedFallback ? "border-emerald-200 bg-emerald-50/50" : "border-amber-200 bg-amber-50/50"}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-emerald-900 flex items-center gap-1.5">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                        {lastResult.agentName} Output · {lastResult.latencyMs}ms
+                      <span className={`text-xs font-semibold flex items-center gap-1.5 ${lastResult.status === "success" && !lastResult.usedFallback ? "text-emerald-900" : "text-amber-900"}`}>
+                        {lastResult.status === "success" && !lastResult.usedFallback
+                          ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                          : <ShieldCheck className="h-4 w-4 text-amber-600" />}
+                        {lastResult.agentName} · {lastResult.status === "success" && !lastResult.usedFallback ? "local model response" : "fallback output — human review required"} · {lastResult.latencyMs}ms
                       </span>
-                      <Badge variant="outline" className="border-emerald-300 text-emerald-800 text-[10px]">
-                        Run {lastResult.runId.slice(0, 10)} · $0.00
+                      <Badge variant="outline" className="text-[10px]">
+                        Run {lastResult.runId.slice(0, 10)} · {lastResult.status}
                       </Badge>
                     </div>
                     <pre className="max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-background p-2.5 font-mono text-[11px] text-foreground">

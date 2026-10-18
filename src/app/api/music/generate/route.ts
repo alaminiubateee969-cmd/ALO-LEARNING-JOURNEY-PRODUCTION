@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     bpm: number;
     lyricsProvider: string;
     lyricsUsedFallback: boolean;
+    usedFallback: boolean;
     lyricsQualityPipeline: QualityAgentPass[];
   }>(
     {
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
           bpm,
           lyricsProvider: lyricsResult.provider,
           lyricsUsedFallback: lyricsResult.usedFallback,
+          usedFallback: lyricsResult.usedFallback,
           lyricsQualityPipeline: lyricsResult.qualityPipeline ?? [],
         },
         provider: `${lyricsResult.provider}+local-procedural-synth`,
@@ -80,9 +82,12 @@ export async function POST(request: Request) {
     }
   );
 
-  if (agent.status !== "success") {
+  if (agent.status === "failed") {
     return NextResponse.json({ error: agent.error || "Local music generation failed", agentRunId: agent.runId }, { status: 500 });
   }
   await recordAgentPipelineStages("song lyric refinement", agent.result.lyricsQualityPipeline);
-  return NextResponse.json({ ...agent.result, agentRunId: agent.runId, auditId: agent.auditId }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(
+    { ...agent.result, agentStatus: agent.status, agentError: agent.error, agentRunId: agent.runId, auditId: agent.auditId },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }

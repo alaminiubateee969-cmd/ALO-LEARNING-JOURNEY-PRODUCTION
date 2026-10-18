@@ -94,6 +94,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ comment: updated, tone: result.data.tone, provider: result.provider, usedFallback: result.usedFallback, humanReviewRequired: true, agentRunId });
   }
 
+  if (action === "save_draft") {
+    const draftReply = typeof body.draftReply === "string" ? body.draftReply.trim() : "";
+    if (!draftReply || draftReply.length > 5_000) {
+      return NextResponse.json({ error: "draft_reply_must_contain_1_to_5000_characters" }, { status: 400 });
+    }
+    const comment = await db.commentInbox.findUnique({ where: { id } });
+    if (!comment) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    if (REVIEW_REQUIRED.includes(comment.category)) {
+      return NextResponse.json({ error: "Sensitive or unclassified comments require a human response.", status: "needs_human_response" }, { status: 403 });
+    }
+    const updated = await db.commentInbox.update({ where: { id }, data: { draftReply } });
+    await db.auditLog.create({
+      data: { actor: "admin", action: "comment.draft_save", detail: `Saved an unsent reply draft for comment ${id}.`, severity: "info" },
+    });
+    return NextResponse.json({ comment: updated, status: "draft_saved", deliveryAttempted: false, message: "Draft saved locally; no platform message was sent." });
+  }
+
   if (action === "send") {
     const comment = await db.commentInbox.findUnique({ where: { id } });
     if (!comment?.draftReply) return NextResponse.json({ error: "no_draft" }, { status: 400 });

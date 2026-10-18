@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureSeeded } from "@/lib/seed";
 
-// WeeklyLearningAgent: analyses the last 7 days of analytics + published posts
-// and derives recommendations. Never auto-rewrites safety/brand rules.
+// Deterministic summaries of stored analytics snapshots and post records.
+// This route does not call an autonomous learning agent or fetch provider data.
 export async function GET() {
   await ensureSeeded();
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -13,7 +13,7 @@ export async function GET() {
   const posts = await db.publishedPost.findMany({
     where: { status: "published", publishedAt: { gte: since } },
   });
-  const comments = await db.commentInbox.findMany();
+  const comments = await db.commentInbox.findMany({ where: { createdAt: { gte: since } } });
 
   // Aggregate per platform
   const byPlatform: Record<string, Record<string, number>> = {};
@@ -117,6 +117,9 @@ export async function GET() {
 
   return NextResponse.json({
     period: "৭ দিন",
+    sourceMessage: "Heuristic summaries of stored analytics snapshots, comment records, and post statuses only. No provider analytics or external delivery is verified; recommendations are not actions.",
+    providerAnalyticsFetched: false,
+    deliveryVerified: false,
     totals,
     byPlatform,
     bestPlatform,

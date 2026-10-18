@@ -11,7 +11,10 @@ export async function GET() {
   return NextResponse.json({
     agents: AGENTS,
     total: AGENTS.length,
-    active: AGENTS.filter((a) => a.status === "active").length,
+    configured: AGENTS.length,
+    active: 0,
+    execution: "on-demand; local model availability is checked per run",
+    declaredToolsExecutedByGenericAgentRoute: false,
     paidApiCalls: false,
     mode: "local-only",
   });
@@ -44,8 +47,10 @@ export async function POST(req: Request) {
     prompt: string;
     output: Record<string, unknown>;
     latencyMs: number;
-    estimatedCostUsd: number;
+    estimatedCostUsd: number | null;
+    costTelemetry: "not_metered";
     paidApiCalls: boolean;
+    usedFallback: boolean;
   }>(
     {
       agentId: agentDef.id,
@@ -60,6 +65,7 @@ export async function POST(req: Request) {
         `Task for ${agentDef.name} (${agentDef.role}): "${customPrompt}"`,
         12_000
       );
+      const usedFallback = completion.model.includes("(built-in-local)");
       let parsedOutput: Record<string, unknown> = {};
       try {
         const parsed = JSON.parse(completion.content);
@@ -80,15 +86,22 @@ export async function POST(req: Request) {
           model: completion.model || agentDef.model,
           prompt: customPrompt,
           output: {
-            summaryBn: `${agentDef.name} সফলভাবে লোকাল এআই কার্নেলের মাধ্যমে টাস্ক সম্পন্ন করেছে ($0.00 Paid API)।`,
-            toolsExecuted: agentDef.tools,
             ...parsedOutput,
+            summaryBn: usedFallback
+              ? `${agentDef.name}: configured Ollama was unavailable; deterministic built-in fallback output needs human review.`
+              : `${agentDef.name} returned a local model response; declared tools were not executed by this route.`,
+            declaredTools: agentDef.tools,
+            toolsExecuted: [],
           },
           latencyMs: Math.max(8, Date.now() - startMs),
-          estimatedCostUsd: 0.0,
+          estimatedCostUsd: null,
+          costTelemetry: "not_metered",
           paidApiCalls: false,
+          usedFallback,
         },
-        provider: "ollama-local",
+        provider: usedFallback ? "built-in-local" : "ollama-local",
+        usedFallback,
+        error: usedFallback ? "The configured local model did not respond; this is template output, not a verified agent completion." : undefined,
       };
     }
   );

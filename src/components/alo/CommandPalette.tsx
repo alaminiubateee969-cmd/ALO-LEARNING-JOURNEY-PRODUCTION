@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, CornerDownLeft, ArrowUp, ArrowDown } from "lucide-react";
 import { AGENTS } from "@/lib/agents";
 import { PLATFORMS } from "@/lib/platforms";
-import { TELEGRAM_COMMANDS } from "@/lib/platforms";
+import { ADMIN_COMMANDS } from "@/lib/platforms";
 
 interface PaletteItem {
   id: string;
@@ -76,11 +76,11 @@ export default function CommandPalette({
     action: () => onNavigate("social"),
   }));
 
-  const telegramItems: PaletteItem[] = TELEGRAM_COMMANDS.slice(0, 8).map((c) => ({
+  const telegramItems: PaletteItem[] = ADMIN_COMMANDS.slice(0, 8).map((c) => ({
     id: `tg-${c.cmd}`,
     label: c.cmd,
     bn: c.desc,
-    group: "Telegram Commands",
+    group: "Admin Console Commands",
     icon: "✈️",
     action: () => onNavigate("telegram"),
   }));
