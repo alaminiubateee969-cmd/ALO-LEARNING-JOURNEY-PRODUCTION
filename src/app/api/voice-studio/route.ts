@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
+import { assertExternalAiAllowed } from "@/lib/agentos/payment-guard";
 
 /**
  * ALO Voice Studio
@@ -65,10 +66,10 @@ export async function GET() {
       totalChars: recent.reduce((s, r) => s + r.charCount, 0),
       totalDuration: recent.reduce((s, r) => s + (r.durationSec || 0), 0),
     };
-    const voiceUsage = recent.reduce<Record<string, number>>((acc, r) => {
-      acc[r.voice] = (acc[r.voice] || 0) + 1;
-      return acc;
-    }, {});
+    const voiceUsage: Record<string, number> = {};
+    for (const generation of recent) {
+      voiceUsage[generation.voice] = (voiceUsage[generation.voice] || 0) + 1;
+    }
     return NextResponse.json({
       voices: VOICE_PROFILES,
       recent,
@@ -152,7 +153,8 @@ export async function POST(req: NextRequest) {
 
     try {
       // dynamic import to keep z-ai in server-only path
-      const ZAI = (await import('z-ai-web-dev-sdk')).default;
+      assertExternalAiAllowed("z-ai-web-dev-sdk");
+      const ZAI = (await import("z-ai-web-dev-sdk")).default;
       const zai = await ZAI.create();
 
       const outputDir = path.join(process.cwd(), 'public', 'voice-studio');

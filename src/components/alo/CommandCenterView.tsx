@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SectionHeader, StatusPill, ProviderTag } from "./primitives";
+import { SectionHeader } from "./primitives";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +31,7 @@ export default function CommandCenterView() {
     setLoading(true);
     setResult(null);
     try {
-      const res = await fetch("/api/command", {
+      const res = await fetch("/api/agentos/command", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command }),
@@ -39,8 +39,8 @@ export default function CommandCenterView() {
       const data = await res.json();
       setResult(data);
       toast({
-        title: `Intent: ${data.parsed?.intent}`,
-        description: `Action: ${data.action} (${data.provider})`,
+        title: data.status === "pending_owner_approval" ? "Owner approval required" : data.status === "blocked_paid_api" ? "Paid API blocked" : "Plan prepared",
+        description: data.note,
       });
     } catch (e) {
       toast({ title: "Command failed", description: String(e), variant: "destructive" });
@@ -54,7 +54,7 @@ export default function CommandCenterView() {
       <SectionHeader
         title="Command Center"
         bn="কমান্ড সেন্টার"
-        desc="প্রাকৃতিক ভাষায় কমান্ড দিন — বাংলা বা English। MasterOrchestratorAgent কমান্ড বুঝে সঠিক এজেন্ট ট্রিগার করবে।"
+        desc="বাংলা বা English-এ নির্দেশ দিন। AgentOS নিরাপদ পরিকল্পনা, বিভাগ/এজেন্ট মিল এবং approval routing করে; এটি নিজে থেকে agent, shell command, deployment, payment বা public action চালায় না।"
         icon={<Terminal className="h-5 w-5" />}
       />
 
@@ -95,13 +95,26 @@ export default function CommandCenterView() {
               <Sparkles className="h-4 w-4 text-amber-600" /> ফলাফল
             </h3>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-[9px]">{result.parsed?.intent}</Badge>
-              <ProviderTag provider={result.provider} fallback={result.provider === "local-fallback"} />
+              <Badge variant="outline" className="text-[9px]">{result.status}</Badge>
+              <Badge variant="outline" className="text-[9px]">Plan only · no tool execution</Badge>
             </div>
           </div>
 
           <ScrollArea className="max-h-96 alo-scrollbar pr-2">
-            {/* Intent-specific display */}
+            <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4">
+              <p className="text-sm font-medium">{result.command}</p>
+              <p className="text-xs text-muted-foreground">Department: {result.matched_department ?? "No exact department match"}</p>
+              {result.approval_id && <p className="text-xs text-amber-700">Pending owner approval: {result.approval_id}</p>}
+              {result.matched_agents?.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {result.matched_agents.map((agent: { id: string; name: string; status: string }) => (
+                    <Badge key={agent.id} variant="outline" className="text-[9px]">{agent.id} · {agent.name} · {agent.status}</Badge>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs">{result.note}</p>
+            </div>
+            {/* Legacy result renderers are retained for typed compatibility but the guarded planner does not return those actions. */}
             {result.action === "ideas_generated" && result.ideas && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground mb-2">Generated {result.ideas.length} ideas via {result.ideasProvider}:</p>

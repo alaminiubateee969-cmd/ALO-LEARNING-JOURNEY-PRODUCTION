@@ -1,25 +1,16 @@
-// ALO Learning Journey — AI service (server-only)
-// Wraps z-ai-web-dev-sdk LLM + image generation with SAFE LOCAL FALLBACKS.
-// The platform NEVER claims a paid model ran if no key/config exists.
-// Every call returns { provider, usedFallback } so the UI can show the truth.
+// ALO Learning Journey — local-first AI service (server-only).
+// This shared service never calls paid/external model APIs. Local models and
+// deterministic fallbacks report their real provider/status to callers.
 
-import ZAI from "z-ai-web-dev-sdk";
-import { generateLocalChatJson } from "@/lib/local-models";
+import { generateComfyUiImage, generateLocalChatJson } from "@/lib/local-models";
 
 export interface AIResult<T> {
   ok: boolean;
   data: T;
-  provider: "zai-llm" | "local-fallback" | "image-gen" | "image-fallback";
+  provider: string;
   usedFallback: boolean;
   error?: string;
   latencyMs: number;
-}
-
-let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-async function getZai() {
-  if (_zai) return _zai;
-  _zai = await ZAI.create();
-  return _zai;
 }
 
 async function chatJSON<T>(
@@ -29,72 +20,43 @@ async function chatJSON<T>(
   opts?: { timeoutMs?: number }
 ): Promise<AIResult<T>> {
   const start = Date.now();
-  const timeoutMs = opts?.timeoutMs ?? 18000;
   try {
-    const zai = await getZai();
-    // Race the LLM call against a timeout so a slow/hung provider degrades
-    // gracefully to the local fallback instead of hanging the request.
-    const completion = (await Promise.race([
-      zai.chat.completions.create({
-        messages: [
-          { role: "assistant", content: system },
-          { role: "user", content: user },
-        ],
-        thinking: { type: "disabled" },
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`LLM timeout after ${timeoutMs}ms`)),
-          timeoutMs
-        )
-      ),
-    ])) as Awaited<ReturnType<typeof zai.chat.completions.create>>;
-
-    const raw = completion.choices[0]?.message?.content ?? "";
-    // Extract the first {...} or [...] JSON block (LLMs sometimes wrap JSON
-    // in prose or multiple code fences).
-    const jsonMatch = raw.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-    const cleaned = (jsonMatch ? jsonMatch[0] : raw)
+    const local = await generateLocalChatJson(system, user, opts?.timeoutMs ?? 18000);
+    if (local.model.includes("(built-in-local)")) {
+      return {
+        ok: false,
+        data: fallback,
+        provider: "local-template-fallback",
+        usedFallback: true,
+        error: "The configured local model was unavailable; no external or paid provider was called.",
+        latencyMs: Date.now() - start,
+      };
+    }
+    const jsonMatch = local.content.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    const cleaned = (jsonMatch ? jsonMatch[0] : local.content)
       .replace(/```json\n?/g, "")
       .replace(/```\n?/g, "")
       .trim();
     const parsed = JSON.parse(cleaned) as Partial<T>;
-
-    // If fallback is an array and parsed is also an array, use parsed directly.
-    // If fallback is an array but parsed is an object containing an array
-    // (e.g. LLM returned {ideas: [...]} instead of [...]), extract the array.
     let merged: T;
     if (Array.isArray(fallback)) {
-      if (Array.isArray(parsed)) {
-        merged = parsed as T;
-      } else if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        // LLM wrapped the array in an object — try to find it
-        const obj = parsed as Record<string, any>;
-        const arrayKey = Object.keys(obj).find((k) => Array.isArray(obj[k]));
+      if (Array.isArray(parsed)) merged = parsed as T;
+      else if (parsed && typeof parsed === "object") {
+        const obj = parsed as Record<string, unknown>;
+        const arrayKey = Object.keys(obj).find((key) => Array.isArray(obj[key]));
         merged = (arrayKey ? obj[arrayKey] : fallback) as T;
-      } else {
-        merged = fallback;
-      }
+      } else merged = fallback;
     } else {
-      // Object merge: ensure every fallback key exists
       merged = { ...(fallback as object), ...(parsed as object) } as T;
     }
-
-    // If the merge produced an empty/garbage critical field, fall back.
-    return {
-      ok: true,
-      data: merged,
-      provider: "zai-llm",
-      usedFallback: false,
-      latencyMs: Date.now() - start,
-    };
-  } catch (e) {
+    return { ok: true, data: merged, provider: local.model, usedFallback: false, latencyMs: Date.now() - start };
+  } catch (error) {
     return {
       ok: false,
       data: fallback,
-      provider: "local-fallback",
+      provider: "local-template-fallback",
       usedFallback: true,
-      error: e instanceof Error ? e.message : "unknown",
+      error: error instanceof Error ? error.message : "local model unavailable",
       latencyMs: Date.now() - start,
     };
   }
@@ -635,26 +597,21 @@ export async function generateImageFile(
 ): Promise<AIResult<{ path: string }>> {
   const start = Date.now();
   try {
-    const zai = await getZai();
-    const resp = await zai.images.generations.create({ prompt, size });
-    const b64 = resp.data[0]?.base64;
-    if (!b64) throw new Error("empty image response");
-    const fs = await import("fs");
-    fs.writeFileSync(outPath, Buffer.from(b64, "base64"));
+    const provider = await generateComfyUiImage(prompt, outPath, size);
     return {
       ok: true,
       data: { path: outPath },
-      provider: "image-gen",
-      usedFallback: false,
+      provider: provider === "comfyui" ? "local-comfyui" : "local-editorial-placeholder",
+      usedFallback: provider !== "comfyui",
       latencyMs: Date.now() - start,
     };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
       data: { path: outPath },
-      provider: "image-fallback",
+      provider: "local-image-unavailable",
       usedFallback: true,
-      error: e instanceof Error ? e.message : "unknown",
+      error: error instanceof Error ? error.message : "local image generation failed",
       latencyMs: Date.now() - start,
     };
   }

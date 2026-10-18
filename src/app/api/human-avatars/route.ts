@@ -17,6 +17,7 @@ import { log, newJobId, truncatePrompt } from '@/lib/observability';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { assertExternalAiAllowed } from "@/lib/agentos/payment-guard";
 
 /**
  * ALO Human Avatar API — PRODUCTION REPAIR
@@ -137,7 +138,8 @@ export async function POST(req: NextRequest) {
       data: { portraitStatus: 'pending' },
     });
     try {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default;
+      assertExternalAiAllowed("z-ai-web-dev-sdk");
+      const ZAI = (await import("z-ai-web-dev-sdk")).default;
       const zai = await ZAI.create();
       const prompt = buildPortraitPrompt(avatar);
       log('info', 'portrait-gen-start', { jobId, avatarId: avatar.id, promptPreview: truncatePrompt(prompt) });
@@ -242,7 +244,8 @@ export async function POST(req: NextRequest) {
 
   if (generatePortrait) {
     try {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default;
+      assertExternalAiAllowed("z-ai-web-dev-sdk");
+      const ZAI = (await import("z-ai-web-dev-sdk")).default;
       const zai = await ZAI.create();
       const prompt = buildPortraitPrompt(avatar);
       const response = await zai.images.generations.create({ prompt, size: '864x1152' });

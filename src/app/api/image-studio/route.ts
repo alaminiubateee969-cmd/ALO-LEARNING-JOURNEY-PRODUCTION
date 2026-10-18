@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { assertExternalAiAllowed } from "@/lib/agentos/payment-guard";
 
 /**
  * ALO Image Studio Pro
@@ -142,7 +143,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ZAI = (await import('z-ai-web-dev-sdk')).default;
+    assertExternalAiAllowed("z-ai-web-dev-sdk");
+      const ZAI = (await import("z-ai-web-dev-sdk")).default;
     const zai = await ZAI.create();
 
     const outDir = path.join(process.cwd(), 'public', 'generated');

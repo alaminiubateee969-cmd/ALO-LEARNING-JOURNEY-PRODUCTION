@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
+import { assertExternalAiAllowed } from "@/lib/agentos/payment-guard";
 
 /**
  * ALO ASR (Speech-to-Text) Studio
@@ -92,7 +93,8 @@ export async function POST(req: NextRequest) {
     });
 
     try {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default;
+      assertExternalAiAllowed("z-ai-web-dev-sdk");
+      const ZAI = (await import("z-ai-web-dev-sdk")).default;
       const zai = await ZAI.create();
 
       // ASR expects base64 audio (without data: prefix)
