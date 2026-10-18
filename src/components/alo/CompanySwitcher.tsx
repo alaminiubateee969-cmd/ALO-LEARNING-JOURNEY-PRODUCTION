@@ -51,10 +51,7 @@ export default function CompanySwitcher() {
 
   const switchTo = (id: string) => {
     setActiveId(id);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("alo-active-company", id);
-      window.dispatchEvent(new Event("alo-company-changed"));
-    }
+    if (typeof window !== "undefined") localStorage.setItem("alo-active-company", id);
     setOpen(false);
   };
 
@@ -103,7 +100,7 @@ export default function CompanySwitcher() {
           <p className="text-xs font-semibold flex items-center gap-1.5">
             <Building2 className="h-3.5 w-3.5 text-amber-600" /> কোম্পানি নির্বাচন
           </p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">Multi-tenant — প্রতিটি কোম্পানির ডেটা আলাদা</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">ওয়ার্কস্পেস-ভিত্তিক ফিল্টার; প্রবেশাধিকার একক অ্যাডমিন অ্যাকাউন্টের</p>
         </div>
         <div className="max-h-64 overflow-y-auto alo-scrollbar py-1">
           {loading ? (

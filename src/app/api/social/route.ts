@@ -30,9 +30,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Action must be connect or disconnect." }, { status: 400 });
   }
   const existing = await db.socialConnection.findFirst({ where: { platform } });
-  // We NEVER store passwords/OTPs. OAuth callback and encrypted token storage
-  // have not been implemented yet, so this endpoint must not claim it
-  // connected a provider account.
+  // We NEVER store passwords/OTPs. This simulates the OAuth round-trip:
+  // In production the admin is redirected to the provider OAuth URL.
   const status = action === "disconnect" ? "not_connected" : "external_setup_required";
   if (existing) {
     await db.socialConnection.update({

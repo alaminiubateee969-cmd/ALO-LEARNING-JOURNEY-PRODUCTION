@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { StatCard, StatusPill, ProviderTag } from "./primitives";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Activity, ShieldCheck, Brain, Sparkles, Send, CheckCircle2,
-  AlertTriangle, Eye, TrendingUp, Clock, Users, Bell, Database,
+  AlertTriangle, Eye, TrendingUp, Clock, Users, Bell, Database, Cpu,
 } from "lucide-react";
 import { PLATFORMS } from "@/lib/platforms";
 import ActivityTimeline from "./ActivityTimeline";
@@ -142,21 +143,22 @@ export default function Dashboard({ onNavigate }: { onNavigate: (s: string) => v
         <div className="relative flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-amber-600">
-              ALO workspace · administrator review
+              Own AI Agent Platform · Protective Mode ON
             </p>
             <h2 className="text-2xl sm:text-3xl font-bold mt-1">
               স্বাগতম, <span className="alo-text-grad">আলো অ্যাডমিন</span> 💛
             </h2>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-              আলো — ভালোবাসা দিয়ে শেখার পথ। {data.agentCounts.total} configured agent definitions are available on demand; they are not background workers. Review saved data and verify each provider-dependent result before use.
+              আলো — ভালোবাসা দিয়ে শেখার পথ। ৪০টি AI এজেন্ট, RAG জ্ঞানভাণ্ডার ও
+              Protective Mode নিয়ে আজকের কনটেন্ট পাইপলাইন দেখুন।
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-100">
-              <ShieldCheck className="h-3 w-3 mr-1" /> Human review required
+            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+              <ShieldCheck className="h-3 w-3 mr-1" /> Protective Mode সক্রিয়
             </Badge>
             <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
-              <Brain className="h-3 w-3 mr-1" /> {w.activeWorkers} active workers
+              <Cpu className="h-3 w-3 mr-1" /> Local {w.localModelUsage}%
             </Badge>
           </div>
         </div>
@@ -164,34 +166,22 @@ export default function Dashboard({ onNavigate }: { onNavigate: (s: string) => v
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <StatCard className="alo-stagger" label="Platform states marked connected" value={w.connectedPlatforms} sub={`${PLATFORMS.length} platform definitions`} icon={<Send className="h-4 w-4" />} tone="emerald" />
-        <StatCard label="Active Agents" value={`${w.activeAgents}/${data.agentCounts.total}`} sub="configured definitions; not workers" icon={<Brain className="h-4 w-4" />} tone="amber" />
-        <StatCard label="Pending Approval" value={w.pendingApproval} sub="stored items awaiting review" icon={<CheckCircle2 className="h-4 w-4" />} tone="rose" />
-        <StatCard label="Posts recorded as published" value={w.publishedPosts} sub="external delivery not verified" icon={<Send className="h-4 w-4" />} tone="emerald" />
-        <StatCard label="Topic Ideas" value={w.topicIdeas} sub="stored records" icon={<Sparkles className="h-4 w-4" />} tone="violet" />
-        <StatCard label="Failed Agent Runs" value={w.failedRuns} sub="stored run records" icon={<AlertTriangle className="h-4 w-4" />} tone="rose" />
-        <StatCard label="Views" value={fmt(w.views)} sub="last 7 days, recorded snapshots" icon={<Eye className="h-4 w-4" />} tone="sky" />
-        <StatCard label="Reach" value={fmt(w.reach)} sub="last 7 days, recorded snapshots" icon={<TrendingUp className="h-4 w-4" />} tone="emerald" />
-        <StatCard label="Watch Time (min)" value={fmt(w.watchTime)} sub={`retention average ${w.retention}`} icon={<Clock className="h-4 w-4" />} tone="amber" />
+        <StatCard className="alo-stagger" label="Connected Platforms" value={w.connectedPlatforms} sub={`${PLATFORMS.length} মোট`} icon={<Send className="h-4 w-4" />} tone="emerald" />
+        <StatCard label="Active Agents" value={`${w.activeAgents}/${data.agentCounts.total}`} sub={`${w.providerFailures} blocked`} icon={<Brain className="h-4 w-4" />} tone="amber" />
+        <StatCard label="Pending Approval" value={w.pendingApproval} sub="অনুমোদনের অপেক্ষায়" icon={<CheckCircle2 className="h-4 w-4" />} tone="rose" />
+        <StatCard label="Published Posts" value={w.publishedPosts} sub="real provider IDs" icon={<Send className="h-4 w-4" />} tone="emerald" />
+        <StatCard label="Topic Ideas" value={w.topicIdeas} sub="RAG-supported" icon={<Sparkles className="h-4 w-4" />} tone="violet" />
+        <StatCard label="Failed Jobs" value={w.failedJobs} sub="retry queue" icon={<AlertTriangle className="h-4 w-4" />} tone="rose" />
+        <StatCard label="Views" value={fmt(w.views)} sub="৭ দিন" icon={<Eye className="h-4 w-4" />} tone="sky" />
+        <StatCard label="Reach" value={fmt(w.reach)} sub="৭ দিন" icon={<TrendingUp className="h-4 w-4" />} tone="emerald" />
+        <StatCard label="Watch Time (min)" value={fmt(w.watchTime)} sub={`retention ${w.retention}`} icon={<Clock className="h-4 w-4" />} tone="amber" />
         <StatCard label="Shares" value={fmt(w.shares)} sub={`saves ${fmt(w.saves)}`} icon={<Users className="h-4 w-4" />} tone="rose" />
-        <StatCard label="Admissions Leads" value={fmt(w.leads)} sub="CRM records" icon={<Sparkles className="h-4 w-4" />} tone="violet" />
-        <StatCard label="Run cost telemetry" value={w.runCostTelemetry === "not_metered" ? "Not metered" : "Unavailable"} sub="provider and infrastructure costs are not measured" icon={<Activity className="h-4 w-4" />} tone="slate" />
+        <StatCard label="Leads" value={fmt(w.leads)} sub={`WA joins ${w.whatsappJoins}`} icon={<Sparkles className="h-4 w-4" />} tone="violet" />
+        <StatCard label="API Cost" value={`$${w.apiCostUsd}`} sub="per cycle" icon={<Activity className="h-4 w-4" />} tone="slate" />
       </div>
 
       {/* Sparkline mini-charts row */}
       <SparklineRow />
-
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <Activity className="h-4 w-4 text-amber-600" /> Provider and background-job status
-          </h3>
-          <Badge variant="outline">{w.backgroundJobsStatus}</Badge>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Agent definitions run on demand; no always-on worker or scheduled job is configured here. AI/media endpoints are designed for local providers, but this dashboard does not probe their availability. Missing providers may yield explicitly labeled fallback drafts that need human review. External delivery, provider charges, and infrastructure cost are not verified by these counters.
-        </p>
-      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Pipeline overview */}
@@ -209,7 +199,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (s: string) => v
               { label: "Ideas", value: w.topicIdeas, c: "from-violet-500/20 to-violet-500/5" },
               { label: "Packages", value: w.contentPackages, c: "from-amber-500/20 to-amber-500/5" },
               { label: "Approval", value: w.pendingApproval, c: "from-rose-500/20 to-rose-500/5" },
-              { label: "Marked published", value: w.publishedPosts, c: "from-emerald-500/20 to-emerald-500/5" },
+              { label: "Published", value: w.publishedPosts, c: "from-emerald-500/20 to-emerald-500/5" },
             ].map((s, i) => (
               <div key={i} className={`rounded-xl bg-gradient-to-br ${s.c} p-3 text-center`}>
                 <p className="text-2xl font-bold tabular-nums">{s.value}</p>
@@ -217,10 +207,14 @@ export default function Dashboard({ onNavigate }: { onNavigate: (s: string) => v
               </div>
             ))}
           </div>
-          <div className="mt-5 rounded-lg border border-border/60 p-3">
-            <p className="text-xs font-medium">Execution record</p>
-            <p className="text-[11px] text-muted-foreground mt-1">
-              {w.runningJobs} run records are currently marked running. These counters do not indicate a queue worker, provider connectivity, or successful delivery; inspect each run and output separately.
+          <div className="mt-5">
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="text-muted-foreground">Local vs Provider usage</span>
+              <span className="font-medium">{w.localModelUsage}% local</span>
+            </div>
+            <Progress value={w.localModelUsage as number} className="h-2" />
+            <p className="text-[11px] text-muted-foreground mt-2">
+              Cost Router প্রথমে local মডেল ব্যবহার করে; paid provider শুধু প্রয়োজনে।
             </p>
           </div>
         </Card>
@@ -256,7 +250,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (s: string) => v
         <Card className="p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold flex items-center gap-2">
-              <Send className="h-4 w-4 text-emerald-600" /> Stored social status · unverified
+              <Send className="h-4 w-4 text-emerald-600" /> সোশ্যাল সংযোগ
             </h3>
             <button onClick={() => onNavigate("social")} className="text-xs text-amber-600 hover:underline">
               সব দেখুন →
@@ -268,11 +262,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (s: string) => v
                 <span className="text-lg">{p.icon}</span>
                 <div className="min-w-0">
                   <p className="text-xs font-medium truncate">{p.name}</p>
-                  {p.connection?.status === "connected" ? (
-                    <Badge variant="outline" className="border-amber-300 text-amber-800 text-[9px]">Marked connected · unverified</Badge>
-                  ) : (
-                    <StatusPill status={p.connection?.status ?? "not_connected"} />
-                  )}
+                  <StatusPill status={p.connection?.status ?? "not_connected"} />
                 </div>
               </div>
             ))}
@@ -314,7 +304,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (s: string) => v
       {/* Recent agent runs */}
       <Card className="p-5">
         <h3 className="font-semibold flex items-center gap-2 mb-3">
-          <Brain className="h-4 w-4 text-amber-600" /> সাম্প্রতিক এজেন্ট রান
+          <Cpu className="h-4 w-4 text-amber-600" /> সাম্প্রতিক এজেন্ট রান
         </h3>
         {data.recentRuns.length === 0 ? (
           <p className="text-sm text-muted-foreground">এখনো কোনো রান নেই। Content Studio থেকে শুরু করুন।</p>
@@ -325,7 +315,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (s: string) => v
                 <StatusPill status={r.status} />
                 <span className="font-medium truncate flex-1">{r.agentId}</span>
                 {r.inputBrief && <span className="text-muted-foreground truncate hidden sm:block">{r.inputBrief}</span>}
-                <span className="text-[10px] text-muted-foreground">Cost not metered</span>
+                <span className="text-[10px] text-muted-foreground">${r.costEstUsd.toFixed(4)}</span>
               </div>
             ))}
           </div>

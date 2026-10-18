@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     data: {
       actor: "SEO_AI",
       action: "content_brief.generate",
-      detail: `Brief for "${topic}" (${category}/${ageGroup}) — ${result.usedFallback ? "fallback draft" : "model output"}; score ${result.data.qualityScore}/100 via ${result.provider}`,
+      detail: `Brief draft for "${topic}" (${category}/${ageGroup}) — ${result.usedFallback ? "fallback template" : "model output"} via ${result.provider}; no independent SEO, fact, safety, or quality review was run`,
       severity: result.usedFallback ? "warn" : "info",
     },
   });

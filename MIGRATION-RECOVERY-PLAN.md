@@ -5,6 +5,14 @@ schema, `_prisma_migrations` history/checksums, the reported missing tables, and
 any backup are unverified. Do not run a migration, `migrate resolve`, schema
 repair, or production write based only on this document.
 
+Operator-provided (not independently verified) configuration: MySQL schema
+`db_learn` at `127.0.0.1:3306`; app root `/home/aloedu/LEARNING-JOURNEY`;
+PM2 process `learn-aloeducation`; port `3017`; public domain
+`learn.aloeducation.com`. The operator reported 22 existing model tables, a
+32-model legacy application expectation, an empty PM2 process list, and VPS
+capacity of 6.5 GiB RAM / 370 GB disk. None of these facts has been checked on
+the VPS from this workspace.
+
 ## Safety rules
 
 - Preserve every production row, user, permission, and stored file.
@@ -23,22 +31,26 @@ repair, or production write based only on this document.
 
 ## Checked-in migration chain (repository evidence only)
 
-The repository currently contains three MySQL migration directories:
+The repair branch now contains five MySQL migration directories:
 
 | Migration | Tables declared | Important property |
-|---|---:|---|
-| `20261001000000_initial_baseline` | 27 Prisma model tables plus `_FamilyProfileToFamilyProject` | Uses `CREATE TABLE IF NOT EXISTS`; this does not prove existing table columns or constraints match. |
-| `20261010000000_admissions_crm_quotes` | `Lead`, `LeadActivity`, `Quotation`, `QuotationItem` | Plain `CREATE TABLE`; fails if any target table already exists and is not recorded as applied. |
-| `20261010000001_admin_otp_challenges` | `AdminOtpChallenge` | Plain `CREATE TABLE`; fails if the target table already exists and is not recorded as applied. |
+|---|---|---|
+| `20261001000000_initial_baseline` | 27 core Prisma model tables plus `_FamilyProfileToFamilyProject` | Uses `CREATE TABLE IF NOT EXISTS`; this does not prove existing table columns or constraints match. Its historical header says “26 core”; do not edit the file until its recorded checksum is checked. |
+| `20261007000000_human_avatar_ownership` | `HumanAvatar`, `AvatarVideo` | The upstream version used SQLite syntax. This repair replaces it with MySQL DDL; compare the original/recorded checksum and actual schema on the restored copy before resolving or applying it. `AvatarVideo` restricts avatar deletion to preserve linked video rows. |
+| `20261010000000_admissions_crm_quotes` | `Lead`, `LeadActivity`, `Quotation`, `QuotationItem` | Plain `CREATE TABLE`; retains the legacy admissions relation and fails if a target table already exists and is not recorded as applied. |
+| `20261010000001_admin_otp_challenges` | `AdminOtpChallenge` | Plain `CREATE TABLE`; stores keyed hashes and fails if the target table already exists and is not recorded as applied. |
+| `20261018000000_v2_additive_mysql_tables` | `Client`, `Project`, `Invoice`, `MarketingCampaign`, `MarketingLead`, `OtpRequest`, `VoiceGeneration`, `AudioTranscription` | Additive MySQL tables. `MarketingLead` is separate from admissions `Lead`; `OtpRequest` schema stores keyed hashes and a masked recipient label. |
 
-Static verification maps these to 32 Prisma models plus one implicit relation
-table. The baseline SQL header comment says “26 core” although its static DDL
-contains 27 model tables; this comment discrepancy is recorded, not edited,
-because changing even a comment changes the migration-file checksum. Static
-verification checks names and selected destructive SQL patterns, not live
-schema, columns/types, defaults, indexes, foreign keys, data, or Prisma
-checksums. The report of 10 missing production tables and three pending
-migrations is user-reported and not independently verified.
+Static verification maps these migrations to 42 Prisma models plus one implicit
+relation table. Static verification checks model/table names and selected
+SQLite/destructive-SQL patterns; it does not prove live schema, data,
+columns/types, defaults, indexes, foreign keys, or recorded Prisma checksums.
+The SQLite-to-MySQL rewrite of the human-avatar migration changes its checksum;
+if the original checksum is recorded or any avatar tables/data already exist,
+stop for an explicit restored-copy reconciliation plan rather than running or
+resolving it automatically. The reported 22 existing model tables, legacy
+admissions/OTP tables, and pending migration count are user-reported and not
+independently verified.
 
 ## Phase A — read-only production inventory
 
@@ -69,7 +81,12 @@ Using a least-privilege read-only connection, capture privately:
 
 Do not infer a migration is pending merely because a table is missing; inspect
 history and the schema together. Do not assume the production database is empty
-or that only the reported CRM/OTP tables are absent.
+or that only the reported CRM/OTP tables are absent. Treat the admissions
+`Lead`/`LeadActivity`/`Quotation` records and their `Company` relationship as
+legacy data; `MarketingLead` is a separate new table and must never be used as a
+replacement or rename target. Check the existing hashed `AdminOtpChallenge`
+records separately from the newer generic `OtpRequest` table; do not export raw
+OTP values or mark either migration applied based only on table names.
 
 ## Phase B — backup and isolated restore test
 
@@ -126,19 +143,23 @@ On the disposable restore only:
    present or structurally different, stop. Never mark a migration applied just
    to make status green.
 7. Apply the exact pending migration suffix on the disposable copy with
-   `npx prisma migrate deploy`. Verify all 32 model tables plus the implicit
-   relation, every column/type/default/index/FK, no failed migration row, and
-   preservation of pre-existing data. Run the application's relevant auth,
-   CRM, OTP, and API checks against the disposable copy.
+   `npx prisma migrate deploy` only after the avatar migration checksum and
+   existing avatar/OTP/admissions schemas have been reconciled. Run
+   `node scripts/verify-prisma-history.mjs <private-history.tsv> prisma/migrations`
+   against the captured `_prisma_migrations` rows before proceeding. Verify all
+   42 model tables plus the implicit relation, every column/type/default/index/FK,
+   no failed migration row, and preservation of pre-existing data. Run the
+   application's relevant auth, admissions CRM, marketing CRM, OTP, health,
+   and API checks against the disposable copy.
 8. Restore the same original backup again and repeat the rehearsal from a clean
    restore. Record exact repository commit, migration file checksums, database
    version, commands, before/after schema inventories, and outcomes.
 
-The CI workflow also uses a fresh disposable MySQL 8 service to apply the three
-migrations twice, check migration status, and compare model tables/columns. That
-is useful fresh-database coverage, but it is not a substitute for this restored
-production-schema rehearsal. This CI integration job has not run in this audit
-sandbox.
+The CI workflow is configured to use a fresh disposable MySQL 8 service to
+apply the five migrations twice, check migration status, and compare model
+tables/columns. That is useful fresh-database coverage, but it is not a
+substitute for this restored production-schema rehearsal. The updated CI job
+has not yet run for the current repair result.
 
 ## Phase D — production go/no-go (manual, after all evidence)
 
@@ -153,19 +174,24 @@ Proceed only when all of the following are true:
 - The candidate commit's CI passes, the production path is confirmed read-only,
   and a human reviewer authorizes the release.
 
-If migrations remain pending, set GitHub variable `VPS_MIGRATION_PLAN_SHA` to
-the exact approved commit SHA **only for the authorized run**. The deployment
-script allows only these ordered pending suffixes:
+The initial baseline must first be reconciled on a restored copy and recorded
+as applied with its exact checked-in checksum. The deployment script refuses an
+empty history or pending baseline; it does not apply or resolve that migration.
+If later migrations remain pending, set GitHub variable `VPS_MIGRATION_PLAN_SHA`
+to the exact approved commit SHA **only for the authorized run**. The deployment
+script may accept only a checksum-verified ordered suffix after the baseline
+that was rehearsed on the restored copy. The human-avatar migration's changed
+checksum and existing admissions/OTP tables must be explicitly accounted for;
+no suffix is safe merely because it appears in `migrate status` output.
 
-- all three checked-in migrations;
-- the CRM and OTP migrations after a verified baseline;
-- the OTP migration after a verified CRM migration.
-
-Any unknown, failed, diverged, unbaselined, or non-suffix state fails closed.
-This allow-list does not prove production schema parity; the independent
-pre-deploy review and restore rehearsal are still mandatory. If the actual
-status does not match the rehearsed plan, do not force the deploy—stop and
-revise the plan.
+The deployment script reads `_prisma_migrations`, verifies checksums of all
+finished, non-rolled-back entries against the exact release, and compares the
+reported pending list to the remaining suffix. Any unknown, failed, diverged,
+unbaselined, checksum-mismatched, duplicate, out-of-order, or non-suffix state
+fails closed. This verification still does not prove production schema parity;
+the independent read-only schema review and restore rehearsal are mandatory. If
+the actual status does not match the rehearsed plan, do not force the deploy—stop
+and revise the plan.
 
 ## Required evidence to close this blocker
 

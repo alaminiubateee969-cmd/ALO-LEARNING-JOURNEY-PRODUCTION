@@ -46,8 +46,8 @@ async function main() {
   const modelTables = parseSchemaTables(schema);
   const prisma = new PrismaClient();
   try {
-    if (modelTables.length !== 32) {
-      throw new Error(`Expected 32 Prisma models; found ${modelTables.length}.`);
+    if (modelTables.length !== 42) {
+      throw new Error(`Expected 42 Prisma models; found ${modelTables.length}.`);
     }
 
     await prisma.$connect();
@@ -96,9 +96,9 @@ async function main() {
     );
     const applied = migrationRows.filter((row) => row.finishedAt && !row.rolledBackAt);
     const failed = migrationRows.filter((row) => !row.finishedAt && !row.rolledBackAt);
-    if (applied.length !== 3 || failed.length) {
+    if (applied.length !== 5 || failed.length) {
       throw new Error(
-        `Expected 3 successfully applied migrations and no failed rows; applied=${applied.length}, failed=${failed.length}.`,
+        `Expected 5 successfully applied migrations and no failed rows; applied=${applied.length}, failed=${failed.length}.`,
       );
     }
 

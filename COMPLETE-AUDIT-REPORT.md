@@ -1,9 +1,20 @@
-# Complete Project Audit Report — Baseline Before Repairs
+# Complete Project Audit Report — Historical Baseline Before Repairs
 
-**Audit date (UTC):** 2026-10-18 08:24 UTC  
-**Repository:** `alaminiubateee969-cmd/ALO-LEARNING-JOURNEY-PRODUCTION`  
-**Branch:** `arena/6d490018-alo-learning-journey-productio`  
-**Starting commit:** `177182fec1ecd0893fbe7fcbeac1a955e7bebbc8`  
+> **ARCHIVAL BASELINE — NOT CURRENT RELEASE EVIDENCE.** This records the
+> pre-repair workspace at the time below. Its counts, findings, paths, check
+> results, and file-state claims are deliberately preserved as historical
+> evidence and may be superseded by later repairs. It does not describe the
+> current worktree or verify the VPS/database. Use
+> [`deploy/docs/PRODUCTION_READINESS.md`](deploy/docs/PRODUCTION_READINESS.md)
+> and [`deploy/docs/TEST_REPORT.md`](deploy/docs/TEST_REPORT.md) for current
+> repository-only status, and [`DEPLOYMENT.md`](DEPLOYMENT.md) plus
+> [`MIGRATION-RECOVERY-PLAN.md`](MIGRATION-RECOVERY-PLAN.md) for current
+> operational safeguards.
+
+**Baseline audit date (UTC):** 2026-10-18 08:24 UTC
+**Repository:** `alaminiubateee969-cmd/ALO-LEARNING-JOURNEY-PRODUCTION`
+**Branch:** `arena/6d490018-alo-learning-journey-productio`
+**Starting commit:** `177182fec1ecd0893fbe7fcbeac1a955e7bebbc8`
 **Scope:** the current shared workspace, including edits already present before this audit pass. This is a source/configuration audit, not evidence from the production VPS.
 
 > **Important:** This report was generated before making any additional source, dependency, migration, deployment, or configuration repairs in this audit pass. At the time of measurement the shared workspace already contained 23 modified tracked source files and 2 untracked code files from earlier work. This report does not treat those earlier changes or claims in older reports as independently verified. Adding this report itself increases the file count after the baseline measurement below.

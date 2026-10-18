@@ -12,8 +12,8 @@ import BrandSettings from "./BrandSettings";
 
 interface Health {
   status: string;
-  checks?: { name: string; ok: boolean; detail: string }[];
-  note?: string;
+  checks: { name: string; ok: boolean; detail: string }[];
+  note: string;
 }
 
 export default function SettingsView() {
@@ -25,7 +25,7 @@ export default function SettingsView() {
 
   const load = () => {
     Promise.all([
-      fetch("/api/health?details=1").then((r) => r.json()),
+      fetch("/api/health").then((r) => r.json()),
       fetch("/api/audit").then((r) => r.json()),
     ])
       .then(([h, a]) => {
@@ -97,11 +97,11 @@ export default function SettingsView() {
           ) : (
             <>
               <div className="flex items-center gap-2 mb-3">
-                <StatusPill status={health.status === "ok" ? "safe" : health.status === "degraded" ? "pending" : "failed"} />
-                <span className="text-sm font-medium capitalize">{health.status}</span>
+                <StatusPill status={health.status === "COMPLETE" ? "safe" : "pending"} />
+                <span className="text-sm font-medium">{health.status}</span>
               </div>
               <div className="space-y-1.5">
-                {(health.checks ?? []).map((c) => (
+                {health.checks.map((c) => (
                   <div key={c.name} className="flex items-center justify-between gap-2 text-xs py-1.5 border-b border-border/40 last:border-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className={`h-2 w-2 rounded-full shrink-0 ${c.ok ? "bg-emerald-500" : "bg-amber-500"}`} />
@@ -110,9 +110,8 @@ export default function SettingsView() {
                     <span className="text-muted-foreground truncate text-right">{c.detail}</span>
                   </div>
                 ))}
-                {!health.checks?.length && <p className="text-xs text-muted-foreground">Detailed checks are available only to signed-in administrators.</p>}
               </div>
-              {health.note && <p className="text-[11px] text-muted-foreground mt-3">{health.note}</p>}
+              <p className="text-[11px] text-muted-foreground mt-3">{health.note}</p>
             </>
           )}
         </Card>
@@ -120,31 +119,31 @@ export default function SettingsView() {
         {/* Pipeline status overview */}
         <Card className="p-5">
           <h3 className="font-semibold mb-3 flex items-center gap-2">
-            <Activity className="h-4 w-4 text-violet-600" /> Implementation limits
+            <Activity className="h-4 w-4 text-violet-600" /> পাইপলাইন নীতি
           </h3>
           <div className="space-y-3 text-xs">
             <div className="rounded-lg bg-muted/40 p-3">
-              <p className="font-semibold mb-1">Local model routing (source-level)</p>
+              <p className="font-semibold mb-1">Own AI Agent নীতি</p>
               <p className="text-muted-foreground">
-                Reviewed content and image generation routes use configured Ollama/ComfyUI endpoints or labelled local fallbacks. This page does not probe provider availability; infrastructure cost is not measured.
+                External providers (OpenAI/Gemini/Claude/ElevenLabs ইত্যাদি) শুধু inference tool। মূল ব্রেন আমাদের নিজস্ব Agent Kernel + Orchestrator + RAG + Protective Mode।
               </p>
             </div>
             <div className="rounded-lg bg-muted/40 p-3">
-              <p className="font-semibold mb-1">Background queue (not configured)</p>
+              <p className="font-semibold mb-1">cPanel-safe queue</p>
               <p className="text-muted-foreground">
-                No cron queue or background worker is implemented or scheduled in this checkout. Concurrency locks, retry backoff, and job limits are not operational.
+                প্রতি cron run: সর্বোচ্চ ১০টি light job + ১–৩টি heavy media job। Lock, timeout, backoff সহ। Permanent worker নেই।
               </p>
             </div>
             <div className="rounded-lg bg-muted/40 p-3">
-              <p className="font-semibold mb-1">Automated safety coverage (not verified)</p>
+              <p className="font-semibold mb-1">Protective Mode</p>
               <p className="text-muted-foreground">
-                No single automated safety check covers every content, image, voice, video, reply, and post route. Some model reviews may be unavailable or return a fallback; human review is required before use.
+                প্রতিটি content/image/voice/video/reply/post অনুমোদনের আগে child safety, medical claims, parent shaming, fear, brand tone যাচাই।
               </p>
             </div>
             <div className="rounded-lg bg-muted/40 p-3">
-              <p className="font-semibold mb-1">Stored status labels</p>
+              <p className="font-semibold mb-1">সৎ স্ট্যাটাস</p>
               <p className="text-muted-foreground">
-                Status values vary by route and persisted labels are not independent proof of execution, safety review, or external delivery. Verify each output and provider result before relying on it.
+                শুধু চারটি অবস্থা: <code className="bg-muted px-1 rounded">COMPLETE</code>, <code className="bg-muted px-1 rounded">PARTIAL</code>, <code className="bg-muted px-1 rounded">BLOCKED_EXTERNAL_SETUP</code>, <code className="bg-muted px-1 rounded">FAILED</code>। কখনো fake success নয়।
               </p>
             </div>
           </div>

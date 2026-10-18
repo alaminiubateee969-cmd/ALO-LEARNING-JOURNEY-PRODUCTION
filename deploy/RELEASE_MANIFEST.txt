@@ -1,0 +1,66 @@
+ALO Learning Journey — Repository Release Status
+================================================
+As of: 2026-10-18 (repository-only review)
+Package version: 0.2.1 (package.json)
+Requested release: v2.0.0 (not independently verified)
+GitHub release/tag: not verified; prior lookup found no v2.0.0 release/tag
+PR: #19, OPEN and DIRTY; no reported check runs
+Branch: arena/6d490018-alo-learning-journey-productio
+Local HEAD: 05796a796511aa96bc23b220e6ef5c96a7ec2b44 (pre-merge)
+Merge target: 2fb44c087c214b0ebb093e1c8b3bb9324d9b532b
+Working tree: local merge in progress; not committed or pushed
+
+Production target (operator-provided; not VPS-verified)
+------------------------------------------------------
+App directory: /home/aloedu/LEARNING-JOURNEY
+PM2 process: learn-aloeducation
+Port: 3017
+Domain: https://learn.aloeducation.com
+Database: MySQL db_learn at 127.0.0.1:3306
+
+Repository evidence currently available
+---------------------------------------
+Automated tests: PASS — 51 tests (npm test)
+ESLint: PASS — 0 errors, 0 warnings
+Static MySQL migration verifier: PASS — 42 Prisma models, 480 scalar column
+  types, keys/indexes/relations map to five checked-in migrations; one implicit
+  relation table; static verification only, not live-schema compatibility
+TypeScript: FAIL/BLOCKED — generated @prisma/client is absent. The only reported
+  error is missing PrismaClient; matching engine/schema downloads from
+  binaries.prisma.sh fail TLS in this environment.
+Production build: FAIL/BLOCKED — Next.js compilation succeeds, then type-check
+  stops at the missing generated PrismaClient; no complete build artifact.
+Dependency audit: FAIL/triage required — npm audit reports 13 findings
+  (9 high, 4 moderate); production-only audit reports 8 (4 high, 4 moderate).
+Workflow YAML and shell syntax: PASS — syntax only; GitHub Actions not run.
+Git diff whitespace checks: PASS at last local run; rerun after final staging.
+Restored production database migration rehearsal: NOT DONE
+Production backup restore: NOT DONE
+VPS / PM2 / public HTTPS verification: NOT DONE
+Production migration/deployment: NOT RUN
+
+Database and OTP policy
+-----------------------
+Keep the existing MySQL database and legacy admissions, marketing CRM, admin
+OTP, and generic OTP records/relationships. MarketingLead is separate from
+admissions Lead. No destructive SQL, migration reset, or unverified baseline
+reconciliation is authorized. Generic OTP delivery remains disabled until a
+real provider is implemented and verified; no simulated code may be generated,
+stored, or returned. Administrator sign-in OTP is a separate flow and must be
+configured/verified independently.
+
+Merge gate
+----------
+NOT READY TO MERGE. PR #19 has no reported checks and is currently DIRTY.
+Complete the local merge, commit/push only to the existing Arena branch, resolve
+GitHub's merge state, generate and verify the matching Prisma Client, pass
+required CI/typecheck/build checks, and obtain review. Do not merge before the
+required checks pass.
+
+Production release/deployment gate
+---------------------------------
+Dependency audit triage is still required before production release. Before
+deployment, complete the read-only production inventory, verified backup and
+isolated restore, exact-schema/history reconciliation, and exact-commit migration
+rehearsal; then follow DEPLOYMENT.md and MIGRATION-RECOVERY-PLAN.md. No production
+success or live-site status is claimed by this manifest.

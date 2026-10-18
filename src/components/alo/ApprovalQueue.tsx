@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardCheck, ShieldCheck, CheckCircle2, XCircle, Loader2, AlertTriangle, Send } from "lucide-react";
+import { ClipboardCheck, CheckCircle2, XCircle, Loader2, AlertTriangle, Sparkles } from "lucide-react";
 
 interface Item {
   id: string;
@@ -40,6 +40,7 @@ export default function ApprovalQueue() {
   const [note, setNote] = useState("");
   const [reviewing, setReviewing] = useState(false);
   const [review, setReview] = useState<any>(null);
+  const [reviewError, setReviewError] = useState("");
   const [acting, setActing] = useState(false);
 
   const load = () =>
@@ -56,11 +57,13 @@ export default function ApprovalQueue() {
     setSelected(it);
     setNote("");
     setReview(null);
+    setReviewError("");
   };
 
   const runReview = async () => {
     if (!selected) return;
     setReviewing(true);
+    setReviewError("");
     try {
       const res = await fetch("/api/protective-review", {
         method: "POST",
@@ -68,7 +71,10 @@ export default function ApprovalQueue() {
         body: JSON.stringify({ content: selected.summary, type: selected.type }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not generate an unverified model suggestion.");
       setReview(data.review);
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : "Suggestion unavailable.");
     } finally {
       setReviewing(false);
     }
@@ -78,17 +84,27 @@ export default function ApprovalQueue() {
     if (!selected) return;
     setActing(true);
     try {
-      await fetch("/api/approvals", {
+      const response = await fetch("/api/approvals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: selected.id, action, note }),
       });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error ?? "Could not update the approval status.");
       toast({
-        title: action === "approve" ? "অনুমোদিত হয়েছে ✅" : action === "reject" ? "প্রত্যাখ্যাত ❌" : "সংশোধনে ফেরত 🔄",
-        description: `${selected.title}`,
+        title: action === "approve" ? "Admin approval recorded" : action === "reject" ? "Item rejected" : "Item returned for revision",
+        description: action === "approve" && selected.type === "content"
+          ? "Added to this app’s internal publishing queue; no social post was sent."
+          : selected.title,
       });
       setSelected(null);
       load();
+    } catch (error) {
+      toast({
+        title: "Approval action failed",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
     } finally {
       setActing(false);
     }
@@ -102,7 +118,7 @@ export default function ApprovalQueue() {
       <SectionHeader
         title="Approval Queue"
         bn="অনুমোদন সারি"
-        desc="Protective Mode রিভিউ শেষে প্রতিটি আর্টিফ্যাক্ট অ্যাডমিনের অনুমোদনের অপেক্ষায় থাকে। কোনো কনটেন্ট অনুমোদন ছাড়া প্রকাশিত হয় না।"
+        desc="Pending items need an admin decision. The optional model output is an unverified suggestion—not safety certification or approval. Approving only places content in this app’s internal queue; no social post is published."
         icon={<ClipboardCheck className="h-5 w-5" />}
         action={
           <div className="flex gap-2">
@@ -206,24 +222,26 @@ export default function ApprovalQueue() {
                   </div>
                 )}
 
-                {/* Protective Mode review */}
+                {/* Unverified model suggestion */}
                 <div className="rounded-lg border border-border/60 p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-emerald-600" /> Protective Mode রিভিউ</p>
+                    <p className="text-xs font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-amber-600" /> Unverified model suggestion</p>
                     <Button size="sm" variant="outline" onClick={runReview} disabled={reviewing}>
-                      {reviewing ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <ShieldCheck className="h-3 w-3 mr-1" />}
-                      রান করুন
+                      {reviewing ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                      Generate suggestion
                     </Button>
                   </div>
                   {!review && !reviewing && (
-                    <p className="text-[11px] text-muted-foreground">SafetyGuardianAgent রান করে child safety, medical claims, parent shaming, fear, brand tone ইত্যাদি যাচাই করুন।</p>
+                    <p className="text-[11px] text-muted-foreground">A configured model may provide observations. Its output is not an independent child-safety, medical, factual, or brand review; a human must assess the full artifact.</p>
                   )}
+                  {reviewError && <p role="alert" className="mb-2 text-xs text-rose-700">{reviewError}</p>}
                   {review && (
                     <div className="space-y-2 text-xs">
-                      <div className="flex items-center gap-2">
-                        <StatusPill status={review.approved ? "safe" : "needs_revision"} />
-                        <span>risk: <strong>{review.riskLevel}</strong></span>
-                        {review.needsHumanReview && <Badge variant="outline" className="text-[9px] bg-rose-50 border-rose-200 text-rose-700">human review</Badge>}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Not safety-cleared</Badge>
+                        <span>Model-suggested risk (unverified): <strong>{review.riskLevel}</strong></span>
+                        <Badge variant="outline" className="text-[9px]">Model suggestion: {review.modelRecommendation}</Badge>
+                        <Badge variant="outline" className="text-[9px] bg-rose-50 border-rose-200 text-rose-700">human review required</Badge>
                       </div>
                       {review.blockedReasons?.length > 0 && (
                         <div className="flex flex-wrap gap-1">
@@ -237,12 +255,12 @@ export default function ApprovalQueue() {
                           {review.requiredEdits.map((r: string) => (<li key={r}>{r}</li>))}
                         </ul>
                       )}
-                      {review.checksPassed?.length > 0 && (
+                      {review.modelChecksReported?.length > 0 && (
                         <div>
-                          <p className="text-[10px] text-muted-foreground mb-1">Checks passed:</p>
+                          <p className="text-[10px] text-muted-foreground mb-1">Unverified checks reported by the model:</p>
                           <div className="flex flex-wrap gap-1">
-                            {review.checksPassed.map((c: string) => (
-                              <Badge key={c} variant="outline" className="text-[9px] bg-emerald-50 border-emerald-200 text-emerald-700">{c}</Badge>
+                            {review.modelChecksReported.map((c: string) => (
+                              <Badge key={c} variant="outline" className="text-[9px] bg-amber-50 border-amber-200 text-amber-800">{c}</Badge>
                             ))}
                           </div>
                         </div>
@@ -276,7 +294,7 @@ export default function ApprovalQueue() {
             </Button>
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => act("approve")} disabled={acting}>
               {acting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-              Approve & Queue
+              Approve & add to internal queue
             </Button>
           </DialogFooter>
         </DialogContent>

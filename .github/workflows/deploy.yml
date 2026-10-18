@@ -36,10 +36,14 @@ name: Deploy to VPS
 #   Secrets: SERVER_HOST (preferred) or VPS_HOST (legacy), VPS_USER,
 #            VPS_SSH_KEY, VPS_SSH_HOST_KEY, VPS_PORT (optional, default 22),
 #            TAILSCALE_OAUTH_CLIENT_ID, TAILSCALE_OAUTH_SECRET
-#   Variables: VPS_APP_DIR (required; no fallback), VPS_PM2_APP, VPS_APP_PORT,
-#              VPS_DOMAIN, VPS_RESTORE_TEST_SHA + VPS_RESTORE_TEST_REFERENCE
-#              (only after an isolated restore rehearsal), VPS_MIGRATION_PLAN_SHA
-#              (only after production schema/history review), VPS_DEPLOY_ENABLED
+#   Variables: VPS_APP_DIR=/home/aloedu/LEARNING-JOURNEY,
+#              VPS_PM2_APP=learn-aloeducation, VPS_APP_PORT=3017,
+#              VPS_DOMAIN=https://learn.aloeducation.com,
+#              VPS_RESTORE_TEST_SHA + VPS_RESTORE_TEST_REFERENCE (only after an
+#              isolated restore rehearsal), VPS_SCHEMA_PREFLIGHT_SHA +
+#              VPS_SCHEMA_PREFLIGHT_REFERENCE (only after schema/history review),
+#              VPS_MIGRATION_PLAN_SHA (only after migration rehearsal),
+#              VPS_DEPLOY_ENABLED
 on:
   push:
     branches: [main]
@@ -266,28 +270,23 @@ jobs:
           APP_PORT: ${{ vars.VPS_APP_PORT }}
           RESTORE_TEST_SHA: ${{ vars.VPS_RESTORE_TEST_SHA }}
           RESTORE_TEST_REFERENCE: ${{ vars.VPS_RESTORE_TEST_REFERENCE }}
+          SCHEMA_PREFLIGHT_SHA: ${{ vars.VPS_SCHEMA_PREFLIGHT_SHA }}
+          SCHEMA_PREFLIGHT_REFERENCE: ${{ vars.VPS_SCHEMA_PREFLIGHT_REFERENCE }}
           MIGRATION_PLAN_APPROVED_SHA: ${{ vars.VPS_MIGRATION_PLAN_SHA }}
           SITE_URL: ${{ vars.VPS_DOMAIN }}
           VPS_DEPLOY_ENABLED: ${{ vars.VPS_DEPLOY_ENABLED }}
         run: |
-          # No application-path fallback is allowed. Reconcile the requested
-          # path with the live PM2 cwd/proxy/storage read-only before setting it.
-          [ -n "$APP_DIR" ] || { echo "::error::VPS_APP_DIR is required; deployment is blocked until the real server path is confirmed."; exit 1; }
-          case "$APP_DIR" in
-            /home/aloedu/*) ;;
-            *) echo "::error::VPS_APP_DIR must be a specific absolute path under /home/aloedu."; exit 1 ;;
-          esac
-          case "$APP_DIR" in
-            *"/../"*|*"/.."|*"/./"*|*"/."|*"//"*|*[!A-Za-z0-9_./-]*)
-              echo "::error::VPS_APP_DIR contains unsupported/traversal characters."; exit 1 ;;
-          esac
-          [[ "$SITE_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/%-]*)?$ ]] || { echo "::error::VPS_DOMAIN must be a verified public HTTPS URL without credentials or query parameters."; exit 1; }
-          PM2_APP_NAME="${PM2_APP_NAME:-learn-aloeducation}"
-          APP_PORT="${APP_PORT:-3017}"
-          [[ "$PM2_APP_NAME" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "::error::VPS_PM2_APP is invalid."; exit 1; }
-          [[ "$APP_PORT" =~ ^[0-9]{1,5}$ ]] && [ "$APP_PORT" -ge 1 ] && [ "$APP_PORT" -le 65535 ] || { echo "::error::VPS_APP_PORT is invalid."; exit 1; }
+          # These values are operator-confirmed production configuration and
+          # must stay exact; no host/path/service fallback is permitted.
+          [ "$APP_DIR" = "/home/aloedu/LEARNING-JOURNEY" ] || { echo "::error::VPS_APP_DIR must be /home/aloedu/LEARNING-JOURNEY."; exit 1; }
+          [ "$PM2_APP_NAME" = "learn-aloeducation" ] || { echo "::error::VPS_PM2_APP must be learn-aloeducation."; exit 1; }
+          [ "$APP_PORT" = "3017" ] || { echo "::error::VPS_APP_PORT must be 3017."; exit 1; }
+          [ "$SITE_URL" = "https://learn.aloeducation.com" ] || { echo "::error::VPS_DOMAIN must be https://learn.aloeducation.com."; exit 1; }
           [[ "$RESTORE_TEST_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::VPS_RESTORE_TEST_SHA must be a 40-character lowercase commit SHA from an isolated restore rehearsal."; exit 1; }
           [[ "$RESTORE_TEST_REFERENCE" =~ ^[A-Za-z0-9._:-]{1,80}$ ]] || { echo "::error::VPS_RESTORE_TEST_REFERENCE must identify the restore rehearsal without spaces or secrets."; exit 1; }
+          [[ "$SCHEMA_PREFLIGHT_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::VPS_SCHEMA_PREFLIGHT_SHA must be a 40-character SHA from schema/history review."; exit 1; }
+          [ "$SCHEMA_PREFLIGHT_SHA" = "${{ github.sha }}" ] || { echo "::error::VPS_SCHEMA_PREFLIGHT_SHA must equal this exact release SHA."; exit 1; }
+          [[ "$SCHEMA_PREFLIGHT_REFERENCE" =~ ^[A-Za-z0-9._:-]{1,80}$ ]] || { echo "::error::VPS_SCHEMA_PREFLIGHT_REFERENCE must identify the review without spaces or secrets."; exit 1; }
           if [ -n "$MIGRATION_PLAN_APPROVED_SHA" ] && ! [[ "$MIGRATION_PLAN_APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::VPS_MIGRATION_PLAN_SHA must be a 40-character lowercase commit SHA."; exit 1
           fi
@@ -298,7 +297,7 @@ jobs:
             -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes \
             -o ConnectTimeout=20 \
             "$VPS_USER@$SERVER_HOST" \
-            "VPS_DEPLOY_ENABLED='$VPS_DEPLOY_ENABLED' EXPECTED_SHA='${{ github.sha }}' APP_DIR='$APP_DIR' PM2_APP_NAME='$PM2_APP_NAME' APP_PORT='$APP_PORT' RESTORE_TEST_SHA='$RESTORE_TEST_SHA' RESTORE_TEST_REFERENCE='$RESTORE_TEST_REFERENCE' MIGRATION_PLAN_APPROVED_SHA='$MIGRATION_PLAN_APPROVED_SHA' bash -s" \
+            "VPS_DEPLOY_ENABLED='$VPS_DEPLOY_ENABLED' EXPECTED_SHA='${{ github.sha }}' APP_DIR='$APP_DIR' PM2_APP_NAME='$PM2_APP_NAME' APP_PORT='$APP_PORT' RESTORE_TEST_SHA='$RESTORE_TEST_SHA' RESTORE_TEST_REFERENCE='$RESTORE_TEST_REFERENCE' SCHEMA_PREFLIGHT_SHA='$SCHEMA_PREFLIGHT_SHA' SCHEMA_PREFLIGHT_REFERENCE='$SCHEMA_PREFLIGHT_REFERENCE' MIGRATION_PLAN_APPROVED_SHA='$MIGRATION_PLAN_APPROVED_SHA' bash -s" \
             < scripts/deploy-production.sh
 
       - name: Verify live site (public, via Nginx/HTTPS)
@@ -308,20 +307,27 @@ jobs:
           [[ "$SITE_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/%-]*)?$ ]] || { echo "::error::VPS_DOMAIN must be a verified public HTTPS URL."; exit 1; }
           base="${SITE_URL%/}"
           echo "Strict public health check: $base"
-          code="000"
+          health_file="$(mktemp)"
+          trap 'rm -f "$health_file"' EXIT
+          code="000"; health_status=""; served_sha=""
           for i in $(seq 1 10); do
-            code="$(curl --connect-timeout 10 --max-time 20 -s -o /dev/null -w '%{http_code}' "$base/api/health" || true)"
-            [ "$code" = "200" ] && break
-            echo "attempt $i: /api/health -> $code, retrying in 6s"; sleep 6
+            code="$(curl --connect-timeout 10 --max-time 20 -sS -o "$health_file" -w '%{http_code}' "$base/api/health" || true)"
+            health_status="$(jq -r '.status // empty' "$health_file" 2>/dev/null || true)"
+            served_sha="$(jq -r '.releaseSha // empty' "$health_file" 2>/dev/null || true)"
+            if [ "$code" = "200" ] && [ "$health_status" = "ok" ] && [ "$served_sha" = "${{ github.sha }}" ]; then break; fi
+            echo "attempt $i: /api/health -> HTTP $code, status=$health_status, release=${served_sha:-unknown}; retrying in 6s"
+            sleep 6
           done
-          [ "$code" = "200" ] || { echo "::error::Public health check failed: $base/api/health -> $code"; exit 1; }
+          [ "$code" = "200" ] && [ "$health_status" = "ok" ] && [ "$served_sha" = "${{ github.sha }}" ] || {
+            echo "::error::Public health/release verification failed: $base/api/health returned HTTP $code, status=$health_status, release=${served_sha:-unknown}; expected ${{ github.sha }}"; exit 1;
+          }
           root_code="$(curl --connect-timeout 10 --max-time 20 -s -o /dev/null -w '%{http_code}' "$base/" || true)"
           echo "GET $base/ -> $root_code (200 or a redirect to login is expected)"
           case "$root_code" in
             200|301|302|307|308) ;;
             *) echo "::error::Unexpected root status $root_code"; exit 1 ;;
           esac
-          echo "LIVE VERIFIED: $base at ${{ github.sha }}"
+          echo "LIVE VERIFIED: $base reports release $served_sha"
 
       - name: Deploy summary
         if: always()

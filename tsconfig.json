@@ -39,6 +39,10 @@
   "exclude": [
     "node_modules",
     "examples/**/*",
-    "skills/**/*"
+    "skills/**/*",
+    "download/**/*",
+    "storage/**/*",
+    "deploy/**/*",
+    "scripts/**/*"
   ]
 }

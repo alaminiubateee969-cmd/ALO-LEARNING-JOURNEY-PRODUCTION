@@ -1,9 +1,21 @@
-# Post-Repair Audit Report
+# Historical Post-Repair Audit Snapshot — Superseded
 
-**Audit date:** 2026-10-18  
-**Repository:** `alaminiubateee969-cmd/ALO-LEARNING-JOURNEY-PRODUCTION`  
-**Branch:** `arena/6d490018-alo-learning-journey-productio`  
-**Starting commit:** `177182fec1ecd0893fbe7fcbeac1a955e7bebbc8`  
+> **ARCHIVAL SNAPSHOT — DO NOT USE AS CURRENT RELEASE EVIDENCE.** This report
+> describes an earlier point in the repair branch, before the subsequent MySQL
+> integration/merge and later code, UI, deployment, and documentation changes.
+> Its model/migration counts, check results, source-behavior descriptions, and
+> statements about whether files or migrations changed are time-specific and may
+> contradict the current tree. It does not verify production. Current repository
+> readiness and check status are maintained in
+> [`deploy/docs/PRODUCTION_READINESS.md`](deploy/docs/PRODUCTION_READINESS.md)
+> and [`deploy/docs/TEST_REPORT.md`](deploy/docs/TEST_REPORT.md); operational
+> constraints remain in [`DEPLOYMENT.md`](DEPLOYMENT.md) and
+> [`MIGRATION-RECOVERY-PLAN.md`](MIGRATION-RECOVERY-PLAN.md).
+
+**Snapshot date:** 2026-10-18
+**Repository:** `alaminiubateee969-cmd/ALO-LEARNING-JOURNEY-PRODUCTION`
+**Branch:** `arena/6d490018-alo-learning-journey-productio`
+**Starting commit:** `177182fec1ecd0893fbe7fcbeac1a955e7bebbc8`
 **Scope:** source, configuration, dependency, documentation, and locally runnable verification in this checkout. This is not a VPS, production-database, or live-site audit.
 
 > **Verdict: SOURCE-LEVEL REPAIRS APPLIED; PRODUCTION READINESS NOT VERIFIED. Do not deploy or migrate production.** The initial pre-repair snapshot is in [`COMPLETE-AUDIT-REPORT.md`](./COMPLETE-AUDIT-REPORT.md). The operator-led database recovery sequence is in [`MIGRATION-RECOVERY-PLAN.md`](./MIGRATION-RECOVERY-PLAN.md).

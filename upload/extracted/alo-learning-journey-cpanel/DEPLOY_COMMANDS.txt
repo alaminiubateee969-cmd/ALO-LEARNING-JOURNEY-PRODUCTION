@@ -1,0 +1,15 @@
+# Create secrets
+php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
+php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
+
+# Permissions
+find /home/aloeduca/learn-app -type d -exec chmod 755 {} \;
+find /home/aloeduca/learn-app -type f -exec chmod 644 {} \;
+chmod -R 775 /home/aloeduca/learn-app/storage
+
+# PHP check
+php -v
+php -m | egrep 'pdo_mysql|curl|openssl|sodium|gd|mbstring|fileinfo'
+
+# Health syntax check
+find /home/aloeduca/learn-app -name '*.php' -print0 | xargs -0 -n1 php -l

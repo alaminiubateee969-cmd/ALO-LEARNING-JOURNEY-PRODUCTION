@@ -465,7 +465,7 @@ export default function DiagramStudioView() {
             <div>
               <h2 className="text-base font-semibold">Button & Interactive Control Design System</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                Production-ready button primitives synthesized from <strong>Archify (&ldquo;The Evidence Console&rdquo;)</strong>, <strong>Diagram Design Editorial</strong>, <strong>Omarchy TUI</strong>, <strong>Twenty / Frappe CRM</strong>, and <strong>ALO Warm Gradient</strong>.
+                Interactive UI pattern previews adapted from <strong>Archify (&ldquo;The Evidence Console&rdquo;)</strong>, <strong>Diagram Design Editorial</strong>, <strong>Omarchy TUI</strong>, <strong>Twenty / Frappe CRM</strong>, and <strong>ALO Warm Gradient</strong>. This showcase does not imply that the depicted backend actions are connected.
               </p>
             </div>
 
@@ -510,7 +510,7 @@ export default function DiagramStudioView() {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <p className="font-mono text-[10px] uppercase tracking-wider text-[#bf4520]">Pattern 02 · Diagram Design Editorial</p>
-                    <h3 className="text-sm font-semibold text-[#2d3142] mt-0.5">WCAG 4.71:1 Editorial Tactile Buttons</h3>
+                    <h3 className="text-sm font-semibold text-[#2d3142] mt-0.5">Editorial Tactile Button Preview · contrast not audited</h3>
                   </div>
                   <Button
                     type="button"
@@ -532,14 +532,14 @@ export default function DiagramStudioView() {
                   No drop shadows. Uses <code>rx=6</code> outer frame, <code>rx=2</code> rectangular type tag, and darkened burnt-tangerine (<code>#bf4520</code>) that clears 4.71:1 contrast on white-smoke paper.
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <EditorialButton variant="accent" tag="ACT" onClick={() => toast({ title: "Focal Editorial Action triggered" })}>
+                  <EditorialButton variant="accent" tag="ACT" onClick={() => toast({ title: "Preview only", description: "No schematic was generated." })}>
                     Generate Schematic
                   </EditorialButton>
-                  <EditorialButton variant="paper" tag="DOC" onClick={() => toast({ title: "Style Guide Profile loaded" })}>
+                  <EditorialButton variant="paper" tag="DOC" onClick={() => toast({ title: "Preview only", description: "No style guide profile was loaded." })}>
                     Inspect Style Guide
                   </EditorialButton>
-                  <EditorialButton variant="link" tag="API" onClick={() => toast({ title: "Verified HTTP endpoint" })}>
-                    Verify Contrast (4.71:1)
+                  <EditorialButton variant="link" tag="API" onClick={() => toast({ title: "Preview only", description: "No HTTP endpoint or contrast audit was checked." })}>
+                    Contrast example (not verified)
                   </EditorialButton>
                 </div>
               </Card>
@@ -591,7 +591,7 @@ export default function DiagramStudioView() {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <p className="font-mono text-[10px] uppercase tracking-wider text-emerald-600">Pattern 04 · Omarchy & Command Palette</p>
-                    <h3 className="text-sm font-semibold mt-0.5">Keyboard-First Hotkey Action Buttons</h3>
+                    <h3 className="text-sm font-semibold mt-0.5">Hotkey Badge Button Preview · shortcuts not wired</h3>
                   </div>
                   <Button
                     type="button"
@@ -607,12 +607,12 @@ export default function DiagramStudioView() {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Pairs every high-frequency operator action with an inline monospace <code>&lt;kbd&gt;</code> chord badge for keyboard-driven workflows.
+                  Shows inline monospace <code>&lt;kbd&gt;</code> chord badges for visual preview. These buttons do not register or execute keyboard shortcuts.
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <HotkeyButton label="Open Command Center" hotkey="⌘K" onClick={() => toast({ title: "Press Cmd+K / Ctrl+K anytime" })} />
-                  <HotkeyButton label="Run 3-Agent Review" hotkey="⇧↵" onClick={() => toast({ title: "Writer → Critic → Finalist pipeline ready" })} />
-                  <HotkeyButton label="Export Encrypted Backup" hotkey="⌘B" onClick={() => toast({ title: "AES-256-GCM snapshot ready" })} />
+                  <HotkeyButton label="Command Center (preview)" hotkey="⌘K" onClick={() => toast({ title: "Preview only", description: "No command palette shortcut is registered here." })} />
+                  <HotkeyButton label="Prompt review (preview)" hotkey="⇧↵" onClick={() => toast({ title: "Preview only", description: "This button does not run a review pipeline." })} />
+                  <HotkeyButton label="Backup export (preview)" hotkey="⌘B" onClick={() => toast({ title: "Preview only", description: "No backup was created or encrypted." })} />
                 </div>
               </Card>
             </div>

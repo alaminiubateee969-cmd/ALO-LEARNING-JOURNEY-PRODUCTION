@@ -5,6 +5,7 @@
 // and provider fields must reflect what actually ran.
 
 import { db } from "./db";
+import type { QualityAgentPass } from "./ai";
 
 export interface AgentTask {
   agentId: string;
@@ -13,17 +14,6 @@ export interface AgentTask {
   tools?: string[];
   priority?: "low" | "normal" | "high" | "urgent";
   requiresApproval?: boolean;
-}
-
-export interface AgentPipelineStageReport {
-  agentId: string;
-  role: string;
-  status: "complete" | "fallback" | "skipped";
-  provider: string;
-  latencyMs: number;
-  scoreBefore?: number;
-  scoreAfter?: number;
-  summary: string;
 }
 
 export interface AgentRunResult<T = any> {
@@ -79,7 +69,7 @@ export async function executeAsAgent<T>(
         outputJson: JSON.stringify(execResult.data).slice(0, 2000),
         errorMsg: usedFallback ? (execResult.error ?? "Configured local provider unavailable; fallback output requires human review.").slice(0, 500) : null,
         finishedAt: new Date(),
-        costEstUsd: 0, // paid AI APIs are disabled; infrastructure costs are not measured here
+        costEstUsd: 0.01, // estimated
       },
     });
 
@@ -153,38 +143,43 @@ export async function executeAsAgent<T>(
 }
 
 /**
- * Get agent run history for traceability.
+ * Persist prompt-stage telemetry supplied by a route. These records describe
+ * which local prompt returned data; they do not certify quality, safety, or
+ * factual accuracy.
  */
-/** Persist the real completion/fallback state of each sequential creative pass. */
-export async function recordAgentPipelineStages(taskLabel: string, stages: AgentPipelineStageReport[]) {
-  const finishedAt = new Date();
-  for (const stage of stages) {
-    const latencyMs = Math.max(0, Math.min(300_000, Math.round(stage.latencyMs)));
-    const startedAt = new Date(finishedAt.getTime() - latencyMs);
-    const status = stage.status === "complete" ? "success" : "blocked_external_setup";
-    const run = await db.aIAgentRun.create({
+export async function recordAgentPipelineStages(
+  taskName: string,
+  passes: QualityAgentPass[]
+): Promise<void> {
+  for (const pass of passes) {
+    const finishedAt = new Date();
+    const latencyMs = Number.isFinite(pass.latencyMs) ? Math.max(0, pass.latencyMs) : 0;
+    await db.aIAgentRun.create({
       data: {
-        agentId: stage.agentId,
-        status,
-        inputBrief: `${taskLabel}: ${stage.role}`.slice(0, 500),
-        outputJson: JSON.stringify({ provider: stage.provider, status: stage.status, scoreBefore: stage.scoreBefore, scoreAfter: stage.scoreAfter }).slice(0, 1_000),
-        errorMsg: stage.status === "complete" ? null : stage.summary.slice(0, 500),
-        startedAt,
+        agentId: pass.agentId.slice(0, 191),
+        status: pass.status === "complete" ? "success" : "blocked_external_setup",
+        inputBrief: `${taskName}: ${pass.role}`.slice(0, 500),
+        outputJson: JSON.stringify({ status: pass.status, provider: pass.provider, summary: pass.summary }).slice(0, 2000),
+        errorMsg: pass.status === "complete" ? null : pass.summary.slice(0, 500),
+        startedAt: new Date(finishedAt.getTime() - latencyMs),
         finishedAt,
         costEstUsd: 0,
       },
     });
     await db.auditLog.create({
       data: {
-        actor: stage.agentId,
-        action: "agent.creative_pipeline_stage",
-        detail: `AgentRun ${run.id}: ${stage.role} ${stage.status} via ${stage.provider}; rubric ${stage.scoreBefore ?? "—"} → ${stage.scoreAfter ?? "—"}`.slice(0, 1_000),
-        severity: stage.status === "complete" ? "info" : "warn",
+        actor: pass.agentId.slice(0, 191),
+        action: "agent.prompt_stage",
+        detail: `${taskName}: ${pass.role} → ${pass.status} via ${pass.provider}; not an independent quality, safety, or fact check.`.slice(0, 500),
+        severity: pass.status === "complete" ? "info" : "warn",
       },
     });
   }
 }
 
+/**
+ * Get agent run history for traceability.
+ */
 export async function getAgentRuns(agentId?: string, limit = 20) {
   return db.aIAgentRun.findMany({
     where: agentId ? { agentId } : undefined,

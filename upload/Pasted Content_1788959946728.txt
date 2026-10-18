@@ -1,0 +1,2702 @@
+====================================================================
+                    ALO LEARNING JOURNEY
+       REAL PRODUCTION SYSTEM MASTER BUILD INSTRUCTION
+====================================================================
+
+MISSION
+====================================================================
+
+I need a REAL, FUNCTIONAL, END-TO-END production system.
+
+DO NOT build a visual demo.
+
+DO NOT build a prototype that only looks functional.
+
+DO NOT create fake buttons.
+
+DO NOT create fake API responses.
+
+DO NOT create fake database records.
+
+DO NOT create fake AI agents.
+
+DO NOT create fake workflows.
+
+DO NOT create fake integrations.
+
+DO NOT create fake provider responses.
+
+DO NOT create fake analytics.
+
+DO NOT create fake social posts.
+
+DO NOT create fake WhatsApp/SMS/email delivery.
+
+DO NOT create fake image/video/voice generation.
+
+DO NOT create fake quality scores.
+
+DO NOT report "PASS" merely because a page renders, an API returns 200, TypeScript passes, or a database row was created.
+
+The objective is a REAL WORKING ALO EDUCATION / ALO LEARNING JOURNEY
+system where every implemented capability performs its actual operation.
+
+====================================================================
+                         GOLDEN RULE
+====================================================================
+
+A feature is COMPLETE only when:
+
+UI
+ ↓
+REAL FRONTEND ACTION
+ ↓
+REAL API
+ ↓
+REAL AUTHENTICATION
+ ↓
+REAL AUTHORIZATION
+ ↓
+REAL BUSINESS LOGIC
+ ↓
+REAL DATABASE
+ ↓
+REAL QUEUE / WORKER WHEN REQUIRED
+ ↓
+REAL EXTERNAL PROVIDER OR REAL LOCAL MODEL
+ ↓
+REAL OUTPUT
+ ↓
+REAL STORAGE
+ ↓
+REAL STATUS
+ ↓
+REAL AUDIT
+ ↓
+REAL ERROR HANDLING
+ ↓
+REAL RETRY / FALLBACK
+ ↓
+REAL END-TO-END TEST
+ ↓
+VERIFIABLE EVIDENCE
+
+If any required layer is missing, the feature is NOT COMPLETE.
+
+====================================================================
+                  ABSOLUTE NO-MOCK POLICY
+====================================================================
+
+Production functionality must never use:
+
+- fake success
+- simulated success
+- placeholder API responses
+- fake provider IDs
+- fake message IDs
+- fake social post IDs
+- fake delivery statuses
+- fake payment IDs
+- fake OAuth tokens
+- fake access tokens
+- fake webhook events
+- fake AI responses
+- fake generated files
+- fake video URLs
+- fake audio URLs
+- fake analytics
+- fake quality scores
+- fake agent execution
+- fake workflow execution
+- fake automation percentages
+- fake dashboard counters
+
+Mocks are permitted ONLY inside isolated automated tests.
+
+Mocks must NEVER be presented as production execution.
+
+====================================================================
+              VERY IMPORTANT: VISIBLE ≠ FUNCTIONAL
+====================================================================
+
+A page is NOT functionality.
+
+A button is NOT functionality.
+
+An API route is NOT functionality.
+
+A database table is NOT functionality.
+
+A database row is NOT proof of execution.
+
+A progress bar is NOT proof of execution.
+
+A success toast is NOT proof of execution.
+
+A JSON response containing success=true is NOT proof.
+
+A configured-looking integration is NOT a connected integration.
+
+An agent definition is NOT an executing AI employee.
+
+A dashboard showing "2,000 agents" is NOT proof that 2,000 agents exist.
+
+A dashboard showing "70% automation" is NOT proof of 70% automation.
+
+Only real end-to-end execution with evidence counts.
+
+====================================================================
+                         PHASE 0
+                  FULL PROJECT DISCOVERY
+====================================================================
+
+Before changing ANYTHING, inspect the complete actual project.
+
+Do not trust previous prompts, reports, documentation, assumptions,
+or claimed architecture until verified against the actual source.
+
+Inspect:
+
+package.json
+all lock files
+src/
+app/
+pages/
+components/
+lib/
+server/
+api/
+database/
+prisma/
+scripts/
+workers/
+queues/
+agents/
+skills/
+prompts/
+sops/
+workflows/
+rag/
+memory/
+knowledge/
+integrations/
+providers/
+auth/
+middleware/
+security/
+audit/
+observability/
+monitoring/
+storage/
+uploads/
+public/
+tests/
+e2e/
+config/
+deployment/
+docker/
+pm2/
+n8n/
+cron/
+webhooks/
+
+Also inspect:
+
+- environment configuration
+- database configuration
+- database schema
+- migrations
+- production configuration
+- reverse proxy
+- process manager
+- background workers
+- queue infrastructure
+- Redis
+- storage
+- OAuth
+- API clients
+- third-party SDKs
+- webhooks
+- external service configuration
+- existing AI providers
+- existing local models
+- existing integrations
+- existing authentication
+- existing RBAC
+- existing audit system
+- existing backup system
+
+Do not invent anything.
+
+If something does not exist, report that it does not exist.
+
+====================================================================
+                         PHASE 1
+                  REAL SYSTEM INVENTORY
+====================================================================
+
+Create:
+
+ALO_REAL_SYSTEM_INVENTORY.md
+
+Document the ACTUAL system.
+
+For every feature record:
+
+Feature
+File
+Route
+Component
+Database Model
+Business Logic
+Worker
+External Provider
+Authentication
+Authorization
+Status
+Actually Functional?
+Evidence
+Known Limitation
+Replacement
+Merge Target
+
+For every AI agent record:
+
+Agent ID
+Name
+Department
+Role
+Implementation
+Execution Engine
+Tools
+Model
+Prompt
+SOP
+Skills
+Memory
+RAG
+Permissions
+Database Persistence
+Worker
+Tests
+Real Execution?
+Evidence
+
+For every integration record:
+
+Integration
+Provider
+Authentication Type
+Credentials Configured?
+Connection Tested?
+Read Tested?
+Write Tested?
+Webhook Tested?
+Provider Response
+Error Handling
+Retry
+Rate Limit Handling
+Status
+Evidence
+
+IMPORTANT:
+
+Never inflate counts.
+
+If the project contains 40 agent definitions,
+report 40 verified agent definitions.
+
+Do NOT claim 2,000 executable agents unless
+2,000 executable agents have actually been verified.
+
+====================================================================
+                         PHASE 2
+                       BACKUP FIRST
+====================================================================
+
+Before structural modifications:
+
+Create backups of:
+
+1. Source code
+2. Database
+3. Configuration
+4. Environment metadata
+5. Agent registry
+6. Prompt registry
+7. Skill registry
+8. SOP registry
+9. Workflow registry
+10. RAG metadata
+11. Memory metadata
+12. Integration configuration
+13. Existing deployment configuration
+
+Record:
+
+timestamp
+git commit/hash
+database size
+database row counts
+file count
+agent count
+department count
+skill count
+SOP count
+prompt count
+workflow count
+integration count
+API route count
+page count
+component count
+
+If backup fails:
+
+STOP.
+
+Do not continue.
+
+====================================================================
+                         PHASE 3
+                ABSOLUTE NON-DESTRUCTIVE RULE
+====================================================================
+
+The existing ALO system is the BASELINE.
+
+The new system is an UPGRADE.
+
+Never destroy the baseline merely to simplify implementation.
+
+DO NOT:
+
+prisma db push --force-reset
+prisma migrate reset
+DROP DATABASE
+DROP TABLE
+TRUNCATE
+destructive seed
+delete all data
+reinitialize the project
+replace the entire architecture blindly
+delete working files
+remove working agents
+remove working workflows
+remove working integrations
+
+unless explicitly authorized by the owner.
+
+Correct process:
+
+AUDIT
+ ↓
+UNDERSTAND
+ ↓
+COMPARE
+ ↓
+COMPATIBILITY ANALYSIS
+ ↓
+BACKUP
+ ↓
+MERGE
+ ↓
+EXTEND
+ ↓
+TEST
+ ↓
+VERIFY
+ ↓
+MIGRATE
+ ↓
+ACTIVATE
+
+====================================================================
+                         PHASE 4
+                   PRESERVE EVERYTHING
+====================================================================
+
+For every existing component classify:
+
+KEEP
+MERGE
+EXTEND
+ADAPTER
+REFACTOR
+REPLACE ONLY IF REQUIRED
+
+Never use:
+
+DELETE-FIRST
+REBUILD-FROM-ZERO
+
+Preserve existing:
+
+- website
+- portals
+- CRM
+- student system
+- university data
+- course data
+- intake data
+- scholarship data
+- APIs
+- pages
+- components
+- business logic
+- AI agents
+- AI providers
+- workflows
+- integrations
+- database
+- authentication
+- RBAC
+- RAG
+- memory
+- audit
+- security
+- backups
+- deployment
+- existing files
+
+If existing functionality is broken:
+
+FIX IT.
+
+If incomplete:
+
+EXTEND IT.
+
+If duplicate:
+
+MERGE IT.
+
+====================================================================
+                         PHASE 5
+                  REAL FEATURE VALIDATION
+====================================================================
+
+For EVERY major feature verify:
+
+1. Frontend exists
+2. Frontend action works
+3. API exists
+4. Authentication works
+5. Authorization works
+6. Business logic works
+7. Database works
+8. Queue works if needed
+9. Worker works if needed
+10. External provider works if required
+11. Output is actually produced
+12. Output is stored
+13. Status is persisted
+14. Audit is recorded
+15. Error handling works
+16. Retry works
+17. Reload/persistence works
+18. E2E test passes
+19. Evidence exists
+
+If not all required conditions are satisfied:
+
+DO NOT mark the feature complete.
+
+====================================================================
+                         PHASE 6
+                  NO FAKE BUTTONS
+====================================================================
+
+Every button must perform a real operation.
+
+For every button inspect:
+
+Click
+ ↓
+API
+ ↓
+Server validation
+ ↓
+Authorization
+ ↓
+Business logic
+ ↓
+Database
+ ↓
+External service if required
+ ↓
+Real result
+ ↓
+UI update
+
+If the backend functionality does not exist:
+
+Do NOT create a fake success button.
+
+Display:
+
+NOT CONFIGURED
+
+or:
+
+BLOCKED_EXTERNAL_SETUP
+
+with the exact dependency required.
+
+====================================================================
+                         PHASE 7
+                    REAL AI AGENTS
+====================================================================
+
+An AI agent is NOT simply a database row or JSON object.
+
+A real agent must contain:
+
+agent_id
+name
+department
+role
+specialization
+system instructions
+skills
+SOP
+prompt
+tools
+model/provider
+permissions
+input schema
+output schema
+execution engine
+memory policy
+RAG scope
+task creation
+task execution
+error handling
+retry policy
+fallback
+quality evaluation
+KPI
+audit
+human escalation
+tests
+
+Most importantly:
+
+THE AGENT MUST ACTUALLY EXECUTE.
+
+====================================================================
+                         PHASE 8
+                    2,000 AI EMPLOYEES
+====================================================================
+
+Target architecture:
+
+100 Departments
+×
+20 Specialized Agents
+=
+2,000 Agents
+
+But NEVER create 2,000 fake database rows just to satisfy the number.
+
+First inspect the existing registry.
+
+If an equivalent agent exists:
+
+EXTEND EXISTING AGENT.
+
+If capabilities overlap:
+
+MERGE CAPABILITIES.
+
+If genuinely new:
+
+CREATE NEW AGENT.
+
+Every new agent requires:
+
+agent ID
+department
+capability
+skills
+SOP
+prompt
+tools
+test suite
+owner
+DCC dependency
+reason for creation
+
+Each production agent must be executable.
+
+Implement or reuse:
+
+agent registry
+agent executor
+task queue
+worker pool
+concurrency
+priority
+retry
+fallback
+monitoring
+audit
+human escalation
+
+If infrastructure cannot execute the claimed number,
+DO NOT claim it can.
+
+====================================================================
+                         PHASE 9
+                       LOOP AI
+====================================================================
+
+If an existing LOOP architecture exists, it remains authoritative.
+
+Do not create a second unrelated orchestration engine.
+
+LOOP must actually execute:
+
+OBSERVE
+ ↓
+UNDERSTAND
+ ↓
+RESEARCH
+ ↓
+PLAN
+ ↓
+DELEGATE
+ ↓
+CREATE
+ ↓
+VERIFY
+ ↓
+CRITIQUE
+ ↓
+CORRECT
+ ↓
+RETRY
+ ↓
+EVALUATE
+ ↓
+APPROVE
+ ↓
+PUBLISH
+ ↓
+MEASURE
+ ↓
+LEARN
+ ↓
+OPTIMIZE
+ ↓
+REPEAT
+
+Every stage must have persistent execution state.
+
+A frontend progress bar is NOT sufficient.
+
+====================================================================
+                         PHASE 10
+                  MULTIMODAL WORKFORCE
+====================================================================
+
+Support real capabilities for:
+
+TEXT
+IMAGE
+VIDEO
+VOICE
+AUDIO
+CALLING
+SMS
+WHATSAPP
+MESSENGER
+INSTAGRAM DM
+TELEGRAM
+EMAIL
+SOCIAL PUBLISHING
+SOCIAL ANALYTICS
+
+Only claim a modality is working when actual execution is verified.
+
+====================================================================
+                         PHASE 11
+                    IMAGE WORKFORCE
+====================================================================
+
+Create or merge real specialists:
+
+Image Director
+Image Prompt Engineer
+Composition Agent
+Lighting Agent
+Character Agent
+Brand Image Agent
+Poster Agent
+Ad Creative Agent
+Thumbnail Agent
+Typography Agent
+Bangla Typography Agent
+Image QA
+Image Correction
+Image Consistency
+Image Optimization
+
+Each must have real execution capability.
+
+Image generation must use:
+
+REAL configured provider
+
+OR
+
+REAL installed local model.
+
+Never fake an image URL.
+
+Required evidence:
+
+request
+provider
+model
+prompt
+job ID where applicable
+output
+stored file
+quality result
+audit
+error/retry if applicable
+
+====================================================================
+                         PHASE 12
+                    VIDEO WORKFORCE
+====================================================================
+
+Create or merge:
+
+Video Director
+Script Agent
+Storyboard Agent
+Shot Agent
+Scene Agent
+Camera Agent
+Lighting Agent
+Character Continuity Agent
+Motion Agent
+Animation Agent
+Video Generator
+Video Editor
+Caption Agent
+Audio Sync Agent
+Video QA
+Video Correction
+Shorts Agent
+Reels Agent
+YouTube Agent
+
+Video generation must be REAL.
+
+If GPU/model/provider is unavailable:
+
+DO NOT fake video generation.
+
+Set:
+
+BLOCKED_EXTERNAL_SETUP
+
+and report exactly what is required.
+
+====================================================================
+                         PHASE 13
+                    VOICE WORKFORCE
+====================================================================
+
+Create or merge:
+
+Voice Director
+Voice Selection
+Bangla Voice
+English Voice
+Banglish Voice
+Emotion
+Pronunciation
+Narration
+Dialogue
+Audio Cleanup
+Voice Timing
+Voice QA
+
+Never clone or imitate a real person's voice without authorization.
+
+Voice generation must produce a real audio artifact.
+
+====================================================================
+                         PHASE 14
+                    CALLING WORKFORCE
+====================================================================
+
+Calling must use a REAL telephony/voice provider.
+
+Required:
+
+Call Strategy
+Call Script
+AI Voice Call
+Lead Qualification
+Appointment
+Follow-up
+Call Summary
+Call QA
+Human Escalation
+
+Track:
+
+provider
+call ID
+status
+duration
+transcript where applicable
+summary
+outcome
+audit
+
+AI must never impersonate a human.
+
+====================================================================
+                         PHASE 15
+                    REAL SMS
+====================================================================
+
+SMS must use a REAL provider.
+
+Do not mark:
+
+SENT
+
+because a database row was inserted.
+
+Require:
+
+provider message ID
+provider response
+delivery status
+timestamp
+failure status
+
+====================================================================
+                         PHASE 16
+                   REAL WHATSAPP
+====================================================================
+
+Use an authorized real WhatsApp Business API/provider.
+
+Required:
+
+send
+receive
+conversation history
+message status
+delivery
+read
+webhook
+template validation
+opt-out
+rate limiting
+error handling
+audit
+
+Never fake:
+
+access token
+phone number ID
+message ID
+delivery status
+webhook
+
+====================================================================
+                         PHASE 17
+                 REAL SOCIAL INTEGRATIONS
+====================================================================
+
+Support where genuinely configured:
+
+Facebook
+Instagram
+YouTube
+TikTok
+LinkedIn
+X
+Pinterest
+Telegram
+Discord
+Reddit where permitted
+WhatsApp
+
+Only authorized accounts may be connected.
+
+No fake OAuth.
+
+No fake access token.
+
+No unauthorized account creation.
+
+A post is only considered published when the provider returns real evidence.
+
+Store:
+
+provider
+account
+post ID
+URL where available
+timestamp
+status
+error
+audit
+
+====================================================================
+                         PHASE 18
+                     REAL EMAIL
+====================================================================
+
+Use a real configured email provider.
+
+Track:
+
+provider
+message ID
+recipient
+subject
+content reference
+delivery status
+bounce
+failure
+timestamp
+
+Never claim SENT solely because an internal database insert succeeded.
+
+====================================================================
+                         PHASE 19
+                      REAL CRM
+====================================================================
+
+CRM operations must actually work.
+
+Test:
+
+lead creation
+lead update
+lead assignment
+counselor assignment
+tags
+notes
+follow-up
+SLA
+status
+communication history
+attachments
+audit
+
+If Facebook Lead Forms are configured:
+
+REAL WEBHOOK
+ ↓
+REAL LEAD
+ ↓
+REAL DATABASE RECORD
+ ↓
+REAL ASSIGNMENT
+ ↓
+REAL NOTIFICATION
+
+====================================================================
+                         PHASE 20
+                       REAL RAG
+====================================================================
+
+Do not call a normal database search "Enterprise RAG."
+
+Real RAG requires:
+
+document ingestion
+processing
+chunking
+metadata
+embedding
+index
+retrieval
+ranking
+context construction
+answer generation
+source references
+access control
+audit
+
+Test using actual stored documents.
+
+====================================================================
+                         PHASE 21
+                      REAL MEMORY
+====================================================================
+
+Memory must actually persist and retrieve information.
+
+Support as applicable:
+
+user memory
+agent memory
+task memory
+conversation memory
+project memory
+campaign memory
+
+Implement:
+
+storage
+retrieval
+permissions
+retention
+deletion
+audit
+
+Do not create memory tables that nothing actually reads.
+
+====================================================================
+                         PHASE 22
+                  KNOWLEDGE GRAPH
+====================================================================
+
+If required, implement a REAL knowledge graph.
+
+Do not create a UI containing fake nodes.
+
+Nodes and relationships must come from actual system data.
+
+Queries must return real relationships.
+
+====================================================================
+                         PHASE 23
+                     EVENT BUS
+====================================================================
+
+Use the existing Event Bus if one exists.
+
+If missing and required, implement a real event system.
+
+Events may include:
+
+CONTENT_CREATED
+IMAGE_GENERATED
+VIDEO_GENERATED
+VOICE_GENERATED
+QA_FAILED
+QA_PASSED
+RETRY_STARTED
+AGENT_FAILED
+AGENT_RECOVERED
+PUBLISH_REQUESTED
+PUBLISHED
+ANALYTICS_RECEIVED
+LEARNING_CREATED
+
+Events must actually be emitted and consumed.
+
+====================================================================
+                         PHASE 24
+                  REAL WORKFLOW ENGINE
+====================================================================
+
+Use existing workflow infrastructure if available.
+
+Do not represent workflows only with frontend state.
+
+Persist:
+
+workflow
+execution
+step
+attempt
+input
+output
+status
+error
+retry
+timestamps
+
+Browser closure must not destroy a running workflow.
+
+====================================================================
+                         PHASE 25
+                     QUEUE + WORKERS
+====================================================================
+
+Long-running operations must not depend on the browser remaining open.
+
+Implement/reuse:
+
+queue
+worker
+job
+attempt
+heartbeat
+timeout
+retry
+dead-letter handling
+
+Use workers for appropriate operations such as:
+
+video generation
+bulk campaigns
+social publishing
+AI tasks
+RAG ingestion
+analytics sync
+large document processing
+email campaigns
+
+====================================================================
+                         PHASE 26
+                     MODEL ROUTER
+====================================================================
+
+Reuse the existing model router if present.
+
+Do not create duplicate routers.
+
+Routing:
+
+BEST AVAILABLE MODEL
+ ↓
+SECONDARY MODEL
+ ↓
+FALLBACK MODEL
+ ↓
+LOCAL MODEL
+ ↓
+HUMAN ESCALATION
+
+Consider:
+
+quality
+task
+modality
+language
+latency
+cost
+availability
+privacy
+
+Never claim a provider works until its API/local runtime is actually tested.
+
+====================================================================
+                         PHASE 27
+                     QUALITY ENGINE
+====================================================================
+
+Every major output must receive an actual quality evaluation.
+
+Score:
+
+0-100
+
+Rules:
+
+95-100 = PRODUCTION READY
+90-94 = MINOR REVISION
+80-89 = REVISION REQUIRED
+<80 = REGENERATE
+
+Critical security/safety failure:
+
+BLOCK
+
+Do not automatically assign 95 merely to make the dashboard look good.
+
+====================================================================
+                         PHASE 28
+                   SELF-CORRECTION
+====================================================================
+
+Every important generation task should support:
+
+GENERATE
+ ↓
+VALIDATE
+ ↓
+SCORE
+ ↓
+PASS?
+ ↓
+YES → RETURN
+ ↓
+NO
+ ↓
+DIAGNOSE
+ ↓
+CORRECT
+ ↓
+REGENERATE
+ ↓
+RECHECK
+
+Maximum retries:
+
+Default = 3
+Ultra Quality = 5
+
+Never allow infinite loops.
+
+====================================================================
+                         PHASE 29
+                 PARTIAL REGENERATION
+====================================================================
+
+If one component fails, do not regenerate everything.
+
+Examples:
+
+bad image
+→ regenerate image only
+
+bad video scene
+→ regenerate scene only
+
+bad voice
+→ regenerate voice only
+
+bad caption
+→ regenerate caption only
+
+bad audio
+→ regenerate audio only
+
+character inconsistency
+→ regenerate affected scene only
+
+Successful outputs must be preserved.
+
+====================================================================
+                         PHASE 30
+                  70% AI + 30% HUMAN
+====================================================================
+
+The 70% AI + 30% Human model must be measured from actual tasks.
+
+Do not display a hardcoded 70%.
+
+Track:
+
+AI completed
+AI failed
+AI escalated
+human completed
+human intervention
+human approval
+AI automation rate
+human intervention rate
+
+Calculate the actual percentage.
+
+====================================================================
+                         PHASE 31
+                     HUMAN APPROVAL
+====================================================================
+
+Where human approval is required:
+
+AI prepares
+ ↓
+Human reviews
+ ↓
+APPROVE / REJECT / EDIT
+ ↓
+System executes
+
+Do not bypass approval merely to make a demo work.
+
+====================================================================
+                         PHASE 32
+                    AUTHENTICATION
+====================================================================
+
+Implement/reuse REAL authentication.
+
+Verify:
+
+login
+logout
+session
+session expiry
+password/security
+authorization
+role access
+resource access
+
+Never rely on hiding frontend buttons.
+
+Server-side authorization is mandatory.
+
+====================================================================
+                         PHASE 33
+                         RBAC
+====================================================================
+
+Implement/reuse real:
+
+roles
+permissions
+resource authorization
+department access
+agent access
+integration access
+admin access
+audit access
+
+Test unauthorized requests directly against APIs.
+
+====================================================================
+                         PHASE 34
+                      SECURITY
+====================================================================
+
+Never expose secrets in:
+
+UI
+browser bundle
+logs
+Git
+database plaintext
+error messages
+API responses
+
+Protect:
+
+DATABASE credentials
+JWT secrets
+NEXTAUTH secrets
+API keys
+OAuth secrets
+access tokens
+refresh tokens
+webhook secrets
+
+Never invent credentials.
+
+If credentials are missing:
+
+BLOCKED_EXTERNAL_SETUP
+
+====================================================================
+                         PHASE 35
+                   ENVIRONMENT REALITY
+====================================================================
+
+Determine actual environment:
+
+OS
+Node version
+Bun version
+Next.js version
+database
+database version
+Redis
+queue
+GPU
+storage
+reverse proxy
+process manager
+workers
+external providers
+local models
+
+Do not silently substitute:
+
+SQLite for production MySQL
+fake Redis for real Redis
+browser state for workers
+fake provider for real provider
+mock service for production service
+
+If development differs from production,
+document the difference.
+
+====================================================================
+                         PHASE 36
+               PRODUCTION CONNECTIVITY
+====================================================================
+
+If the actual production environment is accessible:
+
+test it.
+
+If production is NOT accessible:
+
+DO NOT claim production verification.
+
+Use:
+
+IMPLEMENTED_NOT_CONNECTED
+
+or:
+
+PRODUCTION_VERIFICATION_BLOCKED
+
+and clearly state:
+
+what is missing
+why it is needed
+where it must be configured
+how it will be tested
+
+====================================================================
+                         PHASE 37
+                 CHARACTER CONSISTENCY
+====================================================================
+
+If character functionality exists, reuse it.
+
+If missing and required, create one real registry.
+
+Character:
+
+ID
+Name
+Appearance
+Age
+Clothing
+Personality
+Voice Reference
+Version
+Allowed Context
+
+Maintain consistency across:
+
+image
+video
+voice
+story
+campaign
+
+====================================================================
+                         PHASE 38
+                  INTEGRATION REGISTRY
+====================================================================
+
+Create or extend:
+
+Integration Registry
+
+For every integration:
+
+integration_id
+name
+platform
+URL
+authentication type
+credentials required
+API type
+capabilities
+status
+health
+permissions
+webhooks
+rate limits
+fallback
+owner
+last tested
+evidence
+
+Never mark:
+
+CONNECTED
+
+without a real connection test.
+
+====================================================================
+                         PHASE 39
+                  ADMIN COMMAND CENTER
+====================================================================
+
+KEEP existing navigation.
+
+Do not create duplicate sidebars.
+
+Preserve existing sections such as:
+
+Dashboard
+AI Agents
+Workflow Pipeline
+Topic Ideas
+Content Studio
+Approval Queue
+RAG Knowledge
+Content History
+Social Analytics
+Comments
+Telegram Publishing Queue
+Calendar
+Family
+Models
+Video Pipeline
+Self-Learning
+Cost & Usage
+Backups
+
+Merge additional capabilities:
+
+LOOP AI
+2,000 AI Workforce
+Agent Tasks
+Model Router
+Image Studio
+Video Studio
+Voice Studio
+Calling
+SMS
+Communications
+QA
+Recovery
+DCC
+Integration Registry
+Memory
+Knowledge Graph
+Audit
+Observability
+
+Every metric must come from actual backend data.
+
+No hardcoded fake numbers.
+
+====================================================================
+                         PHASE 40
+                         DATABASE
+====================================================================
+
+Before adding models:
+
+inspect the complete existing Prisma schema.
+
+Reuse existing models whenever possible.
+
+Potential entities:
+
+Agent
+AgentSkill
+AgentSOP
+AgentPrompt
+AgentMemory
+AgentEvaluation
+AgentTask
+AgentAttempt
+AgentError
+AgentRecovery
+Department
+DepartmentCertification
+ModelProvider
+Model
+ModelRoute
+MediaProject
+MediaAsset
+VideoProject
+VideoScene
+Character
+VoiceProfile
+CallSession
+Message
+SocialAccount
+Integration
+IntegrationCredential
+Campaign
+CampaignMetric
+Workflow
+WorkflowExecution
+WorkflowStep
+Event
+QueueJob
+AuditLog
+
+Adapt names to the existing schema.
+
+DO NOT blindly create duplicates.
+
+====================================================================
+                         PHASE 41
+                    MIGRATION SAFETY
+====================================================================
+
+Database changes must be:
+
+additive
+backward-compatible
+reversible
+tested
+backed up
+
+After migration verify:
+
+row counts
+relationships
+foreign keys
+indexes
+existing queries
+existing APIs
+existing workflows
+
+Never erase production data.
+
+====================================================================
+                         PHASE 42
+                  ALO LEARNING JOURNEY
+====================================================================
+
+The actual student journey must work:
+
+Visitor
+ ↓
+University/Course Discovery
+ ↓
+AI Course Finder
+ ↓
+Lead
+ ↓
+Registration
+ ↓
+Student Profile
+ ↓
+Counselor Assignment
+ ↓
+University/Application Selection
+ ↓
+Document Collection
+ ↓
+Application
+ ↓
+Application Tracking
+ ↓
+Offer
+ ↓
+CAS/LOA where applicable
+ ↓
+Visa Support
+ ↓
+Pre-departure
+ ↓
+Enrollment
+ ↓
+Student Support
+
+Every stage must have real persisted state.
+
+====================================================================
+                         PHASE 43
+              UNIVERSITY + COURSE DATA
+====================================================================
+
+Do not create fake records to satisfy counts.
+
+Use actual configured data.
+
+Verify:
+
+University
+Country
+Campus
+Course
+Degree
+Duration
+Fees
+Intake
+Deadline
+Requirements
+Scholarship
+Application status
+
+Check data relationships.
+
+Detect orphan records.
+
+Do not silently invent missing data.
+
+====================================================================
+                         PHASE 44
+                  WORKFLOW EXAMPLE
+====================================================================
+
+A real content workflow:
+
+TOPIC
+ ↓
+RESEARCH
+ ↓
+FACT CHECK
+ ↓
+SCRIPT
+ ↓
+IMAGE / VIDEO
+ ↓
+VOICE
+ ↓
+EDIT
+ ↓
+CAPTIONS
+ ↓
+QA
+ ↓
+HUMAN APPROVAL
+ ↓
+PUBLISH
+ ↓
+ANALYTICS
+ ↓
+LEARNING
+ ↓
+OPTIMIZATION
+
+Every stage must produce real output/state.
+
+====================================================================
+                         PHASE 45
+                     OBSERVABILITY
+====================================================================
+
+Track:
+
+agent
+task
+workflow
+model
+provider
+attempt
+latency
+cost
+error
+fallback
+quality
+human intervention
+result
+
+Never log secrets.
+
+====================================================================
+                         PHASE 46
+                     COST TRACKING
+====================================================================
+
+Do not display fake costs.
+
+Track actual provider usage where available:
+
+model
+provider
+tokens
+image usage
+video usage
+audio usage
+API calls
+cost
+currency
+timestamp
+task
+agent
+
+Clearly classify:
+
+ACTUAL
+ESTIMATED
+UNKNOWN
+
+====================================================================
+                         PHASE 47
+                    SELF-HEALING
+====================================================================
+
+Recovery:
+
+DETECT
+ ↓
+CLASSIFY
+ ↓
+RETRY
+ ↓
+FALLBACK
+ ↓
+ALTERNATE MODEL
+ ↓
+ALTERNATE AGENT
+ ↓
+QUEUE
+ ↓
+HUMAN ESCALATION
+
+Record every attempt.
+
+Never infinite retry.
+
+====================================================================
+                         PHASE 48
+                          DCC
+====================================================================
+
+Department Capability Certification must be real.
+
+Requirements:
+
+SOP Coverage >= 95%
+Knowledge Coverage >= 95%
+Skill Coverage >= 95%
+Test Pass Rate >= 95%
+KPI Achievement >= 90%
+Security Compliance = 100%
+Audit Compliance = 100%
+Self-Recovery Success >= 90%
+Human Escalation <= 10%
+Constitution Compliance = 100%
+
+If DCC fails:
+
+DO NOT activate the department for production.
+
+====================================================================
+                         PHASE 49
+                       AUDIT
+====================================================================
+
+Important operations must record:
+
+who
+what
+when
+where
+agent
+task
+workflow
+model
+provider
+attempt
+status
+error
+approval
+result reference
+
+Never record secrets.
+
+====================================================================
+                         PHASE 50
+                     IDEMPOTENCY
+====================================================================
+
+Prevent duplicate operations for:
+
+SMS
+WhatsApp
+email
+social publishing
+lead creation
+payment
+campaign
+AI tasks
+workflow execution
+
+Use appropriate:
+
+idempotency keys
+provider IDs
+transaction state
+deduplication
+
+====================================================================
+                         PHASE 51
+                  REAL BACKUP TEST
+====================================================================
+
+Do not merely create backup files.
+
+Verify:
+
+backup created
+backup readable
+backup integrity
+backup size
+restore procedure
+restore test where safe
+
+Record evidence.
+
+====================================================================
+                         PHASE 52
+                 FAILURE TESTING
+====================================================================
+
+Do not test only successful operations.
+
+Test:
+
+invalid credentials
+expired tokens
+provider timeout
+provider 500
+rate limits
+network failure
+database failure
+worker failure
+AI failure
+invalid input
+unauthorized access
+missing permissions
+duplicate request
+partial failure
+storage failure
+
+Verify correct recovery.
+
+====================================================================
+                         PHASE 53
+                    BROWSER E2E
+====================================================================
+
+Do not merely inspect screenshots.
+
+Actually interact with the application.
+
+For critical flows:
+
+open page
+login
+click
+submit
+wait
+verify API
+verify database
+verify worker
+verify external result
+reload
+verify persistence
+logout
+test authorization
+
+Test mobile and desktop where applicable.
+
+====================================================================
+                         PHASE 54
+                 DATABASE VERIFICATION
+====================================================================
+
+After each important E2E operation:
+
+verify the actual database.
+
+Example:
+
+Student submits application
+ ↓
+application record exists
+ ↓
+correct student
+ ↓
+correct university
+ ↓
+correct course
+ ↓
+correct status
+ ↓
+audit exists
+ ↓
+notification exists
+ ↓
+counselor assignment exists
+
+UI alone is not sufficient.
+
+====================================================================
+                         PHASE 55
+              EXTERNAL SERVICE EVIDENCE
+====================================================================
+
+Whenever possible verify provider-side evidence.
+
+Examples:
+
+Email
+→ provider message ID
+
+WhatsApp
+→ provider message ID
+
+SMS
+→ provider message ID
+
+Social
+→ actual post ID/URL
+
+YouTube
+→ actual video ID
+
+AI
+→ provider response/job ID
+
+Storage
+→ actual stored object
+
+Payment
+→ provider transaction ID
+
+No evidence means:
+
+NOT VERIFIED.
+
+====================================================================
+                         PHASE 56
+                   FEATURE PARITY REPORT
+====================================================================
+
+Create:
+
+ALO_FEATURE_PARITY_REPORT.md
+
+Compare:
+
+BEFORE
+vs
+AFTER
+
+Every existing feature must be:
+
+PRESERVED
+or
+IMPROVED
+
+No feature may silently disappear.
+
+====================================================================
+                         PHASE 57
+                     FILE PARITY
+====================================================================
+
+Create:
+
+ALO_FILE_PARITY_REPORT.md
+
+Record:
+
+existing files
+new files
+modified files
+deprecated files
+deleted files
+
+A file may only be deleted if:
+
+1. proven unused
+2. replacement exists
+3. dependencies migrated
+4. tests pass
+5. backup exists
+6. migration documented
+7. no feature loss
+
+Otherwise KEEP FILE.
+
+====================================================================
+                         PHASE 58
+                      API PARITY
+====================================================================
+
+Create:
+
+ALO_API_PARITY_REPORT.md
+
+Record:
+
+route
+method
+authentication
+authorization
+before behavior
+after behavior
+status
+tests
+compatibility
+
+No existing API may silently break.
+
+====================================================================
+                         PHASE 59
+                     AGENT PARITY
+====================================================================
+
+Create:
+
+ALO_AGENT_PARITY_REPORT.md
+
+For every existing agent record:
+
+before
+after
+preserved?
+extended?
+merged?
+replaced?
+reason
+tests
+real execution evidence
+
+====================================================================
+                         PHASE 60
+                  REAL STATUS SYSTEM
+====================================================================
+
+Every feature/integration must use honest status:
+
+VERIFIED_REAL
+IMPLEMENTED_NOT_CONNECTED
+BLOCKED_EXTERNAL_SETUP
+FAILED
+DISABLED
+
+Do not use:
+
+COMPLETE
+CONNECTED
+LIVE
+PRODUCTION READY
+
+unless evidence supports it.
+
+====================================================================
+                         PHASE 61
+                NO FALSE COMPLETION
+====================================================================
+
+If something cannot be completed because:
+
+provider unavailable
+credential unavailable
+GPU unavailable
+database unavailable
+server unavailable
+API unavailable
+OAuth unavailable
+model unavailable
+storage unavailable
+
+DO NOT SIMULATE IT.
+
+Implement the correct production architecture where possible.
+
+Then mark:
+
+BLOCKED_EXTERNAL_SETUP
+
+and state:
+
+WHAT IS MISSING
+WHY IT IS REQUIRED
+WHERE TO CONFIGURE IT
+HOW TO TEST IT
+
+====================================================================
+                         PHASE 62
+                FINAL REGRESSION TEST
+====================================================================
+
+Test ALL existing functionality.
+
+Do not test only the new system.
+
+Test:
+
+existing UI
+existing APIs
+existing database
+existing agents
+existing workflows
+existing RAG
+existing memory
+existing authentication
+existing RBAC
+existing integrations
+existing backups
+existing CRM
+existing student portal
+existing admin portal
+existing university data
+existing course data
+existing intake data
+existing scholarship data
+
+Then test all new functionality.
+
+====================================================================
+                         PHASE 63
+                     API TESTING
+====================================================================
+
+Every critical API must test:
+
+valid request
+invalid request
+authentication
+authorization
+database
+business logic
+success
+failure
+timeout
+retry
+idempotency
+audit
+
+A 200 response alone does not equal success.
+
+====================================================================
+                         PHASE 64
+                  PRODUCTION ACCEPTANCE
+====================================================================
+
+Test:
+
+WEBSITE
+- homepage
+- country pages
+- university pages
+- course pages
+- course finder
+- application flow
+- student portal
+- counselor portal
+- admin portal
+
+CRM
+- lead creation
+- assignment
+- follow-up
+- SLA
+- communication
+- history
+
+AI
+- agent execution
+- task creation
+- tool execution
+- RAG
+- memory
+- evaluation
+- retry
+- fallback
+- escalation
+
+MEDIA
+- image
+- video
+- voice
+- audio
+- captions
+- QA
+- storage
+
+COMMUNICATION
+- email
+- SMS
+- WhatsApp
+- Messenger
+- Instagram DM
+- Telegram
+
+SOCIAL
+- Facebook
+- Instagram
+- YouTube
+- TikTok
+- LinkedIn
+- X
+- Pinterest
+
+Only test/claim platforms that are actually configured.
+
+INFRASTRUCTURE
+- database
+- Redis/queue
+- workers
+- storage
+- authentication
+- RBAC
+- audit
+- backup
+- monitoring
+
+====================================================================
+                         PHASE 65
+                  FINAL PROOF TABLE
+====================================================================
+
+Create a final proof table:
+
+Feature
+UI
+API
+Database
+Worker
+External Service
+Authentication
+Authorization
+E2E
+Provider Evidence
+Audit
+Status
+
+Required features:
+
+Authentication
+RBAC
+CRM
+AI Agents
+LOOP
+RAG
+Memory
+Knowledge Graph
+Image
+Video
+Voice
+Calling
+SMS
+WhatsApp
+Email
+Facebook
+Instagram
+YouTube
+TikTok
+LinkedIn
+X
+Telegram
+Analytics
+DCC
+Audit
+Backup
+
+====================================================================
+                         PHASE 66
+                  FINAL PRODUCTION REPORT
+====================================================================
+
+Create:
+
+ALO_FINAL_PRODUCTION_READINESS_REPORT.md
+
+Include actual counts:
+
+Files
+Pages
+Components
+API Routes
+Database Models
+Database Rows
+Agents
+Departments
+Skills
+SOPs
+Prompts
+Workflows
+Integrations
+Tests
+Passed
+Failed
+Blocked
+
+Do not invent numbers.
+
+====================================================================
+                         PHASE 67
+                   STATUS DEFINITIONS
+====================================================================
+
+Use these definitions:
+
+VERIFIED_REAL
+
+The operation was actually executed and independently verified.
+
+IMPLEMENTED_NOT_CONNECTED
+
+The implementation exists but required external infrastructure/provider
+has not been connected or tested.
+
+BLOCKED_EXTERNAL_SETUP
+
+A required external dependency is unavailable.
+
+FAILED
+
+The feature was tested and did not work.
+
+DISABLED
+
+The feature intentionally remains disabled.
+
+MOCK
+
+Only allowed inside isolated automated tests.
+
+====================================================================
+                         PHASE 68
+                   PRODUCTION READY RULE
+====================================================================
+
+The phrase:
+
+PRODUCTION READY
+
+may ONLY be used when:
+
+- required infrastructure is available
+- required integrations are connected
+- authentication works
+- authorization works
+- database works
+- workers work
+- queues work
+- AI works
+- required external providers work
+- critical workflows work
+- E2E tests pass
+- failure tests pass
+- security tests pass
+- backup tests pass
+- regression tests pass
+- real provider evidence exists
+- no critical blocker remains
+
+Otherwise write:
+
+NOT PRODUCTION READY
+
+or:
+
+IMPLEMENTATION COMPLETE -
+PRODUCTION VERIFICATION BLOCKED
+
+====================================================================
+                         PHASE 69
+                ALO REAL-WORK PRINCIPLE
+====================================================================
+
+For every feature:
+
+REAL UI
++
+REAL API
++
+REAL DATABASE
++
+REAL BUSINESS LOGIC
++
+REAL WORKER
++
+REAL PROVIDER
++
+REAL OUTPUT
++
+REAL STORAGE
++
+REAL ERROR HANDLING
++
+REAL RETRY
++
+REAL AUDIT
++
+REAL TEST
++
+REAL EVIDENCE
+
+=
+REAL FUNCTIONALITY
+
+====================================================================
+                         PHASE 70
+                     FINAL EXECUTION
+====================================================================
+
+Execute in this exact order:
+
+1. DISCOVER
+2. INVENTORY
+3. BACKUP
+4. VERIFY ENVIRONMENT
+5. VERIFY DATABASE
+6. VERIFY EXISTING FEATURES
+7. VERIFY EXISTING AGENTS
+8. VERIFY EXISTING WORKFLOWS
+9. VERIFY EXISTING INTEGRATIONS
+10. VERIFY EXISTING AI
+11. CREATE COMPATIBILITY PLAN
+12. MERGE
+13. IMPLEMENT BACKEND
+14. IMPLEMENT DATABASE CHANGES
+15. IMPLEMENT QUEUES
+16. IMPLEMENT WORKERS
+17. IMPLEMENT REAL AI EXECUTION
+18. IMPLEMENT REAL EXTERNAL CONNECTORS
+19. IMPLEMENT REAL MEDIA PIPELINES
+20. IMPLEMENT SECURITY
+21. IMPLEMENT AUDIT
+22. IMPLEMENT OBSERVABILITY
+23. IMPLEMENT FRONTEND
+24. RUN UNIT TESTS
+25. RUN INTEGRATION TESTS
+26. RUN API TESTS
+27. RUN WORKER TESTS
+28. RUN E2E TESTS
+29. RUN REAL PROVIDER TESTS
+30. RUN FAILURE TESTS
+31. RUN SECURITY TESTS
+32. RUN REGRESSION TESTS
+33. VERIFY DATABASE
+34. VERIFY EXTERNAL PROVIDER EVIDENCE
+35. VERIFY BACKUPS
+36. GENERATE FEATURE PARITY
+37. GENERATE FILE PARITY
+38. GENERATE API PARITY
+39. GENERATE AGENT PARITY
+40. GENERATE FINAL PRODUCTION REPORT
+41. ONLY THEN DETERMINE FINAL STATUS
+
+====================================================================
+                         FINAL COMMAND
+====================================================================
+
+DO NOT TRY TO IMPRESS ME.
+
+DO NOT MAKE THE DASHBOARD LOOK COMPLETE.
+
+DO NOT FILL DATABASES WITH PLACEHOLDERS.
+
+DO NOT GENERATE FAKE COUNTERS.
+
+DO NOT CREATE FAKE AGENTS.
+
+DO NOT CREATE FAKE SKILLS.
+
+DO NOT CREATE FAKE SOPs.
+
+DO NOT CREATE FAKE PROMPTS.
+
+DO NOT CREATE FAKE WORKFLOWS.
+
+DO NOT CREATE FAKE INTEGRATIONS.
+
+DO NOT CREATE FAKE OAuth.
+
+DO NOT CREATE FAKE API tokens.
+
+DO NOT CREATE FAKE provider responses.
+
+DO NOT CREATE FAKE social posts.
+
+DO NOT CREATE FAKE WhatsApp messages.
+
+DO NOT CREATE FAKE SMS.
+
+DO NOT CREATE FAKE email delivery.
+
+DO NOT CREATE FAKE video.
+
+DO NOT CREATE FAKE audio.
+
+DO NOT CREATE FAKE voice.
+
+DO NOT CREATE FAKE analytics.
+
+DO NOT CREATE FAKE quality scores.
+
+DO NOT CREATE FAKE automation percentages.
+
+DO NOT CREATE FAKE success messages.
+
+DO NOT HIDE ERRORS.
+
+DO NOT CONVERT BLOCKED FEATURES INTO FAKE SUCCESS.
+
+DO NOT CLAIM PRODUCTION VERIFICATION WITHOUT PRODUCTION EVIDENCE.
+
+====================================================================
+
+BUILD THE ACTUAL SYSTEM.
+
+If an existing implementation works:
+    KEEP IT.
+
+If it is broken:
+    FIX IT.
+
+If it is incomplete:
+    EXTEND IT.
+
+If two implementations overlap:
+    MERGE THEM.
+
+If infrastructure is missing:
+    IMPLEMENT THE CORRECT ARCHITECTURE WHERE POSSIBLE.
+
+If an external dependency is unavailable:
+    DO NOT FAKE IT.
+    Mark BLOCKED_EXTERNAL_SETUP.
+
+If something fails:
+    REPORT THE FAILURE.
+    FIX IT IF POSSIBLE.
+    TEST AGAIN.
+
+If a feature passes:
+    SHOW THE EVIDENCE.
+
+If a feature cannot be verified:
+    SAY SO.
+
+====================================================================
+
+THE MOST IMPORTANT RULE:
+
+NEVER CONFUSE "VISIBLE" WITH "FUNCTIONAL".
+
+A beautiful interface is not proof.
+
+A successful API response is not proof.
+
+A database record is not proof.
+
+A progress bar is not proof.
+
+A configured integration screen is not proof.
+
+A generated agent record is not proof.
+
+A "PASS" label is not proof.
+
+REAL EXECUTION + REAL RESULT + REAL PERSISTENCE +
+REAL PROVIDER EVIDENCE + REAL TEST = PROOF.
+
+====================================================================
+
+PRESERVE FIRST.
+AUDIT FIRST.
+BACKUP FIRST.
+MERGE FIRST.
+
+THEN BUILD.
+
+THEN CONNECT.
+
+THEN EXECUTE.
+
+THEN TEST.
+
+THEN VERIFY.
+
+THEN REPORT.
+
+NO MOCKS.
+NO FAKE SUCCESS.
+NO VIRTUAL-ONLY FEATURES.
+NO FEATURE LOSS.
+NO DATA LOSS.
+NO FALSE CLAIMS.
+
+====================================================================
+                         END OF PROMPT
+====================================================================

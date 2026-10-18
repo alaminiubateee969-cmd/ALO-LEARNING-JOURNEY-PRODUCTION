@@ -1,61 +1,55 @@
 "use client";
 
-import { CheckCircle2, Circle, Loader2, Sparkles } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
 import type { QualityAgentPass } from "@/lib/ai";
 
-const PIPELINE_STAGES = [
-  { agentId: "content_writer", name: "Draft writer", description: "Creates the first complete candidate." },
-  { agentId: "quality_critic", name: "Quality critic", description: "Receives that candidate and returns issues plus a revision brief." },
-  { agentId: "content_finalist", name: "Finalist editor", description: "Revises the candidate, then the app compares rubric scores." },
-] as const;
-
-export function QualityPipelineSummary({ passes }: { passes?: QualityAgentPass[] }) {
-  if (!passes?.length) return null;
+/**
+ * Loading state for the existing single-request content generator. This is not
+ * an agent pipeline and deliberately does not animate unexecuted stages.
+ */
+export default function PipelineRunner({ active }: { active: boolean }) {
+  if (!active) return null;
   return (
-    <Card className="space-y-3 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-violet-600" /><h3 className="text-sm font-semibold">Sequential quality pipeline</h3></div>
-        <p className="text-[10px] text-muted-foreground">Rubric scores are structural checks—not factual verification or a guaranteed “10×” result.</p>
-      </div>
-      <div className="grid gap-2 md:grid-cols-3">
-        {passes.map((pass, index) => {
-          const complete = pass.status === "complete";
-          const fallback = pass.status === "fallback";
-          return (
-            <div key={`${pass.agentId}-${index}`} className="rounded-lg border border-border/60 p-3">
-              <div className="flex items-center gap-2">
-                {complete ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : fallback ? <Circle className="h-4 w-4 shrink-0 text-amber-600" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/50" />}
-                <span className="text-xs font-semibold">{index + 1}. {pass.role}</span>
-                <span className="ml-auto text-[9px] text-muted-foreground">{pass.status}</span>
-              </div>
-              <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{pass.summary}</p>
-              <p className="mt-1 text-[10px] text-muted-foreground">{pass.agentId} · {pass.provider} · {pass.latencyMs} ms{pass.scoreBefore !== undefined && pass.scoreAfter !== undefined ? ` · ${pass.scoreBefore} → ${pass.scoreAfter}` : pass.scoreAfter !== undefined ? ` · rubric ${pass.scoreAfter}/100` : ""}</p>
-            </div>
-          );
-        })}
-      </div>
-    </Card>
+    <div
+      role="status"
+      aria-live="polite"
+      className="rounded-xl border border-border/60 bg-muted/30 p-4"
+    >
+      <p className="flex items-center gap-2 text-sm font-medium">
+        <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+        Single content-draft request in progress
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        The configured model or local template is used; no per-agent stages or independent review run here.
+      </p>
+    </div>
   );
 }
 
-export default function PipelineRunner({ active }: { active: boolean }) {
+const passStatusLabel: Record<QualityAgentPass["status"], string> = {
+  complete: "Prompt returned data",
+  fallback: "Fallback / incomplete",
+  skipped: "Not run",
+};
+
+export function QualityPipelineSummary({ passes }: { passes: QualityAgentPass[] }) {
   return (
-    <Card className="space-y-3 p-4">
-      <div className="flex items-center gap-2">
-        {active ? <Loader2 className="h-4 w-4 animate-spin text-amber-600" /> : <Sparkles className="h-4 w-4 text-violet-600" />}
-        <p className="text-xs font-semibold">Sequential local-agent review</p>
-        <span className="text-[10px] text-amber-700">{active ? "Waiting for actual model passes…" : "Ready"}</span>
-      </div>
-      <div className="grid gap-2 md:grid-cols-3">
-        {PIPELINE_STAGES.map((stage, index) => (
-          <div key={stage.agentId} className="rounded-lg border border-border/60 bg-background/60 p-3">
-            <p className="text-[10px] font-semibold">{index + 1}. {stage.name}</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{stage.description}</p>
-          </div>
+    <section className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-100">
+      <h4 className="text-xs font-semibold">Local prompt trace · not independent review</h4>
+      <p className="mt-1 text-[11px] leading-relaxed">
+        These stages are separate prompts to the same configured local model, not independent agents. They do not verify facts, safety, quality, legal compliance, or consent; human review remains required.
+      </p>
+      <ul className="mt-2 space-y-2">
+        {passes.map((pass) => (
+          <li key={pass.agentId} className="rounded border border-amber-300/70 bg-white/50 p-2 dark:bg-black/10">
+            <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
+              <span className="font-medium">{pass.role}</span>
+              <span>{passStatusLabel[pass.status]} · {pass.provider} · {Math.max(0, Math.round(pass.latencyMs))}ms</span>
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed">{pass.summary}</p>
+          </li>
         ))}
-      </div>
-      <p className="text-[10px] leading-relaxed text-muted-foreground">Each pass receives the previous candidate. This indicator does not animate completed steps; real pass states and scores appear only when the API returns them.</p>
-    </Card>
+      </ul>
+    </section>
   );
 }

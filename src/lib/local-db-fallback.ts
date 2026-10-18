@@ -39,6 +39,16 @@ export const MODEL_NAMES = [
   "leadActivity",
   "quotation",
   "quotationItem",
+  "client",
+  "project",
+  "invoice",
+  "marketingCampaign",
+  "marketingLead",
+  "otpRequest",
+  "voiceGeneration",
+  "audioTranscription",
+  "humanAvatar",
+  "avatarVideo",
 ] as const;
 
 export type ModelName = (typeof MODEL_NAMES)[number];
@@ -70,6 +80,10 @@ const DATE_FIELDS = new Set([
   "nextFollowUp",
   "validUntil",
   "acceptedAt",
+  "verifiedAt",
+  "deadline",
+  "dueDate",
+  "paidAt",
 ]);
 
 const MODEL_DEFAULTS: Record<ModelName, () => Record<string, any>> = {
@@ -105,6 +119,16 @@ const MODEL_DEFAULTS: Record<ModelName, () => Record<string, any>> = {
   leadActivity: () => ({ type: "note", actor: "admin", createdAt: new Date() }),
   quotation: () => ({ currency: "GBP", status: "draft", subtotal: "0.00", discountAmount: "0.00", taxRate: "0.00", taxAmount: "0.00", total: "0.00", validUntil: null, terms: null, notes: null, acceptedAt: null, createdAt: new Date(), updatedAt: new Date() }),
   quotationItem: () => ({ quantity: 1, unitPrice: "0.00", lineTotal: "0.00", position: 0 }),
+  client: () => ({ phone: null, company: null, type: "individual", status: "active", notes: null, createdAt: new Date(), updatedAt: new Date() }),
+  project: () => ({ status: "inquiry", budget: null, deadline: null, description: null, createdAt: new Date(), updatedAt: new Date() }),
+  invoice: () => ({ projectId: null, currency: "BDT", status: "draft", dueDate: null, paidAt: null, itemsJson: null, createdAt: new Date() }),
+  marketingCampaign: () => ({ status: "draft", audienceJson: null, content: null, scheduledAt: null, sentCount: 0, openCount: 0, clickCount: 0, createdAt: new Date() }),
+  marketingLead: () => ({ email: null, phone: null, company: null, source: "website", service: null, budget: null, status: "new", assignedTo: null, notes: null, tagsJson: null, createdAt: new Date(), updatedAt: new Date() }),
+  otpRequest: () => ({ purpose: "verification", status: "pending", attempts: 0, maxAttempts: 5, verifiedAt: null, metadataJson: null, createdAt: new Date() }),
+  voiceGeneration: () => ({ speed: 1, volume: 1, format: "wav", language: "bn", filePath: null, durationSec: null, charCount: 0, status: "pending", errorMessage: null, createdAt: new Date() }),
+  audioTranscription: () => ({ language: "auto", transcription: null, wordCount: 0, durationSec: null, status: "pending", errorMessage: null, createdAt: new Date() }),
+  humanAvatar: () => ({ ownerId: "dev-admin", ethnicity: "south-asian", voiceSpeed: 0.95, backgroundStory: null, consistencySeed: null, portraitUrl: null, portraitStatus: "pending", outfitStyle: null, sceneContext: null, active: true, videoCount: 0, createdAt: new Date(), updatedAt: new Date() }),
+  avatarVideo: () => ({ ownerId: "dev-admin", script: null, scenesJson: null, actualDuration: null, videoUrl: null, thumbnailUrl: null, status: "pending", progress: 0, currentStep: null, errorMessage: null, lipSyncUsed: false, lipSyncReason: null, quality: "standard", createdAt: new Date(), updatedAt: new Date() }),
 };
 
 const UPDATED_AT_MODELS = new Set<ModelName>([
@@ -114,6 +138,11 @@ const UPDATED_AT_MODELS = new Set<ModelName>([
   "inkboxIntegration",
   "lead",
   "quotation",
+  "client",
+  "project",
+  "marketingLead",
+  "humanAvatar",
+  "avatarVideo",
 ]);
 
 type StoreData = Record<ModelName, Record<string, any>[]>;

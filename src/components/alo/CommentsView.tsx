@@ -37,7 +37,6 @@ const CATEGORY_META: Record<string, { label: string; tone: "safe" | "warn" | "da
   emergency: { label: "Emergency", tone: "danger" },
   spam: { label: "Spam", tone: "warn" },
   toxic: { label: "Toxic", tone: "danger" },
-  review_required: { label: "Review required", tone: "danger" },
 };
 
 const toneClass = (t: "safe" | "warn" | "danger") =>
@@ -151,7 +150,7 @@ export default function CommentsView() {
 
   const filtered = comments.filter((c) => {
     if (filter === "new" && !(c.status === "new" || c.status === "classified")) return false;
-    if (filter === "sensitive" && !["medical_sensitive", "development_sensitive", "abuse_risk", "emergency", "review_required"].includes(c.category)) return false;
+    if (filter === "sensitive" && !["medical_sensitive", "development_sensitive", "abuse_risk", "emergency", "toxic", "review_required"].includes(c.category)) return false;
     if (platformFilter !== "all" && c.platform !== platformFilter) return false;
     if (categoryFilter !== "all" && c.category !== categoryFilter) return false;
     if (searchQuery) {

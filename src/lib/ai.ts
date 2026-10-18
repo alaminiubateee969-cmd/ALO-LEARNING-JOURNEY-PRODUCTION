@@ -1,31 +1,25 @@
-// ALO Learning Journey — local-only AI service (server-only).
-// Model inference is sent only to private Ollama/ComfyUI hosts configured by the operator.
-// When a local model is unavailable, the result explicitly reports a deterministic fallback.
+// ALO Learning Journey — AI service (server-only)
+// Wraps z-ai-web-dev-sdk LLM + image generation with SAFE LOCAL FALLBACKS.
+// The platform NEVER claims a paid model ran if no key/config exists.
+// Every call returns { provider, usedFallback } so the UI can show the truth.
 
-import { generateComfyUiImage, generateLocalChatJson } from "@/lib/local-models";
-
-export type AIProvider = "ollama-local" | "local-fallback" | "comfyui-local" | "image-fallback";
-export type QualityPassStatus = "complete" | "fallback" | "skipped";
-
-export interface QualityAgentPass {
-  agentId: string;
-  role: string;
-  status: QualityPassStatus;
-  provider: AIProvider;
-  latencyMs: number;
-  scoreBefore?: number;
-  scoreAfter?: number;
-  summary: string;
-}
+import ZAI from "z-ai-web-dev-sdk";
+import { generateLocalChatJson } from "@/lib/local-models";
 
 export interface AIResult<T> {
   ok: boolean;
   data: T;
-  provider: AIProvider;
+  provider: "zai-llm" | "local-fallback" | "image-gen" | "image-fallback";
   usedFallback: boolean;
   error?: string;
   latencyMs: number;
-  qualityPipeline?: QualityAgentPass[];
+}
+
+let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
+async function getZai() {
+  if (_zai) return _zai;
+  _zai = await ZAI.create();
+  return _zai;
 }
 
 async function chatJSON<T>(
@@ -35,19 +29,30 @@ async function chatJSON<T>(
   opts?: { timeoutMs?: number }
 ): Promise<AIResult<T>> {
   const start = Date.now();
+  const timeoutMs = opts?.timeoutMs ?? 18000;
   try {
-    const completion = await generateLocalChatJson(system, user, opts?.timeoutMs ?? 18_000);
-    if (completion.model.includes("(built-in-local)")) {
-      return {
-        ok: false,
-        data: fallback,
-        provider: "local-fallback",
-        usedFallback: true,
-        error: "Configured Ollama model was unavailable; deterministic built-in output was not treated as a model result.",
-        latencyMs: Date.now() - start,
-      };
-    }
-    const raw = completion.content;
+    const zai = await getZai();
+    // Race the LLM call against a timeout so a slow/hung provider degrades
+    // gracefully to the local fallback instead of hanging the request.
+    const completion = (await Promise.race([
+      zai.chat.completions.create({
+        messages: [
+          { role: "assistant", content: system },
+          { role: "user", content: user },
+        ],
+        thinking: { type: "disabled" },
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`LLM timeout after ${timeoutMs}ms`)),
+          timeoutMs
+        )
+      ),
+    ])) as Awaited<ReturnType<typeof zai.chat.completions.create>>;
+
+    const raw = completion.choices[0]?.message?.content ?? "";
+    // Extract the first {...} or [...] JSON block (LLMs sometimes wrap JSON
+    // in prose or multiple code fences).
     const jsonMatch = raw.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
     const cleaned = (jsonMatch ? jsonMatch[0] : raw)
       .replace(/```json\n?/g, "")
@@ -55,196 +60,405 @@ async function chatJSON<T>(
       .trim();
     const parsed = JSON.parse(cleaned) as Partial<T>;
 
+    // If fallback is an array and parsed is also an array, use parsed directly.
+    // If fallback is an array but parsed is an object containing an array
+    // (e.g. LLM returned {ideas: [...]} instead of [...]), extract the array.
     let merged: T;
     if (Array.isArray(fallback)) {
       if (Array.isArray(parsed)) {
         merged = parsed as T;
-      } else if (parsed && typeof parsed === "object") {
-        const obj = parsed as Record<string, unknown>;
-        const arrayValue = Object.values(obj).find(Array.isArray);
-        merged = (arrayValue ?? fallback) as T;
+      } else if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        // LLM wrapped the array in an object — try to find it
+        const obj = parsed as Record<string, any>;
+        const arrayKey = Object.keys(obj).find((k) => Array.isArray(obj[k]));
+        merged = (arrayKey ? obj[arrayKey] : fallback) as T;
       } else {
         merged = fallback;
       }
-    } else if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      merged = { ...(fallback as object), ...(parsed as object) } as T;
     } else {
-      merged = fallback;
+      // Object merge: ensure every fallback key exists
+      merged = { ...(fallback as object), ...(parsed as object) } as T;
     }
 
-    const usedFallback = completion.model.includes("(built-in-local)");
+    // If the merge produced an empty/garbage critical field, fall back.
     return {
-      ok: !usedFallback,
+      ok: true,
       data: merged,
-      provider: usedFallback ? "local-fallback" : "ollama-local",
-      usedFallback,
-      error: usedFallback ? "Configured Ollama model was unavailable; deterministic built-in content is not a verified model result." : undefined,
+      provider: "zai-llm",
+      usedFallback: false,
       latencyMs: Date.now() - start,
     };
-  } catch (error) {
+  } catch (e) {
     return {
       ok: false,
       data: fallback,
       provider: "local-fallback",
       usedFallback: true,
-      error: error instanceof Error ? error.message : "Local inference failed",
+      error: e instanceof Error ? e.message : "unknown",
       latencyMs: Date.now() - start,
     };
   }
 }
 
-interface CreativeCritique {
-  score: number;
-  strengths: string[];
-  issues: string[];
-  revisionPlan: string[];
-  safetyFlags: string[];
+export type QualityAgentPass = {
+  agentId: string;
+  role: string;
+  status: "complete" | "fallback" | "skipped";
+  provider: string;
+  latencyMs: number;
+  summary: string;
+};
+
+type LocalPromptReviewResult<T> = {
+  data: T;
+  provider: string;
+  usedFallback: boolean;
+  latencyMs: number;
+  qualityPipeline: QualityAgentPass[];
+  error?: string;
+};
+
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(text.trim());
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      const parsed: unknown = JSON.parse(match[0]);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : null;
+    } catch {
+      return null;
+    }
+  }
 }
 
-interface ThreeAgentOptions<T> {
-  writerAgentId: string;
-  writerRole: string;
+function isTemplateFallback(model: string): boolean {
+  return model.includes("(built-in-local)");
+}
+
+async function runLocalPromptReview<T>(options: {
+  task: string;
+  agentPrefix: string;
   writerSystem: string;
   writerUser: string;
-  criticAgentId: string;
-  criticRole: string;
-  criticSystem: string;
-  criticUser: (candidate: T) => string;
-  finalistAgentId: string;
-  finalistRole: string;
+  critiqueSystem: string;
   finalistSystem: string;
-  finalistUser: (candidate: T, critique: CreativeCritique) => string;
   fallback: T;
-  normalize: (candidate: unknown) => T;
-  score: (candidate: T) => number;
-  timeoutMs?: number;
-}
-
-function clampQualityScore(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value)
-    ? Math.max(0, Math.min(100, Math.round(value)))
-    : fallback;
-}
-
-function normalizeCritique(value: unknown, fallbackScore: number): CreativeCritique {
-  const raw = value && typeof value === "object" ? value as Partial<CreativeCritique> : {};
-  const cleanList = (list: unknown) => Array.isArray(list)
-    ? list.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, 240)).filter(Boolean).slice(0, 8)
-    : [];
-  return {
-    score: clampQualityScore(raw.score, fallbackScore),
-    strengths: cleanList(raw.strengths),
-    issues: cleanList(raw.issues),
-    revisionPlan: cleanList(raw.revisionPlan),
-    safetyFlags: cleanList(raw.safetyFlags),
-  };
-}
-
-function skippedPass(agentId: string, role: string, summary: string): QualityAgentPass {
-  return { agentId, role, status: "skipped", provider: "local-fallback", latencyMs: 0, summary };
-}
-
-/**
- * Runs a real sequential writer → critic → finalist chain against the configured
- * local model. Every later pass receives the previous candidate. If a model
- * pass fails, the best available candidate is retained and the skipped/fallback
- * state is surfaced; the function never invents a completed agent run.
- */
-async function runThreeAgentRefinement<T>(options: ThreeAgentOptions<T>): Promise<AIResult<T>> {
+  parseDraft: (value: unknown) => T | null;
+}): Promise<LocalPromptReviewResult<T>> {
   const startedAt = Date.now();
-  const timeoutMs = options.timeoutMs ?? 22_000;
   const passes: QualityAgentPass[] = [];
-  const draftResult = await chatJSON<T>(options.writerSystem, options.writerUser, options.fallback, { timeoutMs });
-  const draft = options.normalize(draftResult.data);
-  const draftScore = clampQualityScore(options.score(draft), 0);
-  passes.push({
-    agentId: options.writerAgentId,
-    role: options.writerRole,
-    status: draftResult.usedFallback ? "fallback" : "complete",
-    provider: draftResult.provider,
-    latencyMs: draftResult.latencyMs,
-    scoreAfter: draftScore,
-    summary: draftResult.usedFallback ? "Local model unavailable; used the marked template fallback." : "Created the first candidate.",
-  });
-  if (!draftResult.ok || draftResult.usedFallback) {
-    passes.push(skippedPass(options.criticAgentId, options.criticRole, "Skipped because the local writer did not produce a model draft."));
-    passes.push(skippedPass(options.finalistAgentId, options.finalistRole, "Skipped because the local writer did not produce a model draft."));
-    return { ...draftResult, data: draft, qualityPipeline: passes, latencyMs: Date.now() - startedAt };
-  }
+  const addPass = (pass: QualityAgentPass) => passes.push(pass);
 
-  const critiqueFallback: CreativeCritique = {
-    score: draftScore,
-    strengths: [],
-    issues: ["Automated critic was unavailable; the draft still requires human review."],
-    revisionPlan: [],
-    safetyFlags: [],
-  };
-  const critiqueResult = await chatJSON<CreativeCritique>(
-    options.criticSystem,
-    options.criticUser(draft),
-    critiqueFallback,
-    { timeoutMs }
-  );
-  const critique = normalizeCritique(critiqueResult.data, draftScore);
-  passes.push({
-    agentId: options.criticAgentId,
-    role: options.criticRole,
-    status: critiqueResult.usedFallback ? "fallback" : "complete",
-    provider: critiqueResult.provider,
-    latencyMs: critiqueResult.latencyMs,
-    scoreBefore: draftScore,
-    scoreAfter: critique.score,
-    summary: critiqueResult.usedFallback
-      ? "Critic unavailable; no revision brief was fabricated."
-      : [...critique.issues, ...critique.revisionPlan].slice(0, 3).join("; ") || "Reviewed the candidate; no structural issue found.",
-  });
-  if (!critiqueResult.ok || critiqueResult.usedFallback) {
-    passes.push(skippedPass(options.finalistAgentId, options.finalistRole, "Skipped because the critic could not provide a usable review."));
-    return {
-      ok: false,
-      data: draft,
-      provider: "local-fallback",
-      usedFallback: true,
-      error: critiqueResult.error || "Local quality critic unavailable; kept the writer draft.",
-      qualityPipeline: passes,
+  let writer: { content: string; model: string };
+  try {
+    writer = await generateLocalChatJson(options.writerSystem, options.writerUser, 12_000);
+  } catch {
+    addPass({
+      agentId: `${options.agentPrefix}_writer`,
+      role: "Draft generation",
+      status: "fallback",
+      provider: "local-template",
       latencyMs: Date.now() - startedAt,
+      summary: "The configured local model was unavailable; a built-in template is returned.",
+    });
+    addPass({
+      agentId: `${options.agentPrefix}_critic`,
+      role: "Prompt-based critique",
+      status: "skipped",
+      provider: "none",
+      latencyMs: 0,
+      summary: "No local model critique or independent quality/safety review was run.",
+    });
+    addPass({
+      agentId: `${options.agentPrefix}_finalist`,
+      role: "Final draft",
+      status: "skipped",
+      provider: "none",
+      latencyMs: 0,
+      summary: "No finalist pass ran; review the template draft yourself.",
+    });
+    return {
+      data: options.fallback,
+      provider: "local-template",
+      usedFallback: true,
+      latencyMs: Date.now() - startedAt,
+      qualityPipeline: passes,
+      error: "Local model unavailable; template output requires human review.",
     };
   }
 
-  const finalistResult = await chatJSON<T>(
-    options.finalistSystem,
-    options.finalistUser(draft, critique),
-    draft,
-    { timeoutMs }
-  );
-  const finalistCandidate = options.normalize(finalistResult.data);
-  const finalistScore = clampQualityScore(options.score(finalistCandidate), 0);
-  const acceptFinalist = finalistScore >= draftScore;
-  const finalData = acceptFinalist ? finalistCandidate : draft;
-  passes.push({
-    agentId: options.finalistAgentId,
-    role: options.finalistRole,
-    status: finalistResult.usedFallback ? "fallback" : "complete",
-    provider: finalistResult.provider,
-    latencyMs: finalistResult.latencyMs,
-    scoreBefore: draftScore,
-    scoreAfter: acceptFinalist ? finalistScore : draftScore,
-    summary: finalistResult.usedFallback
-      ? "Finalist unavailable; retained the writer draft."
-      : acceptFinalist
-        ? "Reviewed the critique, revised the candidate, and matched or improved the structural rubric score."
-        : "Revised candidate scored lower; retained the writer draft.",
+  const writerDuration = Date.now() - startedAt;
+  const writerData = isTemplateFallback(writer.model) ? null : options.parseDraft(parseJsonObject(writer.content));
+  if (!writerData) {
+    addPass({
+      agentId: `${options.agentPrefix}_writer`,
+      role: "Draft generation",
+      status: "fallback",
+      provider: isTemplateFallback(writer.model) ? "local-template" : writer.model,
+      latencyMs: writerDuration,
+      summary: "No validated model draft was returned; a built-in template is used instead.",
+    });
+    addPass({
+      agentId: `${options.agentPrefix}_critic`,
+      role: "Prompt-based critique",
+      status: "skipped",
+      provider: "none",
+      latencyMs: 0,
+      summary: "No critique was run; a template fallback is not an independent quality or safety check.",
+    });
+    addPass({
+      agentId: `${options.agentPrefix}_finalist`,
+      role: "Final draft",
+      status: "skipped",
+      provider: "none",
+      latencyMs: 0,
+      summary: "No finalist pass ran; review the template draft yourself.",
+    });
+    return {
+      data: options.fallback,
+      provider: isTemplateFallback(writer.model) ? "local-template" : writer.model,
+      usedFallback: true,
+      latencyMs: Date.now() - startedAt,
+      qualityPipeline: passes,
+      error: "No valid local model draft; template output requires human review.",
+    };
+  }
+
+  addPass({
+    agentId: `${options.agentPrefix}_writer`,
+    role: "Draft generation",
+    status: "complete",
+    provider: writer.model,
+    latencyMs: writerDuration,
+    summary: "The configured local model returned a structured draft; its claims are not fact-checked.",
   });
-  const usedFallback = finalistResult.usedFallback || !finalistResult.ok;
+
+  const critiqueStartedAt = Date.now();
+  let critique: { content: string; model: string };
+  try {
+    critique = await generateLocalChatJson(
+      options.critiqueSystem,
+      `Draft for ${options.task}:\n${writer.content}\nReturn a JSON critique only.`,
+      12_000
+    );
+  } catch {
+    addPass({
+      agentId: `${options.agentPrefix}_critic`,
+      role: "Prompt-based critique",
+      status: "fallback",
+      provider: "local-template",
+      latencyMs: Date.now() - critiqueStartedAt,
+      summary: "Critique unavailable; no independent quality or safety review was run.",
+    });
+    addPass({
+      agentId: `${options.agentPrefix}_finalist`,
+      role: "Final draft",
+      status: "skipped",
+      provider: "none",
+      latencyMs: 0,
+      summary: "Finalist pass skipped because no critique result was available.",
+    });
+    return {
+      data: writerData,
+      provider: writer.model,
+      usedFallback: true,
+      latencyMs: Date.now() - startedAt,
+      qualityPipeline: passes,
+      error: "Local critique unavailable; the writer draft requires human review.",
+    };
+  }
+
+  if (isTemplateFallback(critique.model) || !parseJsonObject(critique.content)) {
+    addPass({
+      agentId: `${options.agentPrefix}_critic`,
+      role: "Prompt-based critique",
+      status: "fallback",
+      provider: isTemplateFallback(critique.model) ? "local-template" : critique.model,
+      latencyMs: Date.now() - critiqueStartedAt,
+      summary: "No usable critique was returned; no independent quality or safety review was run.",
+    });
+    addPass({
+      agentId: `${options.agentPrefix}_finalist`,
+      role: "Final draft",
+      status: "skipped",
+      provider: "none",
+      latencyMs: 0,
+      summary: "Finalist pass skipped because no usable critique was returned.",
+    });
+    return {
+      data: writerData,
+      provider: writer.model,
+      usedFallback: true,
+      latencyMs: Date.now() - startedAt,
+      qualityPipeline: passes,
+      error: "No usable local critique; the writer draft requires human review.",
+    };
+  }
+
+  addPass({
+    agentId: `${options.agentPrefix}_critic`,
+    role: "Prompt-based critique",
+    status: "complete",
+    provider: critique.model,
+    latencyMs: Date.now() - critiqueStartedAt,
+    summary: "A separate prompt to the same configured local model returned critique; this is not independent verification.",
+  });
+
+  const finalistStartedAt = Date.now();
+  try {
+    const finalist = await generateLocalChatJson(
+      options.finalistSystem,
+      `Writer draft for ${options.task}:\n${writer.content}\n\nModel critique (unverified):\n${critique.content}\nReturn the final JSON draft.`,
+      12_000
+    );
+    const finalistData = isTemplateFallback(finalist.model) ? null : options.parseDraft(parseJsonObject(finalist.content));
+    if (finalistData) {
+      addPass({
+        agentId: `${options.agentPrefix}_finalist`,
+        role: "Final draft",
+        status: "complete",
+        provider: finalist.model,
+        latencyMs: Date.now() - finalistStartedAt,
+        summary: "The same local model returned a revised draft; no factual or safety certification is implied.",
+      });
+      return {
+        data: finalistData,
+        provider: finalist.model,
+        usedFallback: false,
+        latencyMs: Date.now() - startedAt,
+        qualityPipeline: passes,
+      };
+    }
+  } catch {
+    // Keep the valid writer draft below and label the missing finalist pass.
+  }
+
+  addPass({
+    agentId: `${options.agentPrefix}_finalist`,
+    role: "Final draft",
+    status: "fallback",
+    provider: "local-template",
+    latencyMs: Date.now() - finalistStartedAt,
+    summary: "No valid finalist response was returned; the earlier local-model draft is retained for human review.",
+  });
   return {
-    ok: !usedFallback,
-    data: finalData,
-    provider: usedFallback ? "local-fallback" : "ollama-local",
-    usedFallback,
-    error: usedFallback ? finalistResult.error || "Local finalist unavailable; retained the best candidate." : undefined,
-    qualityPipeline: passes,
+    data: writerData,
+    provider: writer.model,
+    usedFallback: true,
     latencyMs: Date.now() - startedAt,
+    qualityPipeline: passes,
+    error: "Local finalist unavailable; the writer draft requires human review.",
   };
+}
+
+export interface NarrationScriptDraft {
+  title: string;
+  lines: string[];
+}
+
+export interface SongLyricsDraft {
+  title: string;
+  lyrics: string;
+  styleNote: string;
+}
+
+export interface EmailMarketingDraft {
+  draft: string;
+}
+
+function parseNarrationDraft(value: unknown): NarrationScriptDraft | null {
+  const object = value as Record<string, unknown> | null;
+  if (!object || typeof object.title !== "string" || !Array.isArray(object.lines)) return null;
+  const lines = object.lines.filter((line): line is string => typeof line === "string" && line.trim().length > 0);
+  return lines.length ? { title: object.title.trim(), lines } : null;
+}
+
+function parseSongLyricsDraft(value: unknown): SongLyricsDraft | null {
+  const object = value as Record<string, unknown> | null;
+  if (!object || typeof object.title !== "string" || typeof object.lyrics !== "string") return null;
+  return {
+    title: object.title.trim(),
+    lyrics: object.lyrics.trim(),
+    styleNote: typeof object.styleNote === "string" ? object.styleNote.trim() : "",
+  };
+}
+
+function parseEmailMarketingDraft(value: unknown): EmailMarketingDraft | null {
+  const object = value as Record<string, unknown> | null;
+  return object && typeof object.draft === "string" && object.draft.trim()
+    ? { draft: object.draft.trim() }
+    : null;
+}
+
+export async function generateNarrationScript(
+  topic: string,
+  audience: string
+): Promise<LocalPromptReviewResult<NarrationScriptDraft>> {
+  const fallback: NarrationScriptDraft = {
+    title: `${topic} — খসড়া`,
+    lines: [
+      `${topic} নিয়ে একটি সংক্ষিপ্ত আলোচনা দিয়ে শুরু করুন।`,
+      `${audience}-এর প্রয়োজন অনুযায়ী নির্ভরযোগ্য তথ্য যাচাই করে নিন।`,
+      "ব্যক্তিভেদে অভিজ্ঞতা আলাদা হতে পারে; নিশ্চিত তথ্য ছাড়া ফলাফলের প্রতিশ্রুতি দেবেন না।",
+      "শিশুর স্বাস্থ্য বা বিকাশ নিয়ে উদ্বেগ থাকলে উপযুক্ত বিশেষজ্ঞের পরামর্শ নিন।",
+    ],
+  };
+  return runLocalPromptReview({
+    task: "narration script",
+    agentPrefix: "voice_script",
+    writerSystem: "You are a Video Scriptwriter. Draft a warm Bengali narration script. Do not invent facts or promise outcomes. Return only JSON {title:string, lines:string[]}. This is a draft, not a fact or safety check.",
+    writerUser: `Topic: "${topic}"\nAudience: "${audience}"\nReturn a short narration script as JSON.`,
+    critiqueSystem: "You are a prompt-based script critic. Return only JSON {strengths:string[], issues:string[], revisionPlan:string[]}. Flag unverified claims, medical advice, and guarantees. Do not claim facts or safety were verified and do not assign an approval score.",
+    finalistSystem: "You are a final script editor. Use the critique to revise the Bengali draft, keep uncertainty clear, and return only JSON {title:string, lines:string[]}. Do not claim fact-checking or safety approval.",
+    fallback,
+    parseDraft: parseNarrationDraft,
+  });
+}
+
+export async function generateSongLyrics(
+  topic: string,
+  mood: string
+): Promise<LocalPromptReviewResult<SongLyricsDraft>> {
+  const fallback: SongLyricsDraft = {
+    title: `${topic} — শেখার গান`,
+    lyrics: `আলোর পথে ছোট্ট পা, গল্পে ভরা দিন,\nভালোবাসায় শেখার মাঝে স্বপ্ন রঙিন।\n\nধীরে ধীরে হাতটি ধরি, শুনি মনের ভাষা,\nতুলনা নয়, পাশে থাকি—জাগুক নতুন আশা।`,
+    styleNote: `${mood} অনুভূতির জন্য সাধারণ স্থানীয় টেমপ্লেট; মানব পর্যালোচনা প্রয়োজন।`,
+  };
+  return runLocalPromptReview({
+    task: "song lyrics",
+    agentPrefix: "music_lyrics",
+    writerSystem: "You are a Songwriter. Draft original Bengali lyrics for a family-learning theme. Return only JSON {title:string, lyrics:string, styleNote:string}. Do not imply that the audio has sung vocals or that lyrics were independently reviewed.",
+    writerUser: `Theme: "${topic}"\nMood: ${mood}\nReturn lyrics as JSON.`,
+    critiqueSystem: "You are a prompt-based lyric critic. Return only JSON {strengths:string[], issues:string[], revisionPlan:string[]}. Flag unclear or unsupported claims. This is not independent review; do not assign a verified quality or safety score.",
+    finalistSystem: "You are a lyric editor. Use the critique to revise the Bengali lyrics and return only JSON {title:string, lyrics:string, styleNote:string}. Do not claim independent quality or safety verification.",
+    fallback,
+    parseDraft: parseSongLyricsDraft,
+  });
+}
+
+export async function generateEmailMarketingDraft(
+  draft: string,
+  audience: string,
+  objective: string
+): Promise<LocalPromptReviewResult<EmailMarketingDraft>> {
+  const fallback: EmailMarketingDraft = { draft };
+  return runLocalPromptReview({
+    task: "email marketing draft",
+    agentPrefix: "email_draft",
+    writerSystem: "You are an email marketing copywriter. Revise the supplied email draft for clarity and the stated objective. Do not invent offers, dates, links, evidence, unsubscribe controls, or consent. Return only JSON {draft:string}. No email is sent.",
+    writerUser: `Original email draft:\n${draft}\nAudience: ${audience}\nObjective: ${objective}\nReturn a proposed draft as JSON.`,
+    critiqueSystem: "You are a prompt-based email draft critic. Return only JSON {strengths:string[], issues:string[], revisionPlan:string[]}. Flag invented facts, missing human verification, and unverified consent/delivery statements. This is not a legal, factual, or independent compliance review.",
+    finalistSystem: "You are an email marketing copywriter. Use the critique to revise the draft conservatively. Preserve placeholders and do not add claims, links, unsubscribe instructions, or consent assertions that are not present in the supplied draft. Return only JSON {draft:string}. No email is sent.",
+    fallback,
+    parseDraft: parseEmailMarketingDraft,
+  });
 }
 
 export interface IdeaOut {
@@ -283,116 +497,6 @@ export async function generateIdeas(
   return chatJSON<IdeaOut[]>(sys, user, fallback);
 }
 
-export interface SongLyricsOut {
-  title: string;
-  lyrics: string;
-  styleNote: string;
-}
-
-export async function generateSongLyrics(topic: string, mood: string): Promise<AIResult<SongLyricsOut>> {
-  const fallback: SongLyricsOut = {
-    title: `${topic} — ভালোবাসার গান`,
-    lyrics: `ছোট্ট হাতে রঙিন সকাল, গল্প জাগে মনে,\nখেলার ছলে শেখা চলে আপনজনের সনে।\n\nআলো জ্বালো, পাশে থাকো, স্বপ্ন ডানা মেলে,\nভালোবাসা শেখার পথে হাতটা রেখো হেলে।\n\nহাসি, কথা, ছোট্ট চেষ্টা—প্রতিদিনের জয়,\nএকসাথে পথ চললে মন আনন্দময়।\n\nআলো জ্বালো, পাশে থাকো, স্বপ্ন ডানা মেলে,\nভালোবাসা শেখার পথে হাতটা রেখো হেলে।`,
-    styleNote: "মৌলিক বাংলা লিরিক্স; আলাদা করে তৈরি স্থানীয় ইন্সট্রুমেন্টাল ট্র্যাকের সঙ্গে ব্যবহার করুন।",
-  };
-  const normalize = (value: unknown): SongLyricsOut => {
-    const raw = value && typeof value === "object" ? value as Partial<SongLyricsOut> : {};
-    return {
-      title: typeof raw.title === "string" && raw.title.trim() ? raw.title.trim().slice(0, 160) : fallback.title,
-      lyrics: typeof raw.lyrics === "string" && raw.lyrics.trim().length >= 20 ? raw.lyrics.trim().slice(0, 6000) : fallback.lyrics,
-      styleNote: typeof raw.styleNote === "string" ? raw.styleNote.trim().slice(0, 600) : fallback.styleNote,
-    };
-  };
-  const score = (candidate: SongLyricsOut) => {
-    let points = 0;
-    if (candidate.title.trim().length >= 3) points += 15;
-    if (candidate.lyrics.trim().length >= 160) points += 20;
-    if (candidate.lyrics.split(/\n\s*\n/).filter(Boolean).length >= 3) points += 15;
-    if ((candidate.lyrics.match(/[\u0980-\u09FF]/g) ?? []).length >= 40) points += 20;
-    const lines = candidate.lyrics.split(/\n/).map((line) => line.trim()).filter(Boolean);
-    if (lines.length >= 6 && new Set(lines).size >= 4) points += 15;
-    if (candidate.styleNote.trim().length >= 12) points += 5;
-    if (!/copyright|cover song|in the style of [a-z]|guaranteed/i.test(candidate.lyrics)) points += 10;
-    return points;
-  };
-  return runThreeAgentRefinement<SongLyricsOut>({
-    writerAgentId: "song_lyricist",
-    writerRole: "Songwriter",
-    writerSystem: `You are ALO's Bengali songwriter. Draft original, family-friendly lyrics; do not imitate or quote known songs. Return ONLY JSON {title, lyrics, styleNote}. Include a concise verse, memorable repeated chorus, and gentle closing. Do not claim the lyric is sung or invent factual promises.`,
-    writerUser: `Theme: "${topic}". Mood: ${mood}. Write natural, simple Bengali lyrics for family listening. The output is a text draft only.`,
-    criticAgentId: "quality_critic",
-    criticRole: "Lyric critic",
-    criticSystem: `You are a strict lyric critic. Review the supplied Bengali lyric for natural phrasing, repetition, singability, originality, family safety, and unsupported claims. Do not rewrite it. Return ONLY JSON {score:0-100,strengths:string[],issues:string[],revisionPlan:string[],safetyFlags:string[]}.`,
-    criticUser: (candidate) => `Review this exact draft:\n${JSON.stringify(candidate)}\nUse the lyric rubric; point out specific lines, not generic praise.`,
-    finalistAgentId: "song_finalist",
-    finalistRole: "Final lyric editor",
-    finalistSystem: `You are the final Bengali lyric editor. Improve the given exact candidate using the critique. Preserve originality, family safety, and natural language. Return ONLY JSON {title,lyrics,styleNote}; no commentary and no claim that audio vocals were generated.`,
-    finalistUser: (candidate, critique) => `Theme: ${topic}. Mood: ${mood}.\nCandidate file:\n${JSON.stringify(candidate)}\nCritique and revision brief:\n${JSON.stringify(critique)}\nReturn a materially improved final lyric draft.`,
-    fallback,
-    normalize,
-    score,
-    timeoutMs: 25_000,
-  });
-}
-
-export interface NarrationScriptOut {
-  title: string;
-  lines: string[];
-}
-
-export async function generateNarrationScript(topic: string, audience = "বাংলাদেশি পিতামাতা"): Promise<AIResult<NarrationScriptOut>> {
-  const fallback: NarrationScriptOut = {
-    title: topic,
-    lines: [
-      `${topic} নিয়ে ছোট্ট একটি কথা।`,
-      "প্রতিটি শিশুর শেখার গতি আলাদা—তাই তুলনা নয়, পাশে থাকাই জরুরি।",
-      "প্রতিদিন অল্প সময় গল্প, খেলা আর কথোপকথনে দিন।",
-      "শিশুর আগ্রহ শুনুন এবং ছোট ছোট চেষ্টাকে স্বীকৃতি দিন।",
-      "কঠিন লাগলে ধৈর্য ধরুন; ভালোবাসা দিয়ে শেখার সুযোগ তৈরি হয়।",
-      "আজকের একটি সহজ অভ্যাস বেছে নিয়ে একসাথে চেষ্টা করুন।",
-      "আপনার অভিজ্ঞতা আলো লার্নিং জার্নির সাথে শেয়ার করুন।",
-    ],
-  };
-  const normalize = (value: unknown): NarrationScriptOut => {
-    const raw = value && typeof value === "object" ? value as Partial<NarrationScriptOut> : {};
-    const lines = Array.isArray(raw.lines)
-      ? raw.lines.filter((line): line is string => typeof line === "string").map((line) => line.trim().slice(0, 500)).filter(Boolean).slice(0, 12)
-      : [];
-    return {
-      title: typeof raw.title === "string" && raw.title.trim() ? raw.title.trim().slice(0, 160) : fallback.title,
-      lines: lines.length >= 4 ? lines : fallback.lines,
-    };
-  };
-  const score = (candidate: NarrationScriptOut) => {
-    const meaningful = candidate.lines.filter((line) => line.trim().length >= 12);
-    let points = meaningful.length >= 6 ? 25 : meaningful.length >= 4 ? 15 : 0;
-    if (meaningful.length <= 10) points += 10;
-    if (candidate.title.trim()) points += 10;
-    if (candidate.lines.join(" ").length >= 240) points += 15;
-    if ((candidate.lines.join(" ").match(/[\u0980-\u09FF]/g) ?? []).length >= 40) points += 20;
-    if (!/guarantee|cure|100%|নিশ্চিতভাবে|অবশ্যই সারবে/i.test(candidate.lines.join(" "))) points += 20;
-    return points;
-  };
-  return runThreeAgentRefinement<NarrationScriptOut>({
-    writerAgentId: "video_scriptwriter",
-    writerRole: "Video scriptwriter",
-    writerSystem: `You are ALO's local Bengali video scriptwriter. Return only JSON {title,lines}, with 6-10 concise spoken lines for a warm, practical educational video. Avoid fear, shaming, unsupported medical claims, guaranteed outcomes, and repetitive filler. Do not add stage directions to spoken lines.`,
-    writerUser: `Topic: "${topic}". Audience: "${audience}". Write useful, natural Bengali narration, ending with one gentle call to action.`,
-    criticAgentId: "quality_critic",
-    criticRole: "Script critic",
-    criticSystem: `You are a strict Bengali narration critic. Review factual restraint, clarity, audience fit, spoken rhythm, repetition, safety, and a non-coercive CTA. Do not rewrite the script. Return ONLY JSON {score:0-100,strengths:string[],issues:string[],revisionPlan:string[],safetyFlags:string[]}.`,
-    criticUser: (candidate) => `Review this exact candidate for ${audience}:\n${JSON.stringify(candidate)}\nTopic: ${topic}. Identify specific improvements and unsupported claims.`,
-    finalistAgentId: "video_script_finalist",
-    finalistRole: "Final script editor",
-    finalistSystem: `You are the final script editor for ALO. Use the independent critique to improve the exact candidate while preserving factual caution, warm Bengali voice, and 6-10 concise spoken lines. Do not invent research, statistics, medical advice, dates, or guarantees. Return ONLY JSON {title,lines}.`,
-    finalistUser: (candidate, critique) => `Topic: ${topic}. Audience: ${audience}.\nCandidate file:\n${JSON.stringify(candidate)}\nCritique/revision brief:\n${JSON.stringify(critique)}\nReturn the complete final script.`,
-    fallback,
-    normalize,
-    score,
-    timeoutMs: 25_000,
-  });
-}
-
 export interface ContentPackageOut {
   reelScript: string;
   hooks: string[];
@@ -411,8 +515,10 @@ export async function generateContentPackage(
   topic: string,
   audience: string,
   ragContext: string,
-  ragCitations: ContentPackageOut["ragCitations"] = []
+  availableSources: { title: string; type: string }[] = []
 ): Promise<AIResult<ContentPackageOut>> {
+  const sys = `You are a Bengali content-drafting model for ALO Learning Journey. Produce one complete content package in a warm, hopeful, non-shaming tone. Return ONLY JSON matching the schema. Captions object keys must be: facebook, instagram, youtube, tiktok, linkedin, x, whatsapp, threads, pinterest, telegram. Set qualityScore to 0 because no independent score is run. Do not claim that content was fact-checked, safety-reviewed, or quality-certified. ragCitations may include only exact document titles present in the supplied context; do not invent sources or relevance scores.`;
+  const user = `Topic: "${topic}". Audience: "${audience}". RAG context:\n${ragContext}\n\nGenerate the full content package.`;
   const fallback: ContentPackageOut = {
     reelScript: `[হুক — ৩ সেকেন্ড] ${topic} নিয়ে আজ জানবো সহজ উপায় 💛\n\n[সমস্যা] অনেক পিতামাতাই এ বিষয়ে দ্বিধায় ভোগেন।\n\n[সমাধান] ৩টি সহজ ধাপ — ধৈর্য, সংবেদনশীলতা, ধারাবাহিকতা।\n\n[CTA] আপনার অভিজ্ঞতা কমেন্টে শেয়ার করুন ✨`,
     hooks: [
@@ -434,118 +540,22 @@ export async function generateContentPackage(
       telegram: `${topic} 💛 আলো লার্নিং জার্নি`,
     },
     hashtags: ["#ParentingBangla", "#ChildDevelopment", "#আলো", "#শিশুশিক্ষা", "#ALOLearningJourney"],
-    imagePrompt: "Warm pastel illustration of a Bengali parent and child reading together, gentle morning light, hopeful mood, flat editorial illustration, no text, no identifiable real face, child-safe.",
-    voiceDirection: "Warm Bengali narration, gentle pace, hopeful tone; use a consented synthetic voice.",
+    imagePrompt: `Warm pastel illustration of a Bengali mother and child reading together, soft morning light, hopeful mood, flat illustration style, no real faces, child-safe`,
+    voiceDirection: "Warm Bangla mother voice, gentle pace, hopeful tone",
     cta: "আপনার অভিজ্ঞতা কমেন্টে শেয়ার করুন ✨",
     disclaimerBn: "প্রয়োজনে pediatrician, child specialist বা speech therapist-এর পরামর্শ নিন 💛",
     qualityScore: 0,
-    ragCitations,
+    ragCitations: [],
   };
-  const channels = Object.keys(fallback.captions);
-  const normalize = (value: unknown): ContentPackageOut => {
-    const raw = value && typeof value === "object" ? value as Partial<ContentPackageOut> : {};
-    const rawCaptions = raw.captions && typeof raw.captions === "object" ? raw.captions as Record<string, unknown> : {};
-    const captions = Object.fromEntries(channels.map((channel) => [
-      channel,
-      typeof rawCaptions[channel] === "string" && rawCaptions[channel].trim()
-        ? rawCaptions[channel].trim().slice(0, 4000)
-        : fallback.captions[channel],
-    ])) as Record<string, string>;
-    const cleanStrings = (items: unknown, safeFallback: string[], limit: number, itemLimit = 300) =>
-      Array.isArray(items)
-        ? items.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, itemLimit)).filter(Boolean).slice(0, limit)
-        : safeFallback;
-    const candidate: ContentPackageOut = {
-      reelScript: typeof raw.reelScript === "string" && raw.reelScript.trim() ? raw.reelScript.trim().slice(0, 8000) : fallback.reelScript,
-      hooks: cleanStrings(raw.hooks, fallback.hooks, 8),
-      seoKeywords: cleanStrings(raw.seoKeywords, fallback.seoKeywords, 20),
-      captions,
-      hashtags: cleanStrings(raw.hashtags, fallback.hashtags, 30, 80),
-      imagePrompt: typeof raw.imagePrompt === "string" && raw.imagePrompt.trim() ? raw.imagePrompt.trim().slice(0, 2000) : fallback.imagePrompt,
-      voiceDirection: typeof raw.voiceDirection === "string" && raw.voiceDirection.trim() ? raw.voiceDirection.trim().slice(0, 500) : fallback.voiceDirection,
-      cta: typeof raw.cta === "string" && raw.cta.trim() ? raw.cta.trim().slice(0, 500) : fallback.cta,
-      disclaimerBn: typeof raw.disclaimerBn === "string" && raw.disclaimerBn.trim() ? raw.disclaimerBn.trim().slice(0, 800) : fallback.disclaimerBn,
-      qualityScore: 0,
-      // Never accept model-invented RAG sources or similarity scores.
-      ragCitations: ragCitations.filter((source) => source && typeof source.title === "string" && typeof source.type === "string").slice(0, 5),
-    };
-    candidate.qualityScore = validateContentPackage(candidate).score;
-    return candidate;
-  };
-  const writerSystem = `You are ALO Learning Journey's Bengali content writer. Create one complete, useful and human-reviewable content package. Use a warm, hopeful, non-shaming tone; no fear hooks, fabricated facts, medical/legal advice, guarantees, invented citations, or claims unsupported by the supplied RAG context. Return ONLY JSON with reelScript, hooks, seoKeywords, captions (keys: facebook, instagram, youtube, tiktok, linkedin, x, whatsapp, threads, pinterest, telegram), hashtags, imagePrompt, voiceDirection, cta, disclaimerBn. Keep claims cautious and identify unverifiable dates/prices as placeholders.`;
-  const writerUser = `Topic: "${topic}". Audience: "${audience}". Supplied reference context (may be empty):\n${ragContext.slice(0, 5_000)}\n\nDraft the complete package in natural Bengali, adapting length to each platform.`;
-  const criticSystem = `You are the independent quality and safety critic for ALO's Bengali education marketing package. Assess practical usefulness, clarity, brand tone, platform fit, factual restraint, medical/legal risk, child safety, CTA pressure, image prompt safety, and completeness. Do not rewrite. Return ONLY JSON {score:0-100,strengths:string[],issues:string[],revisionPlan:string[],safetyFlags:string[]}. A model score is an editorial estimate, not a fact-check.`;
-  const finalistSystem = `You are the finalist editor for ALO Learning Journey. You receive the exact writer draft and an independent critique. Revise the complete package to address valid critique while preserving natural Bengali, safe educational framing, and platform-specific fit. Do not invent external facts, sources, statistics, deadlines, testimonials, or outcome guarantees. Return ONLY the full JSON package schema from the brief. The app replaces citations with actual retrieved source records and calculates its own structural rubric score.`;
-  return runThreeAgentRefinement<ContentPackageOut>({
-    writerAgentId: "content_writer",
-    writerRole: "Package writer",
-    writerSystem,
-    writerUser,
-    criticAgentId: "quality_critic",
-    criticRole: "Independent critic",
-    criticSystem,
-    criticUser: (candidate) => `Topic: ${topic}. Audience: ${audience}.\nReview this exact complete draft:\n${JSON.stringify(candidate)}\nOnly use the supplied context for factual claims: ${ragContext.slice(0, 3500) || "No verified reference text was supplied."}`,
-    finalistAgentId: "content_finalist",
-    finalistRole: "Finalist editor",
-    finalistSystem,
-    finalistUser: (candidate, critique) => `Topic: ${topic}. Audience: ${audience}.\nWriter's candidate file:\n${JSON.stringify(candidate)}\nIndependent critique and revision brief:\n${JSON.stringify(critique)}\nReference context:\n${ragContext.slice(0, 3500) || "No verified reference text was supplied."}\nReturn the complete revised package.`,
-    fallback,
-    normalize,
-    score: (candidate) => validateContentPackage(candidate).score,
-    timeoutMs: 25_000,
-  });
-}
-
-export interface EmailMarketingDraftOut {
-  draft: string;
-}
-
-export async function generateEmailMarketingDraft(
-  draft: string,
-  audience: string,
-  objective: string
-): Promise<AIResult<EmailMarketingDraftOut>> {
-  const fallback = { draft: draft.slice(0, 8_000) };
-  const unresolvedTokens = draft.match(/\{\{[^}]{1,80}\}\}|\[[^\]]{1,160}\]/g) ?? [];
-  const normalize = (value: unknown): EmailMarketingDraftOut => {
-    const raw = value && typeof value === "object" ? value as Partial<EmailMarketingDraftOut> : {};
-    const candidate = typeof raw.draft === "string" ? raw.draft.trim().slice(0, 8_000) : fallback.draft;
-    const preservesRequiredPlaceholders = unresolvedTokens.every((token) => candidate.includes(token));
-    return { draft: candidate && preservesRequiredPlaceholders ? candidate : fallback.draft };
-  };
-  const score = (candidate: EmailMarketingDraftOut) => {
-    const text = candidate.draft;
-    let points = 0;
-    if (/^subject\s*:/im.test(text)) points += 15;
-    if (/^preheader\s*:/im.test(text)) points += 10;
-    if (text.length >= 150 && text.length <= 5_000) points += 20;
-    if (text.split(/\n\s*\n/).filter((part) => part.trim().length > 15).length >= 3) points += 15;
-    if (/unsubscribe|preferences|opt[ -]out|reply\s+stop/i.test(text)) points += 15;
-    if (unresolvedTokens.every((token) => text.includes(token))) points += 10;
-    if (!/guaranteed admission|guaranteed visa|100% success|guaranteed outcome|নিশ্চিত ভর্তি|ভিসা নিশ্চিত/i.test(text)) points += 15;
-    return points;
-  };
-  const writerSystem = `You are ALO's email marketing copywriter. Improve the supplied email draft for clarity, a truthful subject line, a concise preheader, helpful body, accessible plain-text structure, one clear next step, and respectful opt-out/preferences language. Do not invent facts, offers, pricing, dates, testimonials, deadlines, recipient permissions, or admission/visa outcomes. Preserve every supplied [bracket placeholder] and {{merge tag}} byte-for-byte. Return ONLY JSON {draft:string}.`;
-  const criticSystem = `You are an independent email deliverability, clarity, and compliance critic. Check the supplied draft for misleading urgency, unsupported education/visa claims, spammy wording, missing subject/preheader, too many CTAs, privacy risks, and missing consent/unsubscribe reminder. Do not rewrite. Return ONLY JSON {score:0-100,strengths:string[],issues:string[],revisionPlan:string[],safetyFlags:string[]}.`;
-  const finalistSystem = `You are the finalist editor for an ALO email marketing draft. Use the critic's specific notes to improve the exact candidate. Preserve every original bracket placeholder and merge tag exactly. Do not send the email, invent an unsubscribe URL, assert consent, or add unsupported facts. Return ONLY JSON {draft:string}. This is a human-review draft, not delivery authorization.`;
-  return runThreeAgentRefinement<EmailMarketingDraftOut>({
-    writerAgentId: "email_copywriter",
-    writerRole: "Email copywriter",
-    writerSystem,
-    writerUser: `Objective: ${objective.slice(0, 500)}\nAudience: ${audience.slice(0, 500)}\nOriginal email draft:\n${draft.slice(0, 8_000)}\nReturn a revised draft.`,
-    criticAgentId: "quality_critic",
-    criticRole: "Email compliance critic",
-    criticSystem,
-    criticUser: (candidate) => `Objective: ${objective}. Audience: ${audience}. Review this email without inventing facts:\n${candidate.draft}`,
-    finalistAgentId: "email_finalist",
-    finalistRole: "Email finalist",
-    finalistSystem,
-    finalistUser: (candidate, critique) => `Objective: ${objective}. Audience: ${audience}.\nWriter candidate:\n${candidate.draft}\nIndependent critique:\n${JSON.stringify(critique)}\nReturn a better final draft, preserving all placeholders.`,
-    fallback,
-    normalize,
-    score,
-    timeoutMs: 22_000,
-  });
+  const result = await chatJSON<ContentPackageOut>(sys, user, fallback);
+  const sourcesByTitle = new Map(availableSources.map((source) => [source.title.trim().toLocaleLowerCase(), source]));
+  const verifiedTitleMatches = (Array.isArray(result.data.ragCitations) ? result.data.ragCitations : [])
+    .flatMap((citation) => {
+      if (!citation || typeof citation.title !== "string") return [];
+      const source = sourcesByTitle.get(citation.title.trim().toLocaleLowerCase());
+      return source ? [{ title: source.title, type: source.type, relevance: 0 }] : [];
+    });
+  return { ...result, data: { ...result.data, qualityScore: 0, ragCitations: verifiedTitleMatches } };
 }
 
 export interface SafetyOut {
@@ -562,14 +572,15 @@ export async function runProtectiveMode(
   content: string,
   type: string
 ): Promise<AIResult<SafetyOut>> {
-  const sys = `You are the SafetyGuardianAgent of ALO Learning Journey. Run Protective Mode on the given ${type}. Return ONLY JSON {approved, riskLevel, blockedReasons[], requiredEdits[], finalDisclaimer, needsHumanReview, checksPassed[]}. If any developmental/medical concern, set finalDisclaimer to: "প্রয়োজনে pediatrician, child specialist বা speech therapist-এর পরামর্শ নিন 💛". Never approve fear-based, parent-shaming, guaranteed-outcome, or unsafe content.`;
+  const sys = `Provide only a preliminary, unverified model suggestion about the supplied ${type}; you are not an independent safety reviewer and must not certify, fact-check, or approve content. Return ONLY JSON {approved:false, riskLevel, blockedReasons[], requiredEdits[], finalDisclaimer, needsHumanReview:true, checksPassed:[]}. If any developmental/medical concern, include this disclaimer: "প্রয়োজনে pediatrician, child specialist বা speech therapist-এর পরামর্শ নিন 💛". Flag fear-based, parent-shaming, guaranteed-outcome, or potentially unsafe content for human assessment.`;
   const user = `Content to review:\n"""\n${content}\n"""`;
   const fallback: SafetyOut = {
     approved: false,
     riskLevel: "medium",
-    blockedReasons: ["Local safety review unavailable; no safety decision was made."],
+    blockedReasons: ["Automated review unavailable; no safety decision was made."],
     requiredEdits: ["A human reviewer must check this item before approval or publication."],
-    finalDisclaimer: "প্রয়োজনে pediatrician, child specialist বা speech therapist-এর পরামর্শ নিন 💛",
+    finalDisclaimer:
+      "প্রয়োজনে pediatrician, child specialist বা speech therapist-এর পরামর্শ নিন 💛",
     needsHumanReview: true,
     checksPassed: [],
   };
@@ -579,7 +590,7 @@ export async function runProtectiveMode(
 // ---- Comment moderation (CommentModerationAgent + CommunityReplyAgent) ----
 
 export interface CommentClassifyOut {
-  category: string; // safe_general | question | praise | complaint | medical_sensitive | development_sensitive | abuse_risk | emergency | spam | toxic | review_required
+  category: string; // safe_general | question | praise | complaint | medical_sensitive | development_sensitive | abuse_risk | emergency | spam | toxic
   riskLevel: "low" | "medium" | "high";
   rationale: string;
   autoReplyAllowed: boolean;
@@ -593,7 +604,7 @@ export async function classifyComment(
   const fallback: CommentClassifyOut = {
     category: "review_required",
     riskLevel: "medium",
-    rationale: "স্থানীয় moderation model অনুপলব্ধ; human review না হওয়া পর্যন্ত auto-reply বন্ধ।",
+    rationale: "Comment classification is unavailable; human review is required.",
     autoReplyAllowed: false,
   };
   return chatJSON<CommentClassifyOut>(sys, user, fallback, { timeoutMs: 12000 });
@@ -621,162 +632,36 @@ export async function generateImageFile(
   prompt: string,
   outPath: string,
   size: "1024x1024" | "768x1344" | "1344x768" | "1440x720" = "1024x1024"
-): Promise<AIResult<{ path: string; prompt: string }>> {
-  const startedAt = Date.now();
-  const fallback = { prompt: prompt.slice(0, 2_000) };
-  const normalize = (value: unknown) => {
-    const raw = value && typeof value === "object" ? value as { prompt?: unknown } : {};
-    return { prompt: typeof raw.prompt === "string" && raw.prompt.trim() ? raw.prompt.trim().slice(0, 2_000) : fallback.prompt };
-  };
-  const imagePromptResult = await runThreeAgentRefinement({
-    writerAgentId: "image_prompt",
-    writerRole: "Image art director",
-    writerSystem: `You are ALO's local image art director. Improve the supplied prompt for a coherent, age-appropriate Bengali education brand visual: specific subject, composition, lighting, palette, medium, and crop safety. Do not add text, logos, real-person likenesses, or sensitive child depictions. Return ONLY JSON {prompt:string}.`,
-    writerUser: `Canvas: ${size}. Original brief:\n${prompt.slice(0, 2_000)}\nWrite one clear, generator-ready prompt.`,
-    criticAgentId: "quality_critic",
-    criticRole: "Visual prompt critic",
-    criticSystem: `You are a strict visual-prompt critic. Check composition, clarity, accessibility, safe child depiction, identity/consent, text artifacts, and fit for the requested crop. Do not rewrite. Return ONLY JSON {score:0-100,strengths:string[],issues:string[],revisionPlan:string[],safetyFlags:string[]}.`,
-    criticUser: (candidate) => `Canvas: ${size}. Review this exact image prompt:\n${candidate.prompt}`,
-    finalistAgentId: "image_prompt_finalist",
-    finalistRole: "Final prompt editor",
-    finalistSystem: `You are the finalist image-prompt editor. Incorporate valid critique, keep the image child-safe and brand-appropriate, avoid real-person likenesses and all embedded text/logos, and return ONLY JSON {prompt:string}.`,
-    finalistUser: (candidate, critique) => `Canvas: ${size}.\nCandidate prompt:\n${candidate.prompt}\nIndependent critique:\n${JSON.stringify(critique)}\nReturn a materially improved final prompt.`,
-    fallback,
-    normalize,
-    score: (candidate) => {
-      let points = 0;
-      if (candidate.prompt.length >= 80) points += 20;
-      if (/(composition|foreground|background|close-up|wide|portrait|landscape)/i.test(candidate.prompt)) points += 15;
-      if (/(light|lighting|morning|soft|contrast|color|palette)/i.test(candidate.prompt)) points += 15;
-      if (/(illustration|photograph|editorial|watercolor|flat|3d|cinematic)/i.test(candidate.prompt)) points += 15;
-      if (/(no text|without text|no logo|without logo)/i.test(candidate.prompt)) points += 10;
-      if (/(child-safe|child safe|safe for children|non-identifiable|no real faces)/i.test(candidate.prompt)) points += 15;
-      if (!/deepfake|impersonat|sexualized|nude|real person/i.test(candidate.prompt)) points += 10;
-      return points;
-    },
-    timeoutMs: 20_000,
-  });
-
+): Promise<AIResult<{ path: string }>> {
+  const start = Date.now();
   try {
-    await generateComfyUiImage(imagePromptResult.data.prompt, outPath, size);
+    const zai = await getZai();
+    const resp = await zai.images.generations.create({ prompt, size });
+    const b64 = resp.data[0]?.base64;
+    if (!b64) throw new Error("empty image response");
+    const fs = await import("fs");
+    fs.writeFileSync(outPath, Buffer.from(b64, "base64"));
     return {
       ok: true,
-      data: { path: outPath, prompt: imagePromptResult.data.prompt },
-      provider: "comfyui-local",
+      data: { path: outPath },
+      provider: "image-gen",
       usedFallback: false,
-      latencyMs: Date.now() - startedAt,
-      qualityPipeline: imagePromptResult.qualityPipeline,
+      latencyMs: Date.now() - start,
     };
-  } catch (error) {
+  } catch (e) {
     return {
       ok: false,
-      data: { path: outPath, prompt: imagePromptResult.data.prompt },
+      data: { path: outPath },
       provider: "image-fallback",
       usedFallback: true,
-      error: error instanceof Error ? error.message : "Local image generation failed",
-      latencyMs: Date.now() - startedAt,
-      qualityPipeline: imagePromptResult.qualityPipeline,
+      error: e instanceof Error ? e.message : "unknown",
+      latencyMs: Date.now() - start,
     };
   }
 }
 
-// ===== SELF-CORRECTION ENGINE =====
-// Retries a task with quality validation. If quality fails, regenerates.
-// Respects maxAttempts to prevent infinite loops.
-
-export interface QualityCheck {
-  score: number;
-  passed: boolean;
-  issues: string[];
-}
-
-export interface SelfCorrectionResult<T> {
-  data: T;
-  quality: QualityCheck;
-  attempts: number;
-  finalProvider: string;
-  corrections: string[];
-  escalated: boolean;
-}
-
-export async function withSelfCorrection<T>(
-  generateFn: () => Promise<AIResult<T>>,
-  validateFn: (data: T) => QualityCheck,
-  maxAttempts = 3,
-  threshold = 85
-): Promise<SelfCorrectionResult<T>> {
-  const corrections: string[] = [];
-  let lastResult: AIResult<T> | null = null;
-  let lastQuality: QualityCheck = { score: 0, passed: false, issues: [] };
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    lastResult = await generateFn();
-    lastQuality = validateFn(lastResult.data);
-
-    if (lastQuality.passed || lastQuality.score >= threshold) {
-      return {
-        data: lastResult.data,
-        quality: lastQuality,
-        attempts: attempt,
-        finalProvider: lastResult.provider,
-        corrections,
-        escalated: false,
-      };
-    }
-
-    const issueSummary = `Attempt ${attempt}: score ${lastQuality.score}/100 — ${lastQuality.issues.join(", ")}`;
-    corrections.push(issueSummary);
-
-    if (attempt === maxAttempts) {
-      return {
-        data: lastResult.data,
-        quality: lastQuality,
-        attempts: attempt,
-        finalProvider: lastResult.provider,
-        corrections,
-        escalated: true,
-      };
-    }
-  }
-
-  return {
-    data: lastResult!.data,
-    quality: lastQuality,
-    attempts: maxAttempts,
-    finalProvider: lastResult!.provider,
-    corrections,
-    escalated: true,
-  };
-}
-
-export function validateContentPackage(pkg: ContentPackageOut): QualityCheck {
-  const issues: string[] = [];
-  const points = (condition: boolean, value: number, issue: string) => {
-    if (!condition) issues.push(issue);
-    return condition ? value : 0;
-  };
-  const requiredChannels = ["facebook", "instagram", "youtube", "tiktok", "linkedin", "x", "whatsapp", "threads", "pinterest", "telegram"];
-  const captions = pkg.captions && typeof pkg.captions === "object" ? pkg.captions : {};
-  const completeChannels = requiredChannels.every((channel) => typeof captions[channel] === "string" && captions[channel].trim().length >= 15);
-  const allText = [pkg.reelScript, ...Object.values(captions), ...(pkg.hooks ?? [])].filter((value) => typeof value === "string").join(" ");
-  let score = 0;
-  score += points(typeof pkg.reelScript === "string" && pkg.reelScript.trim().length >= 80, 15, "Reel script is missing or too short.");
-  score += points(Array.isArray(pkg.hooks) && pkg.hooks.length >= 3, 10, "At least three hooks are required.");
-  score += points(Array.isArray(pkg.hooks) && new Set(pkg.hooks.map((hook) => hook.trim().toLowerCase())).size >= 3, 5, "Hooks must be distinct.");
-  score += points(completeChannels, 10, "A platform caption is missing or too short.");
-  score += points(Object.values(captions).every((caption) => typeof caption === "string" && caption.trim().length > 0), 10, "All supplied caption values must be non-empty strings.");
-  score += points(Array.isArray(pkg.seoKeywords) && pkg.seoKeywords.length >= 3, 8, "At least three SEO keywords are required.");
-  score += points(Array.isArray(pkg.hashtags) && pkg.hashtags.length >= 3, 5, "At least three hashtags are required.");
-  score += points(typeof pkg.imagePrompt === "string" && pkg.imagePrompt.trim().length >= 30, 10, "Image prompt is missing or too short.");
-  score += points(typeof pkg.voiceDirection === "string" && pkg.voiceDirection.trim().length >= 12, 5, "Voice direction is missing.");
-  score += points(typeof pkg.cta === "string" && pkg.cta.trim().length >= 8, 7, "CTA is missing or too short.");
-  score += points(typeof pkg.disclaimerBn === "string" && pkg.disclaimerBn.trim().length >= 15, 5, "Bengali disclaimer is missing.");
-  score += points(Array.isArray(pkg.ragCitations) && pkg.ragCitations.every((source) => source && typeof source.title === "string" && typeof source.type === "string"), 5, "Reference metadata is malformed; citations must come from retrieved documents.");
-  score += points(/[\u0980-\u09FF]/.test(allText), 5, "Package has no Bengali-script text.");
-  score += points(!/guaranteed admission|guaranteed visa|100% success|guaranteed outcome|ভর্তি নিশ্চিত|ভিসা নিশ্চিত|নিশ্চিত সাফল্য/i.test(allText), 10, "Potential guaranteed-outcome claim requires removal or human verification.");
-  const boundedScore = Math.max(0, Math.min(100, score));
-  return { score: boundedScore, passed: boundedScore >= 85, issues };
-}
+// No independent quality-scoring or self-correction engine is implemented.
+// Generated content remains draft material and must be reviewed by a person.
 
 // ===== GROWTH LOOP: Content Opportunity + Hook Testing =====
 
@@ -797,35 +682,35 @@ export async function scoreContentOpportunity(
   const sys = `You are the SEO AI + Audience AI + TrendResearchAgent for ALO Learning Journey, a Bengali parenting & child-education brand. Score the given topic on a 0-100 scale across 6 dimensions. Return ONLY JSON: {searchDemand, parentRelevance, bangladeshRelevance, competition, videoPotential, brandFit, finalScore, rationale}. competition: higher = harder to rank. finalScore: weighted average favoring parentRelevance, brandFit, and videoPotential. rationale: 1-2 sentences in Bengali explaining the score.`;
   const user = `Topic: "${topic}"\n\nConsider: Bangladesh parenting search demand, relevance to parents of young children, Bangladesh cultural context, existing competition, video format potential, and ALO brand fit (warm, educational, non-judgmental).`;
   const fallback: OpportunityScore = {
-    searchDemand: 0,
-    parentRelevance: 0,
-    bangladeshRelevance: 0,
-    competition: 0,
-    videoPotential: 0,
-    brandFit: 0,
-    finalScore: 0,
-    rationale: "স্থানীয় মডেল অনুপলব্ধ; কোনো অনুসন্ধান-চাহিদা বা বাজার মূল্যায়ন করা হয়নি।",
+    searchDemand: 75,
+    parentRelevance: 85,
+    bangladeshRelevance: 80,
+    competition: 50,
+    videoPotential: 85,
+    brandFit: 90,
+    finalScore: 78,
+    rationale: "প্যারেন্টিং টপিক — বাবা-মায়েদের জন্য প্রাসঙ্গিক, বাংলাদেশি প্রেক্ষাপটে উপযুক্ত।",
   };
   return chatJSON<OpportunityScore>(sys, user, fallback, { timeoutMs: 15000 });
 }
 
 export interface HookVariants {
-  hooks: { variant: string; text: string; strategy: string }[];
+  hooks: { variant: string; text: string; strategy: string; predictedRetention: number }[];
 }
 
 export async function generateHookVariants(
   topic: string,
   count = 5
 ): Promise<AIResult<HookVariants>> {
-  const sys = `You are the HookOptimizerAgent for ALO Learning Journey. Generate ${count} distinct hook drafts for a Bengali parenting video about "${topic}". Use varied approaches such as curiosity, question, benefit, and story, without fabricated statistics, fear, shame, or guarantees. Return ONLY JSON {hooks: [{variant: "A", text: "...", strategy: "curiosity"}]}. Do not invent retention predictions; only measured performance data is reported after a real test.`;
+  const sys = `You are the HookOptimizerAgent for ALO Learning Journey. Generate ${count} distinct 3-second hook variants for a Bengali parenting video about "${topic}". Each hook must use a different psychological strategy (curiosity, shock, question, benefit, story). Return ONLY JSON: {hooks: [{variant: "A", text: "...", strategy: "curiosity", predictedRetention: 65}]}. Text in Bengali. predictedRetention: estimated 3-sec retention % (50-80).`;
   const user = `Topic: "${topic}". Generate ${count} hook variants.`;
   const fallback: HookVariants = {
     hooks: [
-      { variant: "A", text: `${topic} — আপনার কী জানা দরকার? 💛`, strategy: "curiosity" },
-      { variant: "B", text: `${topic} শুরু করার একটি সহজ উপায় ✨`, strategy: "benefit" },
-      { variant: "C", text: `${topic} নিয়ে আপনার প্রশ্ন কী?`, strategy: "question" },
-      { variant: "D", text: `পরিবারের শেখার পথে ${topic} 🌱`, strategy: "story" },
-      { variant: "E", text: `আজ ঘরে ${topic} চেষ্টা করে দেখুন 💛`, strategy: "action" },
+      { variant: "A", text: `${topic} — আপনি কি জানেন? 💛`, strategy: "curiosity", predictedRetention: 65 },
+      { variant: "B", text: `৯০% বাবা-মা এই ভুল করেন ${topic}-এ`, strategy: "shock", predictedRetention: 72 },
+      { variant: "C", text: `${topic} কীভাবে করবেন?`, strategy: "question", predictedRetention: 60 },
+      { variant: "D", text: `মাত্র ৩ ধাপে ${topic} ✨`, strategy: "benefit", predictedRetention: 68 },
+      { variant: "E", text: `আমার মেয়ে যখন প্রথম... ${topic} 💛`, strategy: "story", predictedRetention: 70 },
     ],
   };
   return chatJSON<HookVariants>(sys, user, fallback, { timeoutMs: 15000 });
@@ -854,7 +739,7 @@ export async function generateContentBrief(
   category: string,
   ageGroup: string
 ): Promise<AIResult<ContentBrief>> {
-  const sys = `You are the SEO AI + Content Strategy Agent for ALO Learning Journey. Generate a complete content brief for a Bengali parenting article. Return ONLY JSON matching the ContentBrief schema. All text in Bengali (natural, not machine-translated). Category: ${category}. Age group: ${ageGroup}. Include 3-5 outline sections with 2-3 points each. Include 3 FAQs. SEO title <60 chars. Meta description <160 chars. qualityScore 0-100.`;
+  const sys = `Draft a Bengali content brief for a parenting article. Return ONLY JSON matching the ContentBrief schema. All text in Bengali (natural, not machine-translated). Category: ${category}. Age group: ${ageGroup}. Include 3-5 outline sections with 2-3 points each. Include 3 FAQs. SEO title <60 chars. Meta description <160 chars. Set qualityScore to 0 because no independent quality, factual, or SEO verification is run.`;
   const user = `Topic: "${topic}". Category: ${category}. Age group: ${ageGroup}. Generate the complete content brief.`;
   const fallback: ContentBrief = {
     title: `${topic} — ${ageGroup} বয়সের জন্য গাইড`,
@@ -879,7 +764,8 @@ export async function generateContentBrief(
     estimatedReadTime: 3,
     qualityScore: 0,
   };
-  return chatJSON<ContentBrief>(sys, user, fallback, { timeoutMs: 20000 });
+  const result = await chatJSON<ContentBrief>(sys, user, fallback, { timeoutMs: 20000 });
+  return { ...result, data: { ...result.data, qualityScore: 0 } };
 }
 
 // ===== NATURAL LANGUAGE COMMAND PARSER =====

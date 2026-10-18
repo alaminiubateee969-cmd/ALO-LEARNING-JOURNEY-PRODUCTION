@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireOwner } from "@/lib/auth";
 import { ensureSeeded } from "@/lib/seed";
 
 export type CompanyScope =
@@ -7,8 +8,19 @@ export type CompanyScope =
   | { companyId?: never; error: string; status: number };
 
 export async function resolveCompanyScope(request: Request): Promise<CompanyScope> {
-  await ensureSeeded();
+  try {
+    await requireOwner();
+  } catch (error) {
+    const statusCode = typeof error === "object" && error && "statusCode" in error
+      ? Number((error as { statusCode: unknown }).statusCode)
+      : 401;
+    return {
+      error: statusCode === 503 ? "Administrator authentication is not configured." : "Sign in is required.",
+      status: statusCode === 503 ? 503 : 401,
+    };
+  }
 
+  await ensureSeeded();
   const requestedId = request.headers.get("x-alo-company-id")?.trim();
   const company = requestedId
     ? await db.company.findFirst({ where: { id: requestedId, active: true }, select: { id: true } })

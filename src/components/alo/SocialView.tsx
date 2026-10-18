@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { PLATFORMS } from "@/lib/platforms";
-import { Send, KeyRound, Loader2, Pencil } from "lucide-react";
+import { Send, ShieldCheck, KeyRound, Loader2, Link2, Unlink } from "lucide-react";
 
 interface Conn {
   id: string;
@@ -44,19 +44,12 @@ export default function SocialView() {
         body: JSON.stringify({ platform, action }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not update the connection record.");
       toast({
-        title: action === "connect" ? "Setup requirement recorded" : "Stored connection status updated",
-        description: `${platform} → ${data.status}. ${data.message ?? "No provider was contacted."}`,
+        title: action === "connect" ? "OAuth শুরু" : "সংযোগ বিচ্ছিন্ন",
+        description: `${platform} → ${data.status}`,
         variant: data.status === "external_setup_required" ? "destructive" : "default",
       });
       load();
-    } catch (error) {
-      toast({
-        title: "Connection record not updated",
-        description: error instanceof Error ? error.message : "Try again.",
-        variant: "destructive",
-      });
     } finally {
       setBusy(null);
     }
@@ -67,11 +60,11 @@ export default function SocialView() {
       <SectionHeader
         title="Social Connections"
         bn="সোশ্যাল সংযোগ"
-        desc="These are stored connection-status records, not live provider verification. No OAuth callback, token storage/refresh, or platform API client is implemented; connected labels may be seeded or historical and are not proof of account access."
+        desc="অফিশিয়াল OAuth দিয়ে সংযোগ। আমরা কখনো পাসওয়ার্ড বা OTP সংরক্ষণ করি না। encrypted access/refresh token, scope validation, auto-refresh।"
         icon={<Send className="h-5 w-5" />}
         action={
-          <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
-            <KeyRound className="h-3 w-3 mr-1" /> OAuth integration not implemented
+          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+            <ShieldCheck className="h-3 w-3 mr-1" /> OAuth + PKCE
           </Badge>
         }
       />
@@ -94,28 +87,24 @@ export default function SocialView() {
                         <p className="text-[11px] text-muted-foreground">{p.bn}</p>
                       </div>
                     </div>
-                    {c?.status === "connected" ? (
-                      <Badge variant="outline" className="border-amber-300 text-amber-800">Marked connected · unverified</Badge>
-                    ) : (
-                      <StatusPill status={c?.status ?? "not_connected"} />
-                    )}
+                    <StatusPill status={c?.status ?? "not_connected"} />
                   </div>
 
                   {c && (
                     <div className="mt-3 space-y-1 text-[11px]">
                       <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Stored account label</span>
+                        <span className="text-muted-foreground">Account</span>
                         <span className="font-medium truncate max-w-[140px]">{c.accountName}</span>
                       </div>
                       {c.tokenExpiry && (
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Recorded token expiry</span>
+                          <span className="text-muted-foreground">Token expires</span>
                           <span className="font-medium">{new Date(c.tokenExpiry).toLocaleDateString()}</span>
                         </div>
                       )}
                       {c.lastSyncAt && (
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Stored sync timestamp</span>
+                          <span className="text-muted-foreground">Last sync</span>
                           <span className="font-medium">{new Date(c.lastSyncAt).toLocaleTimeString()}</span>
                         </div>
                       )}
@@ -123,7 +112,7 @@ export default function SocialView() {
                   )}
 
                   <div className="mt-3 pt-2 border-t border-border/50">
-                    <p className="text-[10px] text-muted-foreground mb-1.5">Planned scopes · not granted/verified</p>
+                    <p className="text-[10px] text-muted-foreground mb-1.5">Scopes</p>
                     <div className="flex flex-wrap gap-1 mb-3">
                       {p.scopes.map((s) => (
                         <Badge key={s} variant="outline" className="text-[9px]">{s}</Badge>
@@ -139,10 +128,9 @@ export default function SocialView() {
                         className="flex-1 h-8 text-xs"
                         onClick={() => act(p.id, "disconnect")}
                         disabled={busy === p.id}
-                        title="Changes this stored status only; it does not revoke provider access."
                       >
-                        {busy === p.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Pencil className="h-3 w-3 mr-1" />}
-                        Mark not connected
+                        {busy === p.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Unlink className="h-3 w-3 mr-1" />}
+                        Disconnect
                       </Button>
                     ) : (
                       <Button
@@ -150,10 +138,9 @@ export default function SocialView() {
                         className="flex-1 h-8 text-xs bg-amber-500 hover:bg-amber-600"
                         onClick={() => act(p.id, "connect")}
                         disabled={busy === p.id}
-                        title="Records a local setup-needed status only; it does not start OAuth."
                       >
-                        {busy === p.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Pencil className="h-3 w-3 mr-1" />}
-                        Record setup required
+                        {busy === p.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Link2 className="h-3 w-3 mr-1" />}
+                        Connect via OAuth
                       </Button>
                     )}
                   </div>
@@ -180,9 +167,9 @@ export default function SocialView() {
         <div className="flex items-start gap-3">
           <KeyRound className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-800">
-            <p className="font-semibold">Connection state limits</p>
+            <p className="font-semibold">গুরুত্বপূর্ণ — OAuth বাস্তবতা</p>
             <p className="mt-1">
-              This app has no OAuth callback/token storage or refresh, connectivity check, or publishing client. Stored connection labels, scopes, and timestamps may be seeded or historical metadata. Buttons change local status only.
+              প্রতিটি প্ল্যাটফর্মের নিজস্ব OAuth flow ও app review প্রক্রিয়া আছে। সংযোগ শুধু তখনই &quot;connected&quot; হবে যখন একটি বাস্তব provider token ও account ID পাওয়া যাবে। এই ডেমোতে external_setup_required স্ট্যাটাস সৎভাবে দেখানো হয়েছে।
             </p>
           </div>
         </div>

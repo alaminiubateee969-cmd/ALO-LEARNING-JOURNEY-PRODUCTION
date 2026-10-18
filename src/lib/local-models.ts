@@ -91,7 +91,7 @@ function synthesizeBuiltInLocalChatJson(system: string, user: string, model: str
           `গল্প, খেলা, হাসির ছলে একটু একটু শেখা,\nপ্রতিটি শিশু আপন গতিতে পায় যে আলোর দেখা।\nহোঁচট খেলে জড়িয়ে ধরো, সাহস দিও মনে,\nসুন্দর আগামী গড়ে উঠুক পরিবারের সনে।`,
           `আলো জ্বালো, পাশে থাকো, স্বপ্ন ডানা মেলে,\nভালোবাসায় শেখার পথে হাতটা রেখো হেলে।`,
         ].join("\n\n"),
-        styleNote: "মৌলিক ও শিশু-নিরাপদ বাংলা লিরিক্স; মৃদু ও আশাবাদী স্থানীয় ইন্সট্রুমেন্টাল ট্র্যাকের সাথে ব্যবহারের জন্য প্রস্তুত।",
+        styleNote: "Built-in template only; originality and child safety were not independently reviewed. Human review is required.",
       }),
     };
   }
@@ -130,22 +130,11 @@ function synthesizeBuiltInLocalChatJson(system: string, user: string, model: str
 
   // 5. Email marketing draft (writer or finalist)
   if (sysLower.includes("email marketing copywriter") || sysLower.includes("email marketing draft")) {
-    const origMatch = /Original email draft:\n([\s\S]+?)\nReturn a revised draft/i.exec(user) || /Writer candidate:\n([\s\S]+?)\nIndependent critique/i.exec(user);
+    const origMatch = /Original email draft:\n([\s\S]+?)\nReturn a proposed draft/i.exec(user) || /Writer candidate:\n([\s\S]+?)\nIndependent critique/i.exec(user);
     const original = (origMatch?.[1] || user).trim();
-    const hasSubject = /^subject\s*:/im.test(original);
-    const hasPreheader = /^preheader\s*:/im.test(original);
-    const hasUnsub = /unsubscribe|preferences|opt[ -]out|reply\s+stop/i.test(original);
-    const lines: string[] = [];
-    if (!hasSubject) lines.push("Subject: আলো লার্নিং জার্নি — আপনার পরিবারের জন্য সহায়ক শিক্ষা আপডেট");
-    if (!hasPreheader) lines.push("Preheader: শান্ত, বাস্তবসম্মত এবং ধাপে ধাপে পরামর্শ যা আজই শুরু করতে পারেন।");
-    lines.push(original);
-    lines.push("আমরা প্রতিটি শিক্ষার্থী ও পরিবারের বাস্তব প্রয়োজন অনুযায়ী তথ্যভিত্তিক পরামর্শ দিতে প্রতিশ্রুতিবদ্ধ। আপনার যেকোনো প্রশ্ন থাকলে এই ইমেইলে উত্তর দিতে পারেন।");
-    if (!hasUnsub) {
-      lines.push("You are receiving this update based on your communication preferences. To opt out or update preferences, use your preferences link or reply STOP at any time. Unsubscribe options are always honored.");
-    }
     return {
       model: `${model} (built-in-local)`,
-      content: JSON.stringify({ draft: lines.join("\n\n") }),
+      content: JSON.stringify({ draft: original }),
     };
   }
 
@@ -380,7 +369,7 @@ export async function generateLocalChatJson(
       method: "POST",
       headers: { "content-type": "application/json" },
       cache: "no-store",
-      signal: AbortSignal.timeout(Math.min(timeoutMs, 3_500)),
+      signal: AbortSignal.timeout(Math.max(1_000, Math.min(timeoutMs, 12_000))),
       body: JSON.stringify({
         model,
         stream: false,

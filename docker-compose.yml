@@ -1,60 +1,40 @@
-# ALO Learning Journey — Docker Compose stack.
-# The app is strictly local-first: the only optional AI service is a private
-# Ollama container on an internal network (never published to the internet).
-# Production deployments can also use the bare-metal PM2 + Nginx path in
-# scripts/ (this compose file is the containerised alternative).
-
+# Optional local/sandbox container profile only; not the verified VPS deployment.
+# It does not start a proxy or override DATABASE_URL. Supply a MySQL URL in the
+# ignored .env file and review the volumes/ports before starting any container.
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    image: alo-learning-journey:latest
-    container_name: learn-aloeducation
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3017:3017"   # publish on loopback only; put Nginx/Caddy in front
+      - "127.0.0.1:3017:3017"
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
-      PORT: 3017
+      PORT: "3017"
       HOSTNAME: 0.0.0.0
-      DATABASE_URL: ${DATABASE_URL:-}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-}
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://127.0.0.1:3017}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
-      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
-      ADMIN_OTP_PHONE: ${ADMIN_OTP_PHONE:-}
-      ADMIN_OTP_REQUIRED: ${ADMIN_OTP_REQUIRED:-true}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
-      COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:-}
-      COMFYUI_CHECKPOINT: ${COMFYUI_CHECKPOINT:-}
-      UPLOAD_DIR: /app/storage/uploads
-      VIDEO_DIR: /app/storage/videos
-      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
     volumes:
-      - ./storage:/app/storage
-    networks:
-      - alo-internal
-    depends_on:
-      ollama:
-        condition: service_started
-
-  # Private local LLM — reachable only on the compose-internal network.
-  # The application's endpoint guard rejects public AI hosts by design.
-  ollama:
-    image: ollama/ollama:latest
-    container_name: alo-ollama
-    restart: unless-stopped
-    volumes:
-      - ollama-models:/root/.ollama
-    networks:
-      - alo-internal
-    # No ports published: app reaches it as http://ollama:11434 internally.
-
-networks:
-  alo-internal:
-    driver: bridge
+      - alo-storage:/app/storage
+      - alo-generated:/app/public/generated
+      - alo-avatars:/app/public/avatars
+      - alo-avatar-videos:/app/public/avatar-videos
+      - alo-avatar-audio:/app/public/avatar-audio
+      - alo-avatar-scenes:/app/public/avatar-scenes
+      - alo-avatar-thumbs:/app/public/avatar-thumbs
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:3017/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 volumes:
-  ollama-models:
+  alo-storage:
+  alo-generated:
+  alo-avatars:
+  alo-avatar-videos:
+  alo-avatar-audio:
+  alo-avatar-scenes:
+  alo-avatar-thumbs:

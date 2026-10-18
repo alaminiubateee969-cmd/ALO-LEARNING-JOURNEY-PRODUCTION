@@ -65,7 +65,28 @@ function checkEnv(results: Check[]) {
   const target = isFile
     ? `file path (${path.basename(url.replace(/^file:/, ""))})`
     : `${scheme}://<host redacted>`;
-  record(results, "DATABASE_URL", true, true, `set; scheme=${scheme}; ${target}`);
+  const mysqlRequired = process.env.NODE_ENV === "production";
+  const mysqlConfigured = scheme === "mysql" || scheme === "mysqls";
+  const ok = !mysqlRequired || mysqlConfigured;
+  record(results, "DATABASE_URL", true, ok, `set; scheme=${scheme}; ${target}${!ok ? "; production requires MySQL" : ""}`);
+}
+
+async function checkCoreConfiguration(results: Check[]) {
+  const url = process.env.DATABASE_URL ?? "";
+  const scheme = url.split(":")[0] || "";
+  const mysqlOk = Boolean(url) && (process.env.NODE_ENV !== "production" || scheme === "mysql" || scheme === "mysqls");
+  record(results, "MySQL configuration", true, mysqlOk, mysqlOk ? "configured" : "production requires a MySQL DATABASE_URL");
+
+  const { isAdminAuthenticationConfigured } = await import("@/lib/auth-config");
+  const authOk = isAdminAuthenticationConfigured();
+  const authIsCritical = process.env.NODE_ENV === "production";
+  record(
+    results,
+    "Administrator authentication",
+    authIsCritical,
+    authOk,
+    authOk ? "configured" : "not configured; production admin routes fail closed",
+  );
 }
 
 async function checkStorage(results: Check[]) {
@@ -135,6 +156,7 @@ async function checkLocalSpeech(results: Check[]) {
 export async function GET(request: Request) {
   const results: Check[] = [];
   const detailsRequested = new URL(request.url).searchParams.get("details") === "1";
+  await checkCoreConfiguration(results);
 
   if (detailsRequested) {
     record(results, "Runtime", true, true, `node ${process.version}`);
@@ -161,7 +183,8 @@ export async function GET(request: Request) {
     failedOptional: failedOptional.map((check) => check.name),
   };
   const legacyStatus = failedOptional.length || failedCritical.length ? "PARTIAL" : "COMPLETE";
-  const baseResponse = { status, legacyStatus, httpStatus, checkedAt };
+  const releaseSha = /^[0-9a-f]{40}$/.test(process.env.RELEASE_SHA ?? "") ? process.env.RELEASE_SHA : "unknown";
+  const baseResponse = { status, legacyStatus, httpStatus, checkedAt, releaseSha };
 
   return NextResponse.json(
     detailsRequested ? { ...baseResponse, checks: results, summary } : baseResponse,

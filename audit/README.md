@@ -6,10 +6,12 @@
 > results, and readiness claims; no item here proves the current VPS or live
 > database state. Do not run any cleanup, migration, bootstrap, or deployment
 > command copied from these reports without a new review and explicit approval.
-> For the current source baseline use `../COMPLETE-AUDIT-REPORT.md`; for current
-> deployment and migration blockers use `../DEPLOYMENT.md` and
-> `../MIGRATION-RECOVERY-PLAN.md`. The post-repair report will be
-> `../POST-REPAIR-AUDIT-REPORT.md`.
+> For current repository-only readiness and checks use
+> `../deploy/docs/PRODUCTION_READINESS.md` and `../deploy/docs/TEST_REPORT.md`;
+> for current deployment and migration blockers use `../DEPLOYMENT.md` and
+> `../MIGRATION-RECOVERY-PLAN.md`. `../COMPLETE-AUDIT-REPORT.md`,
+> `../POST-REPAIR-AUDIT-REPORT.md`, and `../worklog.md` are explicitly historical
+> snapshots and must not be treated as current verification.
 
 # ALO Education — Historical Deployment Verification & Safe Cleanup
 

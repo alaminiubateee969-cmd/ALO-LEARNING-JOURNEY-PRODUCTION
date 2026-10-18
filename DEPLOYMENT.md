@@ -1,23 +1,26 @@
 # ALO Learning Journey — Deployment and Production Readiness
 
 > **Current status: NOT PRODUCTION-READY / deployment intentionally blocked.**
-> This repository-only audit has not accessed the VPS, production database, GitHub
-> Actions settings, proxy, DNS, SSL, Docker, or PM2. Values and claims in older
-> audit documents are historical operator reports, not current live evidence.
-> The requested target `/home/aloedu/LEARNING-JOURNEY` conflicts with the older
-> documented path `/home/aloedu/projects/learn-aloeducation`; no script or
-> workflow now selects either path implicitly.
+> This repository-only repair has not accessed the VPS, production database,
+> GitHub Actions settings, proxy, DNS, SSL, Docker, or PM2. Operator-provided
+> configuration (not independently verified): MySQL `db_learn` at
+> `127.0.0.1:3306`; app root `/home/aloedu/LEARNING-JOURNEY`; PM2 name
+> `learn-aloeducation`; port `3017`; domain `learn.aloeducation.com`. The operator
+> reports an empty PM2 process list. Scripts assert these exact values but do
+> not prove the VPS currently matches them.
 
 ## Evidence and scope
 
-- Pre-repair source baseline: [`COMPLETE-AUDIT-REPORT.md`](./COMPLETE-AUDIT-REPORT.md).
-- Post-repair source/test audit: [`POST-REPAIR-AUDIT-REPORT.md`](./POST-REPAIR-AUDIT-REPORT.md) (completed 2026-10-18; check limitations are documented there).
+- Current repository-only status: [`deploy/docs/PRODUCTION_READINESS.md`](./deploy/docs/PRODUCTION_READINESS.md) and [`deploy/docs/TEST_REPORT.md`](./deploy/docs/TEST_REPORT.md).
+- Release evidence and known blockers: [`deploy/RELEASE_MANIFEST.txt`](./deploy/RELEASE_MANIFEST.txt).
+- `COMPLETE-AUDIT-REPORT.md` and `POST-REPAIR-AUDIT-REPORT.md` are explicitly labeled historical snapshots; their counts and check results are not current.
 - Migration recovery requirements: [`MIGRATION-RECOVERY-PLAN.md`](./MIGRATION-RECOVERY-PLAN.md).
-- Historical reports under `audit/` describe earlier checkouts and must not be
-  used as proof that the current VPS, its database, or its network is healthy.
+- Reports under `audit/` and `worklog.md` are historical archives, not proof that the current VPS, database, or network is healthy.
 
-No migration, database write, PM2 command, proxy change, DNS/SSL change, SSH
-operation, merge, or deployment has been performed by this audit.
+No production migration, database write, PM2 command, proxy change, DNS/SSL
+change, SSH operation, PR merge, or deployment has been performed. A local main
+branch integration is being reconciled in the repair branch; it has not been
+pushed as a completed merge or deployed.
 
 ## Deployment workflow and safety gates
 
@@ -30,18 +33,24 @@ switch is forwarded; this is an accidental-invocation guard, not proof that
 production is ready or authorization to bypass the workflow gates. Before the
 remote deploy step it must also receive:
 
-1. `VPS_APP_DIR`, an absolute application path confirmed read-only against the
-   running PM2 cwd, proxy upstream, and persistent storage. The workflow has no
-   path fallback.
-2. `VPS_DOMAIN`, a verified public `https://` URL. The public `/api/health`
-   check is a hard gate; there is no non-strict fallback.
-3. `VPS_RESTORE_TEST_SHA` equal to the exact release commit and
-   `VPS_RESTORE_TEST_REFERENCE` identifying a successful isolated backup restore
-   rehearsal against that release. A compressed dump integrity probe is not a
-   restore test.
-4. If migrations are pending, `VPS_MIGRATION_PLAN_SHA` equal to the exact
-   release commit after the production schema/history inspection and isolated
-   migration rehearsal in `MIGRATION-RECOVERY-PLAN.md`.
+1. `VPS_APP_DIR` must equal `/home/aloedu/LEARNING-JOURNEY`; the workflow and
+   remote script reject any other path. The deployment layout (`current`,
+   `releases`, `shared/.env`) still requires read-only VPS verification.
+2. `VPS_PM2_APP=learn-aloeducation`, `VPS_APP_PORT=3017`, and
+   `VPS_DOMAIN=https://learn.aloeducation.com` must match exactly.
+3. The deploy script requires an already-online PM2 process and a healthy,
+   SHA-marked `current` release. It never starts a missing process. The
+   operator-reported empty PM2 list therefore blocks this release path until a
+   separate, reviewed first-install/recovery procedure establishes a known-good
+   release.
+4. `VPS_RESTORE_TEST_SHA` equal to the exact release commit and
+   `VPS_RESTORE_TEST_REFERENCE` identifying a successful isolated production
+   backup restore rehearsal. A gzip/content probe is not a restore test.
+5. `VPS_SCHEMA_PREFLIGHT_SHA` and `VPS_SCHEMA_PREFLIGHT_REFERENCE` bind the
+   exact release to a reviewed MySQL schema/history compatibility report.
+6. If migrations are pending, `VPS_MIGRATION_PLAN_SHA` equal to the exact
+   release commit after the schema/history inspection and isolated migration
+   rehearsal in `MIGRATION-RECOVERY-PLAN.md`.
 
 The workflow does not run on this branch by default. Do not set the readiness
 switch or approval variables merely to make the job start. The repository has
@@ -65,12 +74,14 @@ or that production is ready.
 
 | Variable | Requirement |
 |---|---|
-| `VPS_APP_DIR` | Required; confirmed live path, no default. Do not choose between the two conflicting documented paths without VPS evidence. |
-| `VPS_PM2_APP` | PM2 app name; defaults to `learn-aloeducation` in the script. |
-| `VPS_APP_PORT` | Must match the actual local app port; defaults to `3017`. |
-| `VPS_DOMAIN` | Required verified HTTPS URL; public health is a hard post-deploy gate. |
-| `VPS_RESTORE_TEST_SHA` | Exact release SHA whose backup restore was rehearsed in isolation. |
-| `VPS_RESTORE_TEST_REFERENCE` | Non-secret audit/ticket/backup reference for that rehearsal. |
+| `VPS_APP_DIR` | Must equal `/home/aloedu/LEARNING-JOURNEY`. The on-disk release layout still needs read-only verification. |
+| `VPS_PM2_APP` | Must equal `learn-aloeducation`. |
+| `VPS_APP_PORT` | Must equal `3017`. |
+| `VPS_DOMAIN` | Must equal `https://learn.aloeducation.com`; public health must report the exact release SHA. |
+| `VPS_RESTORE_TEST_SHA` | Exact release SHA whose production backup restore was rehearsed in isolation. |
+| `VPS_RESTORE_TEST_REFERENCE` | Non-secret audit/ticket reference for that restore rehearsal. |
+| `VPS_SCHEMA_PREFLIGHT_SHA` | Exact release SHA reviewed against production migration history and MySQL schema. |
+| `VPS_SCHEMA_PREFLIGHT_REFERENCE` | Non-secret audit/ticket reference for that schema/history review. |
 | `VPS_MIGRATION_PLAN_SHA` | Set only for an explicitly reviewed pending-migration plan, and only to its exact release SHA. |
 | `VPS_DEPLOY_ENABLED` | Keep unset until every blocker below is cleared and required reviewers are configured. |
 
@@ -80,10 +91,10 @@ variables, workflow logs, reports, or chat.
 
 ## Required sequence before any production release
 
-1. **Read-only host inventory:** establish the real app directory, PM2 process
-   and cwd, port, proxy upstream, storage paths, Node/npm/PM2/MySQL versions,
-   and service owner. Reconcile the path conflict. Do not move/rename the live
-   directory, change the proxy, or restart PM2 during this inventory.
+1. **Read-only host inventory:** confirm the operator-provided app directory,
+   release layout, PM2 process and cwd, port, proxy upstream, storage paths,
+   Node/npm/PM2/MySQL versions, and service owner. The user reports PM2 is
+   empty; verify it read-only and do not start/restart PM2 during inventory.
 2. **Read-only database inspection:** verify which database the app uses, its
    tables/columns/indexes/FKs, `_prisma_migrations` rows and checksums, and
    relevant MySQL version. Do not treat the user-reported missing tables or
@@ -113,34 +124,52 @@ variables, workflow logs, reports, or chat.
 
 ## Migration behavior in the deploy script
 
-`scripts/deploy-production.sh` builds the isolated release **before** any
-migration, checks DB connectivity, writes a compressed SQL dump, verifies gzip
-integrity and a schema-content probe, then evaluates migration status. That
-script does **not** restore-test the dump; the external exact-SHA rehearsal gate
-is mandatory. It refuses an unknown/failed/unbaselined history or a pending set
-that is not a known ordered suffix of the checked-in three-migration chain.
-Pending migrations additionally require `MIGRATION_PLAN_APPROVED_SHA` to equal
-the exact release SHA. After `prisma migrate deploy`, it requires clean status
-before switching `current` and reloading PM2. PM2 reload or local-health
-failure restores the previous **code** path only; database changes are not
-auto-reverted. The later public-health job runs after the remote script returns;
-a public-health failure is a failed workflow, not an automatic server rollback.
+`deploy/app-deploy.sh` is the manual entry point; the workflow streams
+`scripts/deploy-production.sh` over pinned SSH. The deploy script requires the
+exact verified path/name/port, an existing healthy SHA-marked `current` release,
+and an already-online PM2 process. It **does not** bootstrap or start an absent
+process. It builds the exact commit before database changes, checks the MySQL
+target is `127.0.0.1:3306/db_learn`, creates a compressed dump, and checks gzip
+and schema-content integrity. Those checks do **not** prove restoreability; the
+external exact-SHA restore and schema/history review references are mandatory.
 
-The release process preserves files from tracked `storage/` in persistent
-`shared/storage/` using no-clobber copies before linking the release to shared
-storage. The old app directory is not moved by the bootstrap script. Review the
-scripts and backup capacity on the real host before any authorized execution.
+Before reading migration status, the script queries `_prisma_migrations` read-only
+and compares every applied checksum against the exact release's migration files
+using `scripts/verify-prisma-history.mjs`. Empty, unknown, duplicate, unfinished,
+rolled-back, out-of-order, or checksum-mismatched history fails closed. The
+initial baseline must already be reconciled and recorded as applied; the deploy
+script will not apply or resolve the baseline. If history is clean, the script
+skips `prisma migrate deploy`. If migrations are pending, it allows only an
+ordered suffix after the baseline and requires `MIGRATION_PLAN_APPROVED_SHA`
+equal to the exact release SHA. The Prisma-reported pending list must match the
+checksum-verified history suffix. The external restore and schema/history
+references remain operator attestations, not automatic proof. After an approved
+migration it requires clean migration status before switching `current`.
 
-## Bootstrap script
+It reloads only the already registered PM2 process; it never uses a `start`
+fallback. Local health must report `status=ok` and the exact `releaseSha`. The
+previous release is retained for code rollback; database changes are never
+auto-reverted. The later public health job requires the public domain to report
+the same exact SHA. A public health failure fails the workflow but does not
+automatically roll back.
 
-`scripts/bootstrap-vps.sh` is a one-time guarded operation, **not** run as part
-of CI and not run during this audit. It requires an explicit absolute `APP_DIR`,
-`APP_DIR_CONFIRM` equal to that exact path, and an exact-SHA restore-test
-reference. It retains the existing app directory, performs a health check,
-builds a separate release, requires clean read-only migration status, then
-switches `current` with a rollback path. It does not migrate the database or
-change the proxy/DNS. Even with these guards, do not run it until a production
-operator has inspected the complete script and authorized the operation.
+The release process preserves tracked `storage/` files in persistent
+`shared/storage/` and copies runtime-written public media to the new release.
+Files are never overwritten; conflicting content, symlinks, or paths outside
+the reviewed application boundary stop deployment. Database and media backups
+are checksummed before migration. Releases and backup files are never pruned.
+Review disk usage and the actual app layout on the VPS before any authorized
+execution.
+
+## Bootstrap/preflight scripts
+
+`deploy/vps-bootstrap.sh` and the legacy `scripts/bootstrap-vps.sh` entry point
+are now read-only preflight tools. They report missing Node/PM2/MySQL tools,
+release markers, process state, RAM, and disk but perform no package installs,
+firewall/proxy changes, directory moves, file ownership changes, cron edits,
+database writes, or service starts. The operator-reported empty PM2 list is an
+explicit first-deployment blocker. A separate first-install procedure must be
+reviewed and authorized before this release/rollback deploy path can run.
 
 ## Current blockers (must be resolved before production-ready claim)
 
@@ -148,15 +177,16 @@ operator has inspected the complete script and authorized the operation.
   the user-reported missing CRM/OTP tables are **unverified**.
 - No production backup restore or isolated migration rehearsal has been
   demonstrated. The deployment dump probe alone is insufficient.
-- The real VPS path conflicts with prior docs and has not been confirmed.
+- The app path/domain/port/PM2 name are operator-provided but not independently verified on the VPS; the release layout and empty PM2 state require a read-only check and a reviewed first-install plan.
 - Live Ubuntu/PM2/MySQL/Docker/proxy/firewall/TLS/DNS and remote connectivity
   are not verified in this audit.
 - External auth/SMS delivery, social OAuth, publishing delivery, background
   schedulers, off-site monitoring, and actual restore procedures require
   separate operational verification; see the post-repair audit.
-- `npm audit` findings, Prisma engine download blocker, and the Next.js
-  middleware deprecation warning are detailed in the post-repair report and
-  still require follow-up.
+- The current Prisma Client generation/typecheck/build limitation and any
+  remaining dependency-audit findings are recorded in
+  `deploy/docs/PRODUCTION_READINESS.md` and `deploy/docs/TEST_REPORT.md`; do not
+  rely on the historical audit snapshot for current counts.
 
 **Until every blocker is resolved with evidence, leave `VPS_DEPLOY_ENABLED`
 unset and do not execute production migration/bootstrap/deploy commands.**
