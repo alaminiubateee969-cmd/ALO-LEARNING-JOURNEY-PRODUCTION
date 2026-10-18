@@ -4,11 +4,12 @@ As of: 2026-10-18 (repository-only review)
 Package version: 0.2.1 (package.json)
 Requested release: v2.0.0 (not independently verified)
 GitHub release/tag: not verified; prior lookup found no v2.0.0 release/tag
-PR: #19, OPEN and DIRTY; no reported check runs
+PR: #19, OPEN and UNSTABLE at the last completed check
 Branch: arena/6d490018-alo-learning-journey-productio
-Local HEAD: 05796a796511aa96bc23b220e6ef5c96a7ec2b44 (pre-merge)
-Merge target: 2fb44c087c214b0ebb093e1c8b3bb9324d9b532b
-Working tree: local merge in progress; not committed or pushed
+Pushed merge commit: 65e2729cdff4a012d95a16b1ebc30b42941c0117
+Merged main commit: 2fb44c087c214b0ebb093e1c8b3bb9324d9b532b
+Last PR checks: CI / validate PASS; Datadog Synthetics / build FAIL
+Working tree: follow-up opt-in guard for Datadog is not yet pushed
 
 Production target (operator-provided; not VPS-verified)
 ------------------------------------------------------
@@ -20,7 +21,7 @@ Database: MySQL db_learn at 127.0.0.1:3306
 
 Repository evidence currently available
 ---------------------------------------
-Automated tests: PASS — 51 tests (npm test)
+Automated tests: PASS — 52 tests (npm test)
 ESLint: PASS — 0 errors, 0 warnings
 Static MySQL migration verifier: PASS — 42 Prisma models, 480 scalar column
   types, keys/indexes/relations map to five checked-in migrations; one implicit
@@ -51,11 +52,12 @@ configured/verified independently.
 
 Merge gate
 ----------
-NOT READY TO MERGE. PR #19 has no reported checks and is currently DIRTY.
-Complete the local merge, commit/push only to the existing Arena branch, resolve
-GitHub's merge state, generate and verify the matching Prisma Client, pass
-required CI/typecheck/build checks, and obtain review. Do not merge before the
-required checks pass.
+NOT READY TO MERGE. At the last completed PR run on `65e2729`, GitHub reported
+`OPEN` / `UNSTABLE`: `CI / validate` passed, while the Datadog Synthetics `build`
+check failed. The optional Datadog workflow now has an opt-in guard in the local
+follow-up; push it to the existing Arena branch, rerun checks, and verify a
+clean merge state. Generate/verify the matching Prisma Client and obtain review.
+Do not merge before required checks pass.
 
 Production release/deployment gate
 ---------------------------------

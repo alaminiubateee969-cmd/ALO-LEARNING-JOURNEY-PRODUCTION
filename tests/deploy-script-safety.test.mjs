@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const deployScript = await readFile(path.join(root, "scripts/deploy-production.sh"), "utf8");
 const workflow = await readFile(path.join(root, ".github/workflows/deploy.yml"), "utf8");
+const datadogWorkflow = await readFile(path.join(root, ".github/workflows/datadog-synthetics.yml"), "utf8");
 
 test("production deploy is pinned to the operator-provided path, PM2 name, and port", () => {
   assert.match(deployScript, /APP_DIR="\$\{APP_DIR:-\/home\/aloedu\/LEARNING-JOURNEY\}"/);
@@ -100,4 +101,11 @@ test("public HTTPS health verification requires the exact released SHA", () => {
 test("production deployment fails closed if human-review protection cannot be verified", () => {
   assert.match(workflow, /Cannot verify production environment protection rules/);
   assert.match(workflow, /refusing to deploy/);
+});
+
+test("third-party Datadog tests are disabled by default and require an explicit opt-in", () => {
+  assert.match(datadogWorkflow, /vars\.DATADOG_SYNTHETICS_ENABLED == 'true'/);
+  assert.match(datadogWorkflow, /secrets\.DD_API_KEY/);
+  assert.match(datadogWorkflow, /secrets\.DD_APP_KEY/);
+  assert.match(datadogWorkflow, /required repository secrets are missing/);
 });

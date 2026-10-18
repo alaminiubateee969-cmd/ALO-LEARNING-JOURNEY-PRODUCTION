@@ -2,13 +2,13 @@
 
 **As of:** 2026-10-18
 **Branch:** `arena/6d490018-alo-learning-journey-productio`
-**Status:** Local checks only. The merge is not committed or pushed; GitHub CI and production tests have not run.
+**Status:** Local checks plus a GitHub PR-check snapshot for commit `65e2729cdff4a012d95a16b1ebc30b42941c0117`; no production tests have run. The merge commit is pushed to PR #19, which remains open.
 
 ## Local checks
 
 | Check | Result | Evidence / limitation |
 |---|---|---|
-| `npm test` | PASS | 51/51 tests passed. Includes auth/OTP, CRM/health, migration guards, release-script safeguards, bounded uploads, and tests that prevent unverified SEO/lip-sync claims. Node emitted a non-failing module-type performance warning for `src/lib/auth-config.ts`. |
+| `npm test` | PASS | 52/52 tests passed. Includes auth/OTP, CRM/health, migration guards, release-script safeguards, bounded uploads, and tests that prevent unverified SEO/lip-sync claims. Node emitted a non-failing module-type performance warning for `src/lib/auth-config.ts`. |
 | `npm run lint` | PASS | 0 errors, 0 warnings after replacing build-time Google font downloads with the repository's licensed self-hosted Hind Siliguri fonts and system fallbacks. |
 | `npm run verify:migrations` | PASS, static only | 42 Prisma models, 480 scalar column types, indexes/unique constraints/PKs/FKs, and one implicit relation table map to five checked-in MySQL migrations. No selected destructive SQL pattern found. This is not a live database comparison. |
 | `npm run typecheck` | FAIL / BLOCKED | One reported error: `src/lib/db.ts(1,10): @prisma/client has no exported member PrismaClient` because the schema-specific generated client is absent. |
@@ -16,9 +16,9 @@
 | Prisma Client generation | BLOCKED | The prior `npx prisma generate --schema=prisma/schema.prisma --no-engine` attempt could not download Prisma's schema engine/checksum from `binaries.prisma.sh` because of sandbox TLS/network restrictions. Do not mask this with a fake client. |
 | `npm audit` | FAIL / triage required | Registry report: 13 findings (9 high, 4 moderate, 0 critical). `npm audit --omit=dev`: 8 (4 high, 4 moderate). Proposed fixes include major-version changes; none were applied blindly. |
 | `bash -n` | PASS | Seven deployment/preflight/backup/health scripts parsed successfully, including the read-only monitor. |
-| Workflow/Compose YAML | PASS, syntax only | `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, and `docker-compose.yml` parsed with `js-yaml`; this is not a GitHub Actions run. |
+| Workflow/Compose YAML | PASS, syntax only | `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, `.github/workflows/datadog-synthetics.yml`, and `docker-compose.yml` parsed with `js-yaml`; this is not proof of a GitHub Actions run. |
 | `git diff --check` and `git diff --cached --check` | PASS at last run | Both working-tree and staged diff whitespace checks passed after normalizing imported text artifacts. Re-run after final staging. |
-| GitHub CI / PR checks | NOT RUN | Latest observed PR #19 state is `OPEN`, `DIRTY`, with no reported checks. |
+| GitHub CI / PR checks | PARTIAL / FOLLOW-UP PENDING | On commit `65e2729`, `CI / validate` passed. The separate Datadog Synthetics `build` job failed in its third-party action; run logs could not be fetched in this sandbox, so the exact failure cause is not confirmed. The workflow now requires `DATADOG_SYNTHETICS_ENABLED=true` before running and is disabled by default; this change needs a fresh PR check run. |
 
 ## What the static migration check means
 

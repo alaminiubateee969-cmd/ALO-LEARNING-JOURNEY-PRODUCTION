@@ -9,16 +9,16 @@ This is a repository-only assessment. The VPS, production MySQL database, backup
 
 | Gate | Result | Evidence / limitation |
 |---|---|---|
-| Automated tests | PASS | `npm test`: 51/51 tests passed on the current worktree; see [`TEST_REPORT.md`](TEST_REPORT.md). |
+| Automated tests | PASS | `npm test`: 52/52 tests passed on the current worktree; see [`TEST_REPORT.md`](TEST_REPORT.md). |
 | ESLint | PASS | `npm run lint`: 0 errors, 0 warnings. |
 | Static migration verification | PASS, static only | Five MySQL migrations map to 42 Prisma models, 480 scalar column types, keys/indexes/relations, and one implicit relation table. This does not check production schema/history. |
 | TypeScript | FAIL / BLOCKED | Only reported error: `src/lib/db.ts(1,10)` cannot import `PrismaClient` because the schema-specific generated `@prisma/client` is absent. |
 | Prisma generation | BLOCKED | `prisma generate --no-engine` could not fetch the schema-engine checksum from `binaries.prisma.sh` due sandbox TLS/network restrictions. |
 | Production build | FAIL / BLOCKED | Next.js compiled successfully, then type-check failed on the missing generated Prisma Client. No complete build artifact was produced. Middleware-to-proxy deprecation warning remains. |
 | Dependency audit | FAIL / triage required | `npm audit`: 13 findings (9 high, 4 moderate); `npm audit --omit=dev`: 8 (4 high, 4 moderate). Proposed fixes include major-version changes; none were applied blindly. |
-| Workflow/Compose YAML | PASS, syntax only | CI, deploy, and Compose YAML parse; GitHub Actions execution has not occurred. |
+| Workflow/Compose YAML | PASS, syntax only | CI, deploy, Datadog, and Compose YAML parse; this does not prove workflow execution. |
 | Shell syntax | PASS | Seven deployment/preflight/backup/health scripts pass `bash -n`. |
-| GitHub PR checks | NOT RUN | PR #19 reports no check runs. |
+| GitHub PR checks | PARTIAL / FOLLOW-UP PENDING | On commit `65e2729`, `CI / validate` passed, but the Datadog Synthetics `build` job failed in its third-party action. Run logs were not retrievable in this sandbox; the exact failure cause is unconfirmed. The workflow now requires `DATADOG_SYNTHETICS_ENABLED=true` and is disabled by default; that fix is not yet pushed or rechecked. |
 | MySQL/restored-copy rehearsal | NOT DONE | No verified production backup or disposable restored MySQL copy is available. |
 | VPS / PM2 / public health | NOT VERIFIED | No SSH/VPS operation or public-domain verification has occurred. |
 
@@ -26,7 +26,7 @@ The static migration verifier is not evidence that a migration matches productio
 
 ## Merge status
 
-PR #19 is the existing PR and must be updated rather than duplicated. Latest observed GitHub state: `OPEN`, `DIRTY`, head `05796a796511aa96bc23b220e6ef5c96a7ec2b44`, no reported checks. The local branch is merging `2fb44c087c214b0ebb093e1c8b3bb9324d9b532b`; changes are not yet committed or pushed. **Do not merge until the local merge is completed, the branch is pushed, GitHub reports a clean merge state, required checks pass, and review is complete.**
+PR #19 is the existing PR and must be updated rather than duplicated. At the last completed check on commit `65e2729cdff4a012d95a16b1ebc30b42941c0117`, GitHub reported `OPEN`, `UNSTABLE`: `CI / validate` passed and the separate Datadog `build` check failed. The local merge of `2fb44c087c214b0ebb093e1c8b3bb9324d9b532b` is committed and pushed to the fixed branch; the PR itself remains open and unmerged. An opt-in guard for the external Datadog workflow is being prepared and has not yet been pushed or tested. **Do not merge until the follow-up commit produces a clean merge state, required checks pass, and review is complete.**
 
 ## Production safety gates still open
 

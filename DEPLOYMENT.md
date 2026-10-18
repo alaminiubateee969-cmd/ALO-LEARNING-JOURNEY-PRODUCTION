@@ -18,9 +18,10 @@
 - Reports under `audit/` and `worklog.md` are historical archives, not proof that the current VPS, database, or network is healthy.
 
 No production migration, database write, PM2 command, proxy change, DNS/SSL
-change, SSH operation, PR merge, or deployment has been performed. A local main
-branch integration is being reconciled in the repair branch; it has not been
-pushed as a completed merge or deployed.
+change, SSH operation, PR merge, or deployment has been performed. The main
+branch integration is committed and pushed to existing PR #19 on the fixed
+Arena branch; the PR remains open and unmerged pending clean merge state,
+required passing checks, and review.
 
 ## Deployment workflow and safety gates
 

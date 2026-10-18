@@ -4,7 +4,7 @@ This repository contains the existing ALO Learning Journey application and its r
 
 ## Release status
 
-**Production release and PR #19 are not approved to merge/deploy yet.** This repair has not accessed the VPS, production MySQL, or public domain. The current working tree contains an in-progress merge of `main`; review and CI are still required.
+**Production release and PR #19 are not approved to merge/deploy yet.** This repair has not accessed the VPS, production MySQL, or public domain. The merge of `main` is committed and pushed on the fixed Arena branch as an update to existing PR #19; the PR remains open pending clean merge state, passing checks, and review. See the current readiness report for the latest CI result.
 
 The repository currently declares package version `0.2.1`. No `v2.0.0` tag or GitHub release has been verified. The current [`deploy/RELEASE_MANIFEST.txt`](./deploy/RELEASE_MANIFEST.txt) is a repository-only status record, not evidence that a release shipped; see it and the readiness report for current repository-only evidence.
 
