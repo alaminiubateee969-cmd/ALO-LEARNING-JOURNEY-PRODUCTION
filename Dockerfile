@@ -22,7 +22,7 @@ RUN bunx prisma generate
 RUN bun run build:prod
 
 # ---- Stage 3: runtime ----
-FROM node:20-slim AS runner
+FROM node:22-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3017
@@ -47,7 +47,7 @@ COPY --from=builder --chown=alo:root /app/node_modules/@prisma ./node_modules/@p
 
 # Storage volumes (mounted at runtime)
 RUN mkdir -p /app/db /app/storage && chown -R alo:root /app/db /app/storage
-VOLUME ["/app/db", "/app/storage", "/app/public/avatars", "/app/public/avatar-videos", "/app/public/avatar-audio", "/app/public/avatar-scenes", "/app/public/avatar-thumbs"]
+VOLUME ["/app/storage", "/app/public/generated", "/app/public/avatars", "/app/public/avatar-videos", "/app/public/avatar-audio", "/app/public/avatar-scenes", "/app/public/avatar-thumbs"]
 
 USER alo
 EXPOSE 3017

@@ -108,7 +108,8 @@ export async function POST(request: Request) {
     async () => {
       const fallbackScenes = buildLocalStoryboardScenes(topic, audience);
       let scenes = fallbackScenes;
-      let modelUsed = "alo-local-director-v1 (built-in-local)";
+      let modelUsed = "built-in-local";
+      let usedFallback = true;
 
       try {
         const completion = await generateLocalChatJson(
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
         );
         modelUsed = completion.model;
         const parsed = JSON.parse(completion.content) as { scenes?: Partial<StoryboardSceneItem>[] };
-        if (Array.isArray(parsed.scenes) && parsed.scenes.length >= 3) {
+        if (!completion.model.includes("(built-in-local)") && Array.isArray(parsed.scenes) && parsed.scenes.length >= 3) {
           scenes = parsed.scenes.slice(0, 4).map((s, idx) => ({
             ...fallbackScenes[idx % fallbackScenes.length],
             ...s,
@@ -126,42 +127,23 @@ export async function POST(request: Request) {
             number: idx + 1,
             duration: Math.max(3, Math.min(15, Number(s.duration ?? fallbackScenes[idx % fallbackScenes.length].duration))),
           }));
+          usedFallback = false;
         }
       } catch {
-        // Built-in local director scenes remain active
+        // The route retains a labeled built-in storyboard template.
       }
 
-      const elapsed = Math.max(12, Date.now() - startMs);
+      const elapsed = Math.max(1, Date.now() - startMs);
       const qualityPipeline: QualityAgentPass[] = [
         {
           agentId: "video_director",
-          role: "Writer · VideoDirectorAgent (4-Scene Hook-Problem-Solution-CTA Arc)",
-          status: "complete",
-          provider: "ollama-local",
-          latencyMs: Math.round(elapsed * 0.45),
-          scoreBefore: 78,
-          scoreAfter: 91,
-          summary: `Built 4-scene 9:16 storyboard for "${topic}" with character blocking, shot types, and Bengali voiceover.`,
-        },
-        {
-          agentId: "image_prompt",
-          role: "Critic · ImagePromptAgent (Protective Mode & Child-Safe Visual Check)",
-          status: "complete",
-          provider: "ollama-local",
-          latencyMs: Math.round(elapsed * 0.3),
-          scoreBefore: 91,
-          scoreAfter: 95,
-          summary: "Verified all 4 visual prompts enforce warm editorial illustration style with zero real faces or unsafe claims.",
-        },
-        {
-          agentId: "quality_critic",
-          role: "Finalist · QualityCriticAgent (Pacing, Retention & Brand Voice Polish)",
-          status: "complete",
-          provider: "ollama-local",
-          latencyMs: Math.round(elapsed * 0.25),
-          scoreBefore: 95,
-          scoreAfter: 98,
-          summary: "Confirmed 3-second opening hook, clear Bengali voiceover cadence, and 20s total duration.",
+          role: "Storyboard generation",
+          status: usedFallback ? "fallback" : "complete",
+          provider: usedFallback ? "local-fallback" : "ollama-local",
+          latencyMs: elapsed,
+          summary: usedFallback
+            ? "Built-in storyboard template used; no model-based critic, finalist, child-safety review, or quality score was run."
+            : "A local Ollama model returned a storyboard. No separate critic, finalist, or child-safety reviewer was run.",
         },
       ];
 
@@ -172,10 +154,13 @@ export async function POST(request: Request) {
           scenes,
           totalDuration: scenes.reduce((sum, s) => sum + s.duration, 0),
           provider: modelUsed,
+          usedFallback,
           paidApiCalls: false,
           qualityPipeline,
         },
-        provider: "ollama-local",
+        provider: usedFallback ? "local-fallback" : "ollama-local",
+        usedFallback,
+        error: usedFallback ? "Built-in storyboard template used; the configured Ollama model did not provide a valid storyboard." : undefined,
       };
     }
   );
@@ -183,6 +168,8 @@ export async function POST(request: Request) {
   await recordAgentPipelineStages("video storyboard direction", agent.result.qualityPipeline);
   return NextResponse.json({
     ...agent.result,
+    agentStatus: agent.status,
+    agentError: agent.error,
     agentRunId: agent.runId,
     auditId: agent.auditId,
   });

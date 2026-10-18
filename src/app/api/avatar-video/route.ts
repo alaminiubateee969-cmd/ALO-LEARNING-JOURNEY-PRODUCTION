@@ -11,7 +11,6 @@ import {
 } from '@/lib/validation';
 import { checkRateLimit, markGenerationStart, markGenerationEnd } from '@/lib/rate-limit';
 import { log, newJobId, truncatePrompt } from '@/lib/observability';
-import { maybeLipSync } from '@/lib/lipsync';
 import { cleanupVideoFiles, resolvePublicPath } from '@/lib/cleanup';
 import { mintMediaToken } from '@/lib/media-token';
 
@@ -21,8 +20,9 @@ import { mintMediaToken } from '@/lib/media-token';
  * Fixes applied:
  *   B1: composeVideo() now produces a video+audio MP4 (silent-audio title card
  *       + filter_complex concat that preserves both streams).
- *   B2: maybeLipSync() is a REAL HTTP adapter (src/lib/lipsync.ts). Returns
- *       structured reason codes. Only lipSyncUsed=true on verified success.
+ *   B2: lip-sync is NOT integrated into composeVideo(). The adapter is not
+ *       called; records return lipSyncUsed=false/reason=not_integrated until
+ *       its output is consumed and validated by the final compositor.
  *   Validation: structured 400s, whitespace rejection, prompt length cap.
  *   Prompt injection: system/user separation, sanitizePrompt(), strict schema.
  *   Ownership: every query scoped by ownerId from session.
@@ -478,15 +478,11 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ---------- 3. LIP-SYNC (real adapter; B2) ----------
-      const lipOutPath = path.join(VIDEO_DIR, `lipsync_${video.id}.mp4`);
-      const lipResult = await maybeLipSync({
-        portraitPath: portraitFsPath,
-        audioPath: scenes[0].audioPath,
-        outPath: lipOutPath,
-      });
-      const lipSyncUsed = lipResult.used;
-      const lipSyncReason = lipResult.reason;
+      // ---------- 3. LIP-SYNC (not integrated; B2) ----------
+      // Do not call the external adapter and do not report success: the final
+      // compositor below currently uses still scene images, not lip-sync output.
+      const lipSyncUsed = false;
+      const lipSyncReason = "not_integrated";
 
       await db.avatarVideo.update({
         where: { id: video.id },

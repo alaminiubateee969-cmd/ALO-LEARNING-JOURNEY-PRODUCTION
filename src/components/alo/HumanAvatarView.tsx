@@ -224,21 +224,21 @@ const QUALITY_PRESETS: {
 }[] = [
   {
     value: "standard",
-    label: "Standard",
-    bn: "স্ট্যান্ডার্ড",
-    desc: "CRF 23 · medium preset · fast",
+    label: "Balanced encode",
+    bn: "ব্যালান্সড এনকোড",
+    desc: "CRF 23 · medium encoding preset",
   },
   {
     value: "hd",
-    label: "HD",
-    bn: "এইচডি",
-    desc: "CRF 20 · medium preset · sharper",
+    label: "Lower compression",
+    bn: "কম কম্প্রেশন",
+    desc: "CRF 20 · same 1080×1920 output · larger files",
   },
   {
     value: "cinematic",
-    label: "Cinematic",
-    bn: "সিনেমা",
-    desc: "CRF 23 · slow preset · premium grade",
+    label: "Slow encode",
+    bn: "ধীর এনকোড",
+    desc: "CRF 23 · slow encoding preset; no effects added",
   },
 ];
 
@@ -293,6 +293,10 @@ function qualityBadgeClass(q: string): string {
   if (q === "cinematic") return "bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-100";
   if (q === "hd") return "bg-amber-100 text-amber-700 hover:bg-amber-100";
   return "bg-slate-100 text-slate-600 hover:bg-slate-100";
+}
+
+function qualityPresetLabel(value: string): string {
+  return QUALITY_PRESETS.find((preset) => preset.value === value)?.label ?? value;
 }
 
 function parseScenes(scenesJson: string | null | undefined): Scene[] {
@@ -466,8 +470,11 @@ export default function HumanAvatarView() {
   }, [toast]);
 
   useEffect(() => {
-    loadMeta();
-    loadVideos();
+    const timeout = window.setTimeout(() => {
+      void loadMeta();
+      void loadVideos();
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [loadMeta, loadVideos]);
 
   /* ----- Polling effect -----
@@ -871,7 +878,10 @@ export default function HumanAvatarView() {
                 </span>
               </h2>
               <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
-                AI-নির্মিত মানবসদৃশ অ্যাভাটার — স্বাভাবিক ভয়েস ও ধারাবাহিক মুখমণ্ডল
+                Provider-dependent demo: still images, voice-over and FFmpeg pan/zoom. Face consistency, naturalness and lip-sync are not independently verified.
+              </p>
+              <p className="text-xs text-muted-foreground max-w-2xl">
+                প্রোভাইডার-নির্ভর ডেমো: স্থিরচিত্র, ভয়েস-ওভার ও FFmpeg প্যান/জুম। মুখের ধারাবাহিকতা, স্বাভাবিকতা ও লিপ-সিঙ্ক স্বাধীনভাবে যাচাই করা হয় না।
               </p>
             </div>
           </div>
@@ -1337,12 +1347,12 @@ export default function HumanAvatarView() {
               </div>
             </div>
 
-            {/* Quality */}
+            {/* Encoding preset */}
             <div className="space-y-2 mb-4">
               <Label className="text-xs flex items-center gap-1">
                 <Sparkles className="h-3 w-3" />
-                Quality
-                <span className="text-muted-foreground font-normal">/ গুণমান</span>
+                Encoding preset
+                <span className="text-muted-foreground font-normal">/ এনকোডিং প্রিসেট</span>
               </Label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {QUALITY_PRESETS.map((q) => (
@@ -1436,20 +1446,14 @@ export default function HumanAvatarView() {
                   </span>
                 </h4>
                 {finalResult.lipSyncUsed ? (
-                  <Badge className="bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-100">
-                    <Sparkles className="h-2.5 w-2.5 mr-0.5" />
-                    Lip-synced
+                  <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100" title="A legacy lipSyncUsed flag does not prove the adapter output was included in the final video.">
+                    Lip-sync flag unverified
                   </Badge>
-                ) : finalResult.lipSyncReason === "not_configured" ? (
-                  <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100" title="LIPSYNC_SERVICE_URL not set">
-                    Lip-sync unavailable
+                ) : (
+                  <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100" title="The final compositor uses still scene images and does not consume lip-sync adapter output.">
+                    Lip-sync not integrated
                   </Badge>
-                ) : finalResult.lipSyncReason ? (
-                  <Badge className="bg-red-100 text-red-700 hover:bg-red-100" title={finalResult.lipSyncReason}>
-                    <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
-                    Lip-sync failed
-                  </Badge>
-                ) : null}
+                )}
               </div>
 
               <h3 className="text-base font-bold mb-1">
@@ -1488,7 +1492,7 @@ export default function HumanAvatarView() {
                   {finalResult.totalScenes ?? finalResult.scenes?.length ?? 0} scenes
                 </Badge>
                 <Badge className={qualityBadgeClass(genQuality)}>
-                  {genQuality}
+                  {qualityPresetLabel(genQuality)}
                 </Badge>
               </div>
 
@@ -1565,7 +1569,7 @@ export default function HumanAvatarView() {
               tone="fuchsia"
             />
             <StatTile
-              label="Lip-synced"
+              label="Lip-sync flags (unverified)"
               value={videoStats?.lipSyncUsed ?? 0}
               icon={<Sparkles className="h-3 w-3" />}
               tone="rose"
@@ -1671,26 +1675,16 @@ export default function HumanAvatarView() {
                             {avatar?.name ?? "—"}
                           </Badge>
                           <Badge className={qualityBadgeClass(v.quality)}>
-                            {v.quality}
+                            {qualityPresetLabel(v.quality)}
                           </Badge>
-                          {/* Honest lip-sync state display */}
+                          {/* Stored legacy flags do not prove lipsync output reached the final compositor. */}
                           {v.lipSyncUsed ? (
-                            <Badge className="bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-100">
-                              <Sparkles className="h-2 w-2 mr-0.5" />
-                              Lip-synced
-                            </Badge>
-                          ) : v.lipSyncReason === "not_configured" ? (
-                            <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100" title="LIPSYNC_SERVICE_URL not set — talking-portrait mode">
-                              Lip-sync unavailable
-                            </Badge>
-                          ) : v.lipSyncReason === "http_error" || v.lipSyncReason === "invalid_output" || v.lipSyncReason === "timeout" || v.lipSyncReason === "provider_error" ? (
-                            <Badge className="bg-red-100 text-red-700 hover:bg-red-100" title={v.lipSyncReason || ""}>
-                              <AlertTriangle className="h-2 w-2 mr-0.5" />
-                              Lip-sync failed
+                            <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100" title="Legacy lipSyncUsed metadata is not independent proof; adapter output was not integrated into the final video.">
+                              Lip-sync flag unverified
                             </Badge>
                           ) : (
-                            <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100">
-                              No lip-sync
+                            <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100" title={v.lipSyncReason ? `Recorded reason: ${v.lipSyncReason}. The final compositor does not include lip-sync output.` : "The final compositor uses still scene images and does not consume lip-sync adapter output."}>
+                              Lip-sync not integrated
                             </Badge>
                           )}
                           <Badge className={statusBadgeClass(v.status)}>
@@ -2050,23 +2044,17 @@ export default function HumanAvatarView() {
                   {formatDuration(playVideo.actualDuration)}
                 </Badge>
                 <Badge className={qualityBadgeClass(playVideo.quality)}>
-                  {playVideo.quality}
+                  {qualityPresetLabel(playVideo.quality)}
                 </Badge>
                 {playVideo.lipSyncUsed ? (
-                  <Badge className="bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-100">
-                    <Sparkles className="h-2.5 w-2.5 mr-0.5" />
-                    Lip-synced
+                  <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100" title="A legacy lipSyncUsed flag does not prove the adapter output was included in the final video.">
+                    Lip-sync flag unverified
                   </Badge>
-                ) : playVideo.lipSyncReason === "not_configured" ? (
-                  <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100" title="LIPSYNC_SERVICE_URL not set — talking-portrait mode">
-                    Lip-sync unavailable
+                ) : (
+                  <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100" title="The final compositor uses still scene images and does not consume lip-sync adapter output.">
+                    Lip-sync not integrated
                   </Badge>
-                ) : playVideo.lipSyncReason ? (
-                  <Badge className="bg-red-100 text-red-700 hover:bg-red-100" title={playVideo.lipSyncReason || ""}>
-                    <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
-                    Lip-sync failed
-                  </Badge>
-                ) : null}
+                )}
               </div>
               {/* Scenes breakdown for library video */}
               {parseScenes(playVideo.scenesJson).length > 0 && (

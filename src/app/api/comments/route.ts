@@ -2,107 +2,150 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureSeeded } from "@/lib/seed";
 import { classifyComment, draftReply } from "@/lib/ai";
-import { executeAsAgent } from "@/lib/agent-runtime";
+
+const REVIEW_REQUIRED = new Set([
+  "medical_sensitive",
+  "development_sensitive",
+  "abuse_risk",
+  "emergency",
+  "toxic",
+  "review_required",
+]);
+
+function requiresHumanReview(comment: { category: string; riskLevel: string }) {
+  return comment.riskLevel === "high" || REVIEW_REQUIRED.has(comment.category);
+}
 
 export async function GET() {
   await ensureSeeded();
   const comments = await db.commentInbox.findMany({ orderBy: { createdAt: "desc" } });
   const stats = {
     total: comments.length,
-    new: comments.filter((c) => c.status === "new").length,
-    sensitive: comments.filter(
-      (c) => ["medical_sensitive", "development_sensitive", "abuse_risk", "emergency"].includes(c.category)
-    ).length,
-    replied: comments.filter((c) => c.status === "replied").length,
-    escalated: comments.filter((c) => c.status === "escalated").length,
+    new: comments.filter((comment) => comment.status === "new").length,
+    sensitive: comments.filter((comment) => REVIEW_REQUIRED.has(comment.category)).length,
+    replied: comments.filter((comment) => comment.status === "replied").length,
+    escalated: comments.filter((comment) => comment.status === "escalated").length,
   };
   return NextResponse.json({ comments, stats });
 }
 
-// Classify a single comment via CommentModerationAgent
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   await ensureSeeded();
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "invalid_json_body" }, { status: 400 });
+  }
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  const action = typeof body.action === "string" ? body.action : "classify";
 
-  // ALO Agent Runtime — creates traceable AgentRun
-  const agentRun = await db.aIAgentRun.create({
-    data: {
-      agentId: "comment_moderation",
-      status: "running",
-      inputBrief: "Comment classification/reply",
-      startedAt: new Date(),
-    },
-  });
-
-  const { id, action } = await req.json().catch(() => ({ id: "", action: "classify" }));
+  if (action === "send") {
+    return NextResponse.json({
+      error: "external_reply_delivery_not_configured",
+      status: "blocked",
+      deliveryAttempted: false,
+      message: "No platform reply was sent and no reply status was changed.",
+    }, { status: 503 });
+  }
+  if (!id || id.length > 191) {
+    return NextResponse.json({ error: "comment_id_required" }, { status: 400 });
+  }
 
   if (action === "classify") {
-    const c = await db.commentInbox.findUnique({ where: { id } });
-    if (!c) return NextResponse.json({ error: "not found" }, { status: 404 });
-    const res = await classifyComment(c.text);
+    const comment = await db.commentInbox.findUnique({ where: { id } });
+    if (!comment) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    const result = await classifyComment(comment.text);
+    const classification = result.usedFallback
+      ? {
+          category: "review_required",
+          riskLevel: "medium",
+          rationale: "Classifier unavailable; a human must review this comment.",
+          autoReplyAllowed: false,
+        }
+      : result.data;
     const updated = await db.commentInbox.update({
       where: { id },
       data: {
-        category: res.data.category,
-        riskLevel: res.data.riskLevel,
+        category: classification.category,
+        riskLevel: classification.riskLevel,
         status: "classified",
       },
     });
     await db.auditLog.create({
       data: {
-        actor: "CommentModerationAgent",
+        actor: "admin",
         action: "comment.classify",
-        detail: `Comment ${id} → ${res.data.category} (${res.data.riskLevel}) via ${res.provider}`,
-        severity: res.data.riskLevel === "high" ? "warn" : "info",
+        detail: `Comment ${id} classified via ${result.provider}; fallback=${result.usedFallback}; classification is not an independent safety check.`,
+        severity: result.usedFallback || classification.riskLevel === "high" ? "warn" : "info",
       },
     });
-    return NextResponse.json({ comment: updated, rationale: res.data.rationale, autoReplyAllowed: res.data.autoReplyAllowed, provider: res.provider, usedFallback: res.usedFallback });
+    return NextResponse.json({
+      comment: updated,
+      rationale: classification.rationale,
+      autoReplyAllowed: result.usedFallback ? false : classification.autoReplyAllowed,
+      provider: result.provider,
+      usedFallback: result.usedFallback,
+      independentSafetyCheck: false,
+    });
   }
 
   if (action === "draft") {
-    const c = await db.commentInbox.findUnique({ where: { id } });
-    if (!c) return NextResponse.json({ error: "not found" }, { status: 404 });
-    // Sensitive comments must NOT get auto-replies — enforce server-side
-    const SENSITIVE_CATEGORIES = ["medical_sensitive", "development_sensitive", "abuse_risk", "emergency", "toxic"];
-    if (SENSITIVE_CATEGORIES.includes(c.category)) {
+    const comment = await db.commentInbox.findUnique({ where: { id } });
+    if (!comment) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    if (requiresHumanReview(comment)) {
       return NextResponse.json({
-        error: "Sensitive comments require human response — auto-reply not allowed",
+        error: "human_review_required",
         status: "needs_human_response",
+        message: "Sensitive, high-risk, or unclassified comments cannot receive a generated reply draft.",
       }, { status: 403 });
     }
-    const res = await draftReply(c.text, c.category);
-    const updated = await db.commentInbox.update({
-      where: { id },
-      data: { draftReply: res.data.reply },
+    const result = await draftReply(comment.text, comment.category);
+    const updated = await db.commentInbox.update({ where: { id }, data: { draftReply: result.data.reply } });
+    await db.auditLog.create({
+      data: {
+        actor: "admin",
+        action: "comment.reply_draft",
+        detail: `Unsent reply draft created for ${id} via ${result.provider}; fallback=${result.usedFallback}; no platform delivery attempted.`,
+        severity: result.usedFallback ? "warn" : "info",
+      },
     });
-    return NextResponse.json({ comment: updated, tone: res.data.tone, provider: res.provider, usedFallback: res.usedFallback });
+    return NextResponse.json({
+      comment: updated,
+      tone: result.data.tone,
+      provider: result.provider,
+      usedFallback: result.usedFallback,
+      deliveryAttempted: false,
+    });
   }
 
-  if (action === "send") {
-    const c = await db.commentInbox.findUnique({ where: { id } });
-    if (!c || !c.draftReply) return NextResponse.json({ error: "no draft" }, { status: 400 });
-    // Double-check: sensitive comments cannot be auto-replied
-    const SENSITIVE_CATEGORIES = ["medical_sensitive", "development_sensitive", "abuse_risk", "emergency", "toxic"];
-    if (SENSITIVE_CATEGORIES.includes(c.category)) {
+  if (action === "save_draft") {
+    const draftReply = typeof body.draftReply === "string" ? body.draftReply.trim() : "";
+    if (!draftReply || draftReply.length > 5_000) {
+      return NextResponse.json({ error: "draft_reply_must_contain_1_to_5000_characters" }, { status: 400 });
+    }
+    const comment = await db.commentInbox.findUnique({ where: { id } });
+    if (!comment) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    if (requiresHumanReview(comment)) {
       return NextResponse.json({
-        error: "Sensitive comments require human response — send not allowed",
+        error: "human_review_required",
         status: "needs_human_response",
       }, { status: 403 });
     }
-    const updated = await db.commentInbox.update({
-      where: { id },
-      data: { status: "replied", repliedAt: new Date() },
-    });
+    const updated = await db.commentInbox.update({ where: { id }, data: { draftReply } });
     await db.auditLog.create({
-      data: { actor: "admin", action: "comment.reply_sent", detail: `Replied to ${id}`, severity: "info" },
+      data: { actor: "admin", action: "comment.draft_save", detail: `Saved an unsent reply draft for comment ${id}; no platform delivery attempted.`, severity: "info" },
     });
-    return NextResponse.json({ comment: updated });
+    return NextResponse.json({
+      comment: updated,
+      status: "draft_saved",
+      deliveryAttempted: false,
+      message: "Draft saved locally; no platform message was sent.",
+    });
   }
 
   if (action === "escalate") {
-    const updated = await db.commentInbox.update({
-      where: { id },
-      data: { status: "escalated" },
-    });
+    const comment = await db.commentInbox.findUnique({ where: { id } });
+    if (!comment) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    const updated = await db.commentInbox.update({ where: { id }, data: { status: "escalated" } });
     await db.notification.create({
       data: {
         title: "মন্তব্য এসকেলেটেড",
@@ -111,33 +154,20 @@ export async function POST(req: Request) {
       },
     });
     await db.auditLog.create({
-      data: { actor: "admin", action: "comment.escalate", detail: `Escalated ${id}`, severity: "warn" },
+      data: { actor: "admin", action: "comment.escalate", detail: `Escalated ${id} for in-app human review.`, severity: "warn" },
     });
-    return NextResponse.json({ comment: updated });
+    return NextResponse.json({ comment: updated, status: "marked_for_in_app_review" });
   }
 
   if (action === "ignore") {
-    const updated = await db.commentInbox.update({
-      where: { id },
-      data: { status: "ignored" },
+    const comment = await db.commentInbox.findUnique({ where: { id } });
+    if (!comment) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    const updated = await db.commentInbox.update({ where: { id }, data: { status: "ignored" } });
+    await db.auditLog.create({
+      data: { actor: "admin", action: "comment.ignore", detail: `Comment ${id} marked ignored locally.`, severity: "info" },
     });
-    return NextResponse.json({ comment: updated });
+    return NextResponse.json({ comment: updated, status: "ignored_locally" });
   }
 
-
-  // Update AgentRun with success
-  await db.aIAgentRun.update({
-    where: { id: agentRun.id },
-    data: { status: "success", finishedAt: new Date() },
-  });
-  await db.auditLog.create({
-    data: {
-      actor: "comment_moderation",
-      action: "agent.comment_classification/reply",
-      detail: `AgentRun ${agentRun.id}: Comment classification/reply → success`,
-      severity: "info",
-    },
-  });
-
-  return NextResponse.json({ error: "unknown action" }, { status: 400 });
+  return NextResponse.json({ error: "unknown_action" }, { status: 400 });
 }

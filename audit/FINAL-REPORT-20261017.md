@@ -1,4 +1,13 @@
-# Final Project Report — 2026-10-17 (post-fix, every claim verified by execution)
+# Historical Project Report — 2026-10-17 (superseded; claims not current verification)
+
+> **Historical snapshot — not current production evidence.** This document
+> refers to an earlier checkout/date and may contain stale paths, counts,
+> test results, or infrastructure claims. Use the current repository
+> baseline at `../COMPLETE-AUDIT-REPORT.md`, deployment blockers at
+> `../DEPLOYMENT.md`, and migration procedure at
+> `../MIGRATION-RECOVERY-PLAN.md`. Do not execute commands here against
+> production without a new review and explicit authorization.
+
 
 This report separates verified facts from unverified items. Nothing below is estimated. Pre-change evidence: `audit/FULL-PROJECT-AUDIT-20261017.md`.
 

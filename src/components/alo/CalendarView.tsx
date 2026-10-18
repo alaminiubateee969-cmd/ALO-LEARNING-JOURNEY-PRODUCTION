@@ -119,7 +119,7 @@ export default function CalendarView() {
       <SectionHeader
         title="Content Calendar"
         bn="কনটেন্ট ক্যালেন্ডার"
-        desc="মাসিক ক্যালেন্ডারে নির্ধারিত ও প্রকাশিত পোস্ট দেখুন। প্রতিটি দিনের পোস্ট সংখ্যা ও প্ল্যাটফর্ম এক নজরে।"
+        desc="This calendar displays stored scheduling and status records only. Scheduled dates do not trigger a publisher; records marked published are not verified deliveries."
         icon={<Calendar className="h-5 w-5" />}
         action={
           <div className="flex gap-2">
@@ -127,7 +127,7 @@ export default function CalendarView() {
               <Clock className="h-3 w-3 mr-1" /> {scheduledCount} নির্ধারিত
             </Badge>
             <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-              <CheckCircle2 className="h-3 w-3 mr-1" /> {publishedCount} প্রকাশিত
+              <CheckCircle2 className="h-3 w-3 mr-1" /> {publishedCount} marked published · unverified
             </Badge>
           </div>
         }
@@ -213,7 +213,7 @@ export default function CalendarView() {
                           key={p.id}
                           className={`text-[8px] sm:text-[9px] truncate rounded px-1 py-0.5 border ${statusColor[p.status] ?? "bg-muted"}`}
                           title={p.topic}
-                          onClick={() => toast({ title: p.topic, description: `${p.platform} · ${p.status}` })}
+                          onClick={() => toast({ title: p.topic, description: `Stored record · ${p.platform} · ${p.status === "published" ? "marked published, delivery unverified" : p.status}` })}
                         >
                           <span className="mr-0.5">{platformEmoji[p.platform] ?? "📱"}</span>
                           <span className="hidden sm:inline">{p.topic.slice(0, 12)}</span>
@@ -240,7 +240,7 @@ export default function CalendarView() {
         <div className="flex flex-wrap gap-3">
           {Object.entries(statusColor).filter(([k]) => ["scheduled", "queued", "published", "failed"].includes(k)).map(([status, cls]) => (
             <div key={status} className={`rounded-md px-2 py-1 text-[10px] border ${cls}`}>
-              {status === "scheduled" ? "নির্ধারিত" : status === "queued" ? "সারিবদ্ধ" : status === "published" ? "প্রকাশিত" : "ব্যর্থ"}
+              {status === "scheduled" ? "নির্ধারিত" : status === "queued" ? "সারিবদ্ধ" : status === "published" ? "Marked published · unverified" : "ব্যর্থ"}
             </div>
           ))}
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground">

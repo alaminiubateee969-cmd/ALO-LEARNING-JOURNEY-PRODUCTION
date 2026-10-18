@@ -1,4 +1,13 @@
-# FINAL REPORT — ALO Education VPS deployment verification & safe cleanup
+# Historical Final Report — ALO Education VPS deployment verification & safe cleanup
+
+> **Historical snapshot — not current production evidence.** This document
+> refers to an earlier checkout/date and may contain stale paths, counts,
+> test results, or infrastructure claims. Use the current repository
+> baseline at `../COMPLETE-AUDIT-REPORT.md`, deployment blockers at
+> `../DEPLOYMENT.md`, and migration procedure at
+> `../MIGRATION-RECOVERY-PLAN.md`. Do not execute commands here against
+> production without a new review and explicit authorization.
+
 
 **Date (UTC):** 2026-09-14
 **Session host:** `e2b.local` — an isolated build sandbox, **not your VPS**

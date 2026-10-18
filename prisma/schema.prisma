@@ -1,11 +1,12 @@
-// ALO Learning Journey — Prisma schema (SQLite)
-// Operational data layer. The 40-agent roster is a static config module
+// ALO Learning Journey — Prisma schema (MySQL)
+// Operational data layer. The agent roster is a static config module
 // (src/lib/agents.ts) so it stays richly typed and always available even
 // before the DB is seeded. Runs, content, approvals, RAG, analytics etc.
 // are persisted here.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -22,15 +23,17 @@ model Company {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  leads Lead[]
 }
 
 model AIAgentRun {
   id          String   @id @default(cuid())
   agentId     String
   status      String   @default("idle") // idle | running | success | failed | blocked_external_setup
-  inputBrief  String?
-  outputJson  String?
-  errorMsg    String?
+  inputBrief String? @db.Text
+  outputJson String? @db.LongText
+  errorMsg String? @db.Text
   retryCount  Int      @default(0)
   costEstUsd  Float    @default(0)
   startedAt   DateTime?
@@ -41,13 +44,27 @@ model AIAgentRun {
   @@index([status])
 }
 
+model AdminOtpChallenge {
+  id              String    @id @default(cuid())
+  phoneHash       String    @unique
+  otpHash         String
+  expiresAt       DateTime
+  consumedAt      DateTime?
+  failedAttempts  Int       @default(0)
+  sentAt          DateTime?
+  windowStartedAt DateTime  @default(now())
+  sendCount       Int       @default(0)
+
+  @@index([expiresAt, consumedAt])
+}
+
 model ContentIdea {
   id          String   @id @default(cuid())
   topic       String
-  hook        String
-  angle       String
+  hook String @db.Text
+  angle String @db.Text
   audience    String
-  ragSources  String? // JSON array of source titles
+  ragSources String? @db.Text // JSON array of source titles
   status      String   @default("idea") // idea | packaged | approved | published | rejected
   createdAt   DateTime @default(now())
 
@@ -58,18 +75,18 @@ model ContentPackage {
   id           String   @id @default(cuid())
   ideaId       String?
   topic        String
-  reelScript   String
-  hooksJson    String // JSON: string[]
-  seoKeywords  String? // JSON: string[]
-  captionsJson String // JSON: { platform: caption }
-  hashtagsJson String? // JSON: string[]
-  imagePrompt  String?
-  voiceDirection String?
-  cta          String
-  disclaimerBn String?
+  reelScript String @db.LongText
+  hooksJson String @db.LongText // JSON: string[]
+  seoKeywords String? @db.Text // JSON: string[]
+  captionsJson String @db.LongText // JSON: { platform: caption }
+  hashtagsJson String? @db.Text // JSON: string[]
+  imagePrompt String? @db.Text
+  voiceDirection String? @db.Text
+  cta String @db.Text
+  disclaimerBn String? @db.Text
   qualityScore Int      @default(0)
   safetyStatus String   @default("pending") // pending | safe | needs_revision | blocked
-  ragCitations String? // JSON
+  ragCitations String? @db.Text // JSON
   createdAt    DateTime @default(now())
 
   @@index([safetyStatus])
@@ -81,12 +98,12 @@ model ApprovalItem {
   topic         String
   type          String   @default("content") // content | comment | image | voice | video
   title         String
-  summary       String
+  summary String @db.Text
   riskLevel     String   @default("low") // low | medium | high
-  blockedReasons String? // JSON array
-  requiredEdits String?  // JSON array
+  blockedReasons String? @db.Text // JSON array
+  requiredEdits String? @db.Text // JSON array
   status        String   @default("pending") // pending | approved | rejected | revised
-  reviewerNote  String?
+  reviewerNote String? @db.Text
   createdAt     DateTime @default(now())
   reviewedAt    DateTime?
 
@@ -99,7 +116,7 @@ model SocialConnection {
   accountName  String
   handle        String?
   status       String   @default("not_connected") // not_connected | connected | external_setup_required | expired | revoked | failed
-  scopesJson   String?
+  scopesJson String? @db.Text
   tokenExpiry  DateTime?
   lastSyncAt   DateTime?
   createdAt    DateTime @default(now())
@@ -113,8 +130,8 @@ model RagDocument {
   title      String
   sourceType String   @default("manual") // manual | pdf | docx | csv | url | faq | policy
   sourceUrl  String?
-  content    String
-  tagsJson   String? // JSON array
+  content String @db.LongText
+  tagsJson String? @db.Text // JSON array
   chunkCount Int      @default(0)
   createdAt  DateTime @default(now())
 }
@@ -122,8 +139,8 @@ model RagDocument {
 model RagChunk {
   id          String   @id @default(cuid())
   documentId  String
-  text        String
-  keywordsJson String? // JSON array
+  text String @db.LongText
+  keywordsJson String? @db.Text // JSON array
   createdAt   DateTime @default(now())
 
   @@index([documentId])
@@ -142,10 +159,10 @@ model AnalyticsSnapshot {
 model TelegramCommand {
   id         String   @id @default(cuid())
   command    String
-  args       String?
+  args String? @db.Text
   senderId   String
   status     String   @default("received") // received | executed | rejected | unknown
-  response   String?
+  response String? @db.Text
   createdAt  DateTime @default(now())
 }
 
@@ -153,7 +170,7 @@ model AuditLog {
   id         String   @id @default(cuid())
   actor      String   @default("system")
   action     String
-  detail     String?
+  detail String? @db.Text
   severity   String   @default("info") // info | warn | error | critical
   createdAt  DateTime @default(now())
 
@@ -163,7 +180,7 @@ model AuditLog {
 model Notification {
   id        String   @id @default(cuid())
   title     String
-  body      String
+  body String @db.Text
   kind      String   @default("info") // info | success | warn | danger
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -175,10 +192,10 @@ model FamilyModel {
   personType       String   // baby_girl | mother | father | teacher | narrator | user_owned
   consentConfirmed Boolean  @default(false)
   consentDate      DateTime?
-  referenceImages  String?  // JSON array of urls
+  referenceImages String? @db.Text // JSON array of urls
   voiceSample      String?
-  appearanceJson   String?
-  voiceSettingsJson String?
+  appearanceJson String? @db.Text
+  voiceSettingsJson String? @db.Text
   active           Boolean  @default(true)
   createdAt        DateTime @default(now())
 }
@@ -204,12 +221,12 @@ model CommentInbox {
   platform     String
   authorName   String
   authorHandle String?
-  text         String
+  text String @db.Text
   postTopic    String?
   category     String   @default("safe_general")
   riskLevel    String   @default("low")
   status       String   @default("new")
-  draftReply   String?
+  draftReply String? @db.Text
   createdAt    DateTime @default(now())
   repliedAt    DateTime?
 
@@ -223,7 +240,7 @@ model Department {
   id          String   @id @default(cuid())
   name        String
   family      String   // CONTENT_STRATEGY | SOCIAL_MEDIA | IMAGE | VIDEO | VOICE | etc.
-  description String?
+  description String? @db.Text
   agentCount  Int      @default(0)
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -238,7 +255,7 @@ model AgentEmployee {
   role          String
   specialization String
   capabilities  String   // JSON: ["TEXT","IMAGE","VIDEO","VOICE","CALL","SMS","SOCIAL","ANALYTICS","RESEARCH","QA"]
-  tools         String   // JSON array
+  tools String @db.Text // JSON array
   modelProvider String   @default("local")
   modelName     String   @default("local")
   qualityScore  Float    @default(0)
@@ -255,15 +272,15 @@ model AgentEmployee {
 
 model LoopCycle {
   id          String   @id @default(cuid())
-  objective   String
+  objective String @db.Text
   phase       String   @default("observe") // observe|understand|plan|delegate|create|verify|critique|correct|evaluate|publish|learn
   status      String   @default("running") // running|completed|failed|escalated
-  agentsUsed  String?  // JSON array of agent IDs
+  agentsUsed String? @db.Text // JSON array of agent IDs
   qualityScore Float   @default(0)
   retryCount  Int      @default(0)
   costUsd     Float    @default(0)
   errorType   String?
-  lesson      String?
+  lesson String? @db.Text
   startedAt   DateTime @default(now())
   completedAt DateTime?
 
@@ -282,8 +299,8 @@ model FamilyProfile {
   guardianName     String?  // required if personType=child
   voiceConsent     Boolean  @default(false)
   faceConsent      Boolean  @default(false)
-  appearanceJson   String?  // JSON: hair, eyes, build, etc.
-  voiceSettingsJson String?
+  appearanceJson String? @db.Text // JSON: hair, eyes, build, etc.
+  voiceSettingsJson String? @db.Text
   active           Boolean  @default(true)
   createdAt        DateTime @default(now())
 
@@ -321,13 +338,13 @@ model FamilyReferenceAsset {
 model FamilyProject {
   id            String   @id @default(cuid())
   title         String
-  description   String?
-  prompt        String   // user's one-click prompt
-  castProfileIds String  // JSON array of FamilyProfile IDs
+  description String? @db.Text
+  prompt String @db.Text // user's one-click prompt
+  castProfileIds String @db.Text // JSON array of FamilyProfile IDs
   status        String   @default("draft") // draft|running|completed|failed
   qualityScore  Float    @default(0)
   currentStage  String?  // creative_director|script|storyboard|...|final_director
-  outputJson    String?  // JSON: generated outputs per stage
+  outputJson String? @db.LongText // JSON: generated outputs per stage
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -340,15 +357,15 @@ model MediaGeneration {
   id            String   @id @default(cuid())
   projectId     String?
   stage         String   // script|storyboard|image|video|voice|lip_sync|edit|upscale
-  inputJson     String?  // JSON: input params
-  outputJson    String?  // JSON: generated output
+  inputJson String? @db.Text // JSON: input params
+  outputJson String? @db.LongText // JSON: generated output
   qualityScore  Float    @default(0)
   identityScore Float    @default(0) // face/likeness consistency 0-1
   provider      String   @default("local")
   status        String   @default("pending") // pending|running|passed|failed|regenerated
   attempt       Int      @default(1)
   maxAttempts   Int      @default(3)
-  issuesJson    String?  // JSON array of quality issues
+  issuesJson String? @db.Text // JSON array of quality issues
   createdAt     DateTime @default(now())
 
   @@index([projectId])
@@ -368,7 +385,7 @@ model ContentOpportunityScore {
   videoPotential      Int      @default(0)   // 0-100
   brandFit            Int      @default(0)   // 0-100
   finalScore          Int      @default(0)   // weighted average
-  rationale           String?
+  rationale String? @db.Text
   approved            Boolean  @default(false) // only high-score topics enter production
   provider            String   @default("local")
   createdAt           DateTime @default(now())
@@ -380,7 +397,7 @@ model ContentOpportunityScore {
 model HookTest {
   id            String   @id @default(cuid())
   topic         String
-  hookText      String
+  hookText String @db.Text
   variant       String   @default("A") // A | B | C | D | E
   impressions   Int      @default(0)
   hookRetention Float    @default(0)   // 3-sec retention %
@@ -409,7 +426,7 @@ model Campaign {
   followerGain  Int      @default(0)
   audienceRelevance Float @default(0) // % relevant parents
   conversionRate Float   @default(0)
-  lesson        String?
+  lesson String? @db.Text
   createdAt     DateTime @default(now())
   publishedAt   DateTime?
   measuredAt    DateTime?
@@ -426,9 +443,9 @@ model InkboxIntegration {
   inkboxIdentityId String?
   channels      String   @default("[]")
   status        String   @default("not_connected")
-  configJson    String?
+  configJson String? @db.Text
   lastHealthCheck DateTime?
-  lastError     String?
+  lastError String? @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -441,13 +458,13 @@ model AgentMessage {
   senderAgentId String
   recipientAgentId String
   taskId        String?
-  objective     String
-  context       String?
-  requiredOutput String?
+  objective String @db.Text
+  context String? @db.Text
+  requiredOutput String? @db.Text
   priority      String   @default("normal")
   status        String   @default("pending")
-  result        String?
-  failureReason String?
+  result String? @db.LongText
+  failureReason String? @db.Text
   hopCount      Int      @default(0)
   channel       String   @default("internal")
   inkboxMessageId String?
@@ -461,27 +478,90 @@ model AgentMessage {
   @@index([taskId])
 }
 
-// ===== CRM + Marketing + Lead Management =====
-
+// ===== Admissions CRM + Quote management =====
+// Personal data is limited to enquiry/contact fields. Do not use these records
+// for passport, immigration case files, health data, or other special-category data.
 model Lead {
-  id          String   @id @default(cuid())
-  name        String
-  email       String?
-  phone       String?
-  company     String?
-  source      String   @default("website") // website|whatsapp|telegram|referral|ads
-  service     String?  // website|crm|automation|ai|video|seo
-  budget      String?  // low|medium|high|enterprise
-  status      String   @default("new") // new|qualified|proposal|negotiation|won|lost
-  assignedTo  String?  // staff member
-  notes       String?
-  tagsJson    String?  // JSON array
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(cuid())
+  companyId        String
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fullName         String
+  email            String?
+  phone            String?
+  targetCountry    String?
+  studyLevel       String?
+  courseInterest   String?
+  intake           String?
+  source           String   @default("website") // website | referral | social | event | partner | other
+  stage            String   @default("new") // new | contacted | qualified | consultation_booked | proposal_sent | enrolled | lost
+  consentStatus    String   @default("unknown") // unknown | consented | opted_out
+  consentRecordedAt DateTime?
+  nextFollowUp     DateTime?
+  notes            String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  @@index([status])
-  @@index([source])
+  activities LeadActivity[]
+  quotations Quotation[]
+
+  @@index([companyId, stage])
+  @@index([companyId, nextFollowUp])
+  @@index([companyId, createdAt])
+  @@index([email])
 }
+
+model LeadActivity {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type      String   @default("note") // created | note | call | email | whatsapp | meeting | follow_up | stage_change | quotation
+  body      String   @db.Text
+  actor     String   @default("admin")
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+model Quotation {
+  id             String   @id @default(cuid())
+  leadId         String
+  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  number         String   @unique
+  title          String
+  currency       String   @default("GBP") // GBP | USD | EUR | BDT
+  status         String   @default("draft") // draft | sent | accepted | declined | expired
+  subtotal       Decimal  @default(0) @db.Decimal(12, 2)
+  discountAmount Decimal  @default(0) @db.Decimal(12, 2)
+  taxRate        Decimal  @default(0) @db.Decimal(5, 2)
+  taxAmount      Decimal  @default(0) @db.Decimal(12, 2)
+  total          Decimal  @default(0) @db.Decimal(12, 2)
+  validUntil     DateTime?
+  terms          String?  @db.Text
+  notes          String?  @db.Text
+  acceptedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  items QuotationItem[]
+
+  @@index([leadId, status])
+  @@index([createdAt])
+}
+
+model QuotationItem {
+  id          String    @id @default(cuid())
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Int       @default(1)
+  unitPrice   Decimal   @default(0) @db.Decimal(12, 2)
+  lineTotal   Decimal   @default(0) @db.Decimal(12, 2)
+  position    Int       @default(0)
+
+  @@index([quotationId, position])
+}
+
+// ===== v2 additive models; admissions Lead remains a separate model/table. =====
 
 model Client {
   id          String   @id @default(cuid())
@@ -491,7 +571,7 @@ model Client {
   company     String?
   type        String   @default("individual") // individual|company
   status      String   @default("active") // active|inactive|blocked
-  notes       String?
+  notes       String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -506,7 +586,7 @@ model Project {
   status      String   @default("inquiry") // inquiry|proposal|approved|development|review|deployment|completed|maintenance
   budget      Float?
   deadline    DateTime?
-  description String?
+  description String? @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -523,7 +603,7 @@ model Invoice {
   status      String   @default("draft") // draft|sent|paid|overdue|cancelled
   dueDate     DateTime?
   paidAt      DateTime?
-  itemsJson   String?  // JSON: [{description, quantity, price}]
+  itemsJson   String?  @db.Text // JSON: [{description, quantity, price}]
   createdAt   DateTime @default(now())
 
   @@index([clientId])
@@ -535,8 +615,8 @@ model MarketingCampaign {
   name        String
   channel     String   // email|whatsapp|social|sms
   status      String   @default("draft") // draft|scheduled|running|completed|paused
-  audienceJson String? // JSON: target criteria
-  content     String?
+  audienceJson String? @db.Text // JSON: target criteria
+  content     String?  @db.Text
   scheduledAt DateTime?
   sentCount   Int      @default(0)
   openCount   Int      @default(0)
@@ -547,33 +627,29 @@ model MarketingCampaign {
   @@index([channel])
 }
 
-// ============================================================
-// Task 24: OTP/Verification Service + Voice Studio + ASR Studio
-// Advanced media & security features (references-inspired)
-// ============================================================
-
 model OtpRequest {
   id          String   @id @default(cuid())
   channel     String   // sms|email|whatsapp|voice
-  recipient   String   // phone or email
-  code        String   // 6-digit code
+  recipientHash  String   // keyed hash of normalized address/number; raw PII is not persisted
+  recipientLabel String   // masked display value, never the full address/number
+  codeHash       String   // keyed hash only; raw OTP codes are never persisted
   purpose     String   @default("verification") // verification|login|transaction|reset
   status      String   @default("pending") // pending|delivered|verified|expired|failed
   attempts    Int      @default(0)
   maxAttempts Int      @default(5)
   expiresAt   DateTime
   verifiedAt  DateTime?
-  metadataJson String? // provider, message_id, cost etc.
+  metadataJson String? @db.Text // provider, message_id, cost etc.
   createdAt   DateTime @default(now())
 
-  @@index([recipient])
+  @@index([recipientHash])
   @@index([status])
   @@index([expiresAt])
 }
 
 model VoiceGeneration {
   id           String   @id @default(cuid())
-  text         String
+  text         String   @db.LongText
   voice        String   // tongtong|chuichui|xiaochen|jam|kazi|douji|luodo
   speed        Float    @default(1.0)
   volume       Float    @default(1.0)
@@ -583,7 +659,7 @@ model VoiceGeneration {
   durationSec  Float?
   charCount    Int      @default(0)
   status       String   @default("pending") // pending|completed|failed
-  errorMessage String?
+  errorMessage String? @db.Text
   createdAt    DateTime @default(now())
 
   @@index([status])
@@ -596,22 +672,15 @@ model AudioTranscription {
   fileSize     Int
   format       String   // wav|mp3|m4a|flac|ogg
   language     String   @default("auto")
-  transcription String?
+  transcription String? @db.LongText
   wordCount    Int      @default(0)
   durationSec  Float?
   status       String   @default("pending") // pending|completed|failed
-  errorMessage String?
+  errorMessage String? @db.Text
   createdAt    DateTime @default(now())
 
   @@index([status])
 }
-
-// ============================================================
-// Task 25: Human Avatar System — AI-generated human agents
-// with consistent faces + natural voice + prompt-driven video
-// pipeline (5 min to 1 hour). Lip-sync via Wav2Lip microservice
-// (graceful degradation to talking-portrait when unavailable).
-// ============================================================
 
 model HumanAvatar {
   id              String   @id @default(cuid())
@@ -621,10 +690,10 @@ model HumanAvatar {
   gender          String   // male | female
   ageRange        String   // e.g. "28-35"
   ethnicity       String   @default("south-asian") // south-asian | bengali | mixed
-  faceDescription String   // detailed facial features for consistency
+  faceDescription String   @db.Text // detailed facial features for consistency
   voiceProfile    String   // tongtong|chuichui|xiaochen|jam|kazi|douji|luodo
   voiceSpeed      Float    @default(0.95)
-  backgroundStory String?  // persona backstory for LLM context
+  backgroundStory String?  @db.Text // persona backstory for LLM context
   consistencySeed String?  // hash to keep face consistent across regen
   portraitUrl     String?  // generated portrait image url
   portraitStatus  String   @default("pending") // pending|generated|failed
@@ -646,10 +715,10 @@ model AvatarVideo {
   id              String   @id @default(cuid())
   ownerId         String   @default("dev-admin") // tenant/owner isolation
   avatarId        String
-  avatar          HumanAvatar @relation(fields: [avatarId], references: [id], onDelete: Cascade)
-  prompt          String   // user's original instruction
-  script          String?  // LLM-generated full script (Bengali)
-  scenesJson      String?  // JSON: [{text, imageUrl, audioUrl, durationSec}]
+  avatar          HumanAvatar @relation(fields: [avatarId], references: [id], onDelete: Restrict)
+  prompt          String   @db.Text // user's original instruction
+  script          String?  @db.LongText // LLM-generated full script (Bengali)
+  scenesJson      String?  @db.LongText // JSON: [{text, imageUrl, audioUrl, durationSec}]
   targetDuration  Int      // seconds (300-3600)
   actualDuration  Float?   // measured final duration
   videoUrl        String?
@@ -667,4 +736,24 @@ model AvatarVideo {
   @@index([ownerId])
   @@index([avatarId])
   @@index([status])
+}
+
+model MarketingLead {
+  id          String   @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  company     String?
+  source      String   @default("website") // website|whatsapp|telegram|referral|ads
+  service     String?  // website|crm|automation|ai|video|seo
+  budget      String?  // low|medium|high|enterprise
+  status      String   @default("new") // new|qualified|proposal|negotiation|won|lost
+  assignedTo  String?  // staff member
+  notes       String?  @db.Text
+  tagsJson    String?  @db.Text  // JSON array
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([source])
 }

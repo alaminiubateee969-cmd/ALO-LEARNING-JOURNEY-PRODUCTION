@@ -35,7 +35,7 @@ export default function CrmView() {
 
   const load = () => {
     Promise.all([
-      fetch("/api/crm/leads").then(r => r.json()),
+      fetch("/api/marketing/leads").then(r => r.json()),
       fetch("/api/crm/clients").then(r => r.json()),
       fetch("/api/crm/projects").then(r => r.json()),
       fetch("/api/crm/invoices").then(r => r.json()),
@@ -53,24 +53,28 @@ export default function CrmView() {
 
   const createLead = async () => {
     if (!leadName.trim()) { toast({ title: "Name required", variant: "destructive" }); return; }
-    const res = await fetch("/api/crm/leads", {
+    if (!leadEmail.trim() && !leadPhone.trim()) { toast({ title: "Add an email or phone number", variant: "destructive" }); return; }
+    const res = await fetch("/api/marketing/leads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "create", name: leadName, email: leadEmail, phone: leadPhone, service: leadService, source: "website" }),
     });
     const d = await res.json();
-    toast({ title: "Lead created ✅" });
+    if (!res.ok) { toast({ title: d.error || "Lead creation failed", variant: "destructive" }); return; }
+    toast({ title: "Marketing lead created ✅" });
     setShowLeadForm(false); setLeadName(""); setLeadEmail(""); setLeadPhone("");
     load();
   };
 
   const updateLeadStatus = async (id: string, status: string) => {
-    await fetch("/api/crm/leads", {
+    const res = await fetch("/api/marketing/leads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "update_status", id, status }),
     });
-    toast({ title: `Lead → ${status}` });
+    const result = await res.json();
+    if (!res.ok) { toast({ title: result.error || "Lead update failed", variant: "destructive" }); return; }
+    toast({ title: `Marketing lead → ${status}` });
     load();
   };
 
@@ -78,10 +82,10 @@ export default function CrmView() {
 
   return (
     <div className="alo-fade-up space-y-5">
-      <SectionHeader title="CRM Dashboard" bn="সিআরএম" desc="Lead management, client tracking, project pipeline, invoices, and marketing campaigns." icon={<Users className="h-5 w-5" />} action={<Button onClick={() => setShowLeadForm(!showLeadForm)} className="bg-amber-500 hover:bg-amber-600"><Plus className="h-4 w-4 mr-1" /> New Lead</Button>} />
+      <SectionHeader title="Marketing CRM" bn="মার্কেটিং সিআরএম" desc="Marketing contacts, client tracking, project pipeline, invoices, and campaigns. Admissions enquiries remain in Admissions CRM." icon={<Users className="h-5 w-5" />} action={<Button onClick={() => setShowLeadForm(!showLeadForm)} className="bg-amber-500 hover:bg-amber-600"><Plus className="h-4 w-4 mr-1" /> New Lead</Button>} />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <StatCard label="Leads" value={leads.length} icon={<Target className="h-4 w-4" />} tone="amber" />
+        <StatCard label="Marketing leads" value={leads.length} icon={<Target className="h-4 w-4" />} tone="amber" />
         <StatCard label="Clients" value={clients.length} icon={<Users className="h-4 w-4" />} tone="emerald" />
         <StatCard label="Projects" value={projects.length} icon={<Briefcase className="h-4 w-4" />} tone="sky" />
         <StatCard label="Invoices" value={invoices.length} icon={<FileText className="h-4 w-4" />} tone="violet" />
@@ -102,7 +106,7 @@ export default function CrmView() {
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="leads" className="text-xs">Leads</TabsTrigger>
+          <TabsTrigger value="leads" className="text-xs">Marketing Leads</TabsTrigger>
           <TabsTrigger value="clients" className="text-xs">Clients</TabsTrigger>
           <TabsTrigger value="projects" className="text-xs">Projects</TabsTrigger>
           <TabsTrigger value="invoices" className="text-xs">Invoices</TabsTrigger>

@@ -221,31 +221,33 @@ export default function BrandSettings() {
       {/* Notifications */}
       <Card className="p-5">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
-          <Bell className="h-4 w-4 text-rose-600" /> নোটিফিকেশন নীতি
+          <Bell className="h-4 w-4 text-rose-600" /> Notification preferences
+          <Badge variant="outline" className="text-[9px] ml-1">not implemented</Badge>
         </h3>
-        {toggleRow(settings.notifyOnSensitive, (v) => update("notifyOnSensitive", v), "সংবেদনশীল মন্তব্যে নোটিফাই", "মেডিক্যাল/ডেভেলপমেন্টাল সংবেদনশীল মন্তব্য এলে অ্যাডমিনকে নোটিফাই করুন")}
-        {toggleRow(settings.notifyOnFailure, (v) => update("notifyOnFailure", v), "ব্যর্থতায় নোটিফাই", "প্রকাশনা বা এজেন্ট ব্যর্থ হলে নোটিফাই করুন")}
-        {toggleRow(settings.autoApproveLowRisk, (v) => update("autoApproveLowRisk", v), "স্বল্প-ঝুঁকি স্বয়ংক্রিয় অনুমোদন", "risk=low কনটেন্ট স্বয়ংক্রিয়ভাবে অনুমোদন (পরামর্শিত নয়)")}
+        <p className="mb-2 text-xs leading-relaxed text-muted-foreground">These values are saved as configuration only. No notification delivery service or automatic approval process is implemented.</p>
+        {toggleRow(settings.notifyOnSensitive, (v) => update("notifyOnSensitive", v), "Sensitive-content notification preference", "Stored only; no alert is sent when sensitive content is recorded.")}
+        {toggleRow(settings.notifyOnFailure, (v) => update("notifyOnFailure", v), "Failure notification preference", "Stored only; no alert is sent for publishing or agent failures.")}
+        {toggleRow(settings.autoApproveLowRisk, (v) => update("autoApproveLowRisk", v), "Automatic low-risk approval preference (inactive)", "Stored only; content is not automatically approved by this setting.")}
       </Card>
 
       {/* Queue limits */}
       <Card className="p-5">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
-          <Cpu className="h-4 w-4 text-violet-600" /> কিউ সীমা
-          <Badge variant="outline" className="text-[9px] ml-1">cPanel-safe</Badge>
+          <Cpu className="h-4 w-4 text-violet-600" /> Queue settings
+          <Badge variant="outline" className="text-[9px] ml-1">not enforced</Badge>
         </h3>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label className="text-xs">প্রতি cron-এ light jobs</Label>
+            <Label className="text-xs">Light jobs per run · stored value</Label>
             <Input type="number" value={settings.maxJobsPerCron} onChange={(e) => update("maxJobsPerCron", e.target.value)} className="h-9 mt-1" min="1" max="20" />
           </div>
           <div>
-            <Label className="text-xs">প্রতি cron-এ heavy jobs</Label>
+            <Label className="text-xs">Heavy jobs per run · stored value</Label>
             <Input type="number" value={settings.maxHeavyJobsPerCron} onChange={(e) => update("maxHeavyJobsPerCron", e.target.value)} className="h-9 mt-1" min="0" max="5" />
           </div>
         </div>
         <p className="text-[11px] text-muted-foreground mt-2">
-          cPanel cron-এ সর্বোচ্চ ১০টি light + ১-৩টি heavy job প্রতি run-এ। Lock + timeout + backoff সহ।
+          Values are stored for planning only. This checkout has no cron scheduler or background worker and does not enforce job limits, locks, timeouts, or retry/backoff behavior.
         </p>
       </Card>
 

@@ -1,5 +1,14 @@
 # 04 — Cleanup plan: classification method and per-candidate evidence gaps
 
+> **Historical snapshot — not current production evidence.** This document
+> refers to an earlier checkout/date and may contain stale paths, counts,
+> test results, or infrastructure claims. Use the current repository
+> baseline at `../COMPLETE-AUDIT-REPORT.md`, deployment blockers at
+> `../DEPLOYMENT.md`, and migration procedure at
+> `../MIGRATION-RECOVERY-PLAN.md`. Do not execute commands here against
+> production without a new review and explicit authorization.
+
+
 **Nothing has been moved, quarantined, or deleted.** No sizes below are asserted
 as current — your earlier figures (3.3 GB, 3.1 GB, 1.2 GB) are treated as
 *unverified prior observations* and must be re-measured, exactly as you

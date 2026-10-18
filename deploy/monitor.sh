@@ -1,66 +1,59 @@
 #!/usr/bin/env bash
-# ALO Learning Journey — Monitoring Script
-# Reports: app health, PM2 process, disk usage, memory, DB size, video counts.
+# Read-only monitoring snapshot for the operator-provided production target.
+# This script does not start/restart PM2, query MySQL, mutate data, or print logs.
+# Verify the host and release layout before running it.
 # Usage: bash deploy/monitor.sh
-# Cron: */10 * * * * cd /home/aloedu/learn-app && bash deploy/monitor.sh >> /home/aloedu/monitor.log 2>&1
 
-set -euo pipefail
-APP_PORT="${PORT:-3017}"
-APP_NAME="alo-learning-journey"
-APP_DIR="${APP_DIR:-/home/aloedu/learn-app}"
-DB_PATH="$APP_DIR/db/custom.db"
+set -uo pipefail
+APP_DIR="${APP_DIR:-/home/aloedu/LEARNING-JOURNEY}"
+APP_PORT="${APP_PORT:-3017}"
+APP_NAME="${PM2_APP_NAME:-learn-aloeducation}"
 
-echo "=========================================="
-echo "[$(date -Iseconds)] ALO Monitoring Report"
-echo "=========================================="
+fail() { printf '[monitor] ERROR: %s\n' "$*" >&2; exit 1; }
+[ "$APP_DIR" = "/home/aloedu/LEARNING-JOURNEY" ] || fail "APP_DIR must be /home/aloedu/LEARNING-JOURNEY"
+[ "$APP_PORT" = "3017" ] || fail "APP_PORT must be 3017"
+[ "$APP_NAME" = "learn-aloeducation" ] || fail "PM2 app must be learn-aloeducation"
+[ -d "$APP_DIR" ] || fail "APP_DIR does not exist; no action taken"
 
-# 1. HTTP health
-echo "[1/6] HTTP health:"
-if curl -sf "http://localhost:$APP_PORT/api/health" 2>/dev/null | head -c 200; then
-  echo ""
-  echo "  ✓ health endpoint OK"
+printf '==========================================\n'
+printf '[%s] ALO read-only monitoring snapshot\n' "$(date -Iseconds)"
+printf '==========================================\n'
+
+printf '\n[1/5] Local health (minimal public endpoint):\n'
+if curl --connect-timeout 3 --max-time 8 -fsS "http://127.0.0.1:${APP_PORT}/api/health" >/dev/null 2>&1; then
+  printf '  health endpoint responded successfully\n'
 else
-  echo "  ✗ health endpoint FAILED — app may be down"
+  printf '  health endpoint failed or is not listening; no restart attempted\n'
 fi
 
-# 2. PM2 status
-echo ""
-echo "[2/6] PM2 process:"
-if command -v pm2 &>/dev/null; then
-  pm2 describe "$APP_NAME" 2>/dev/null | grep -E "status|uptime|memory|restarts" | head -5
+printf '\n[2/5] PM2 process:\n'
+if ! command -v pm2 >/dev/null 2>&1; then
+  printf '  PM2 is not installed or not on PATH\n'
+elif pm2 jlist 2>/dev/null | node -e '
+  let s=""; process.stdin.setEncoding("utf8"); process.stdin.on("data",x=>s+=x).on("end",()=>{
+    try {
+      const rows=JSON.parse(s).filter(p=>p.name===process.argv[1]);
+      if (rows.length===1) console.log(`  ${rows[0].name}: ${rows[0].pm2_env?.status ?? "unknown"}`);
+      else console.log(`  expected exactly one ${process.argv[1]} process; found ${rows.length}`);
+    } catch { console.log("  PM2 process list unavailable"); }
+  });
+' "$APP_NAME"; then
+  :
 else
-  echo "  pm2 not installed"
+  printf '  PM2 process list unavailable\n'
 fi
 
-# 3. Disk usage
-echo ""
-echo "[3/6] Disk usage:"
-df -h "$APP_DIR" 2>/dev/null | tail -1 | awk '{print "  total:",$2,"used:",$3,"avail:",$4,"usage:",$5}'
-du -sh "$APP_DIR/public/avatars" "$APP_DIR/public/avatar-videos" "$APP_DIR/public/avatar-audio" "$APP_DIR/public/avatar-scenes" "$APP_DIR/db" 2>/dev/null | sed 's/^/  /'
+printf '\n[3/5] Disk usage:\n'
+df -h "$APP_DIR" 2>/dev/null | tail -1 | awk '{print "  total:",$2,"used:",$3,"available:",$4,"usage:",$5}' || printf '  filesystem usage unavailable\n'
+for media_dir in "$APP_DIR/shared/storage" "$APP_DIR/current/public/avatar-videos" "$APP_DIR/current/public/avatar-audio" "$APP_DIR/current/public/avatar-scenes" "$APP_DIR/current/public/avatar-thumbs"; do
+  if [ -d "$media_dir" ]; then du -sh -- "$media_dir" 2>/dev/null | sed 's/^/  /'; fi
+done
 
-# 4. Memory
-echo ""
-echo "[4/6] Memory:"
-free -h | head -2 | tail -1 | awk '{print "  total:",$2,"used:",$3,"free:",$4}'
+printf '\n[4/5] Memory:\n'
+if command -v free >/dev/null 2>&1; then free -h | awk 'NR==2 {print "  total:",$2,"used:",$3,"available:",$7}'; else printf '  free command unavailable\n'; fi
 
-# 5. Database stats
-echo ""
-echo "[5/6] Database stats:"
-if [ -f "$DB_PATH" ] && command -v sqlite3 &>/dev/null; then
-  echo "  db size: $(du -h "$DB_PATH" | cut -f1)"
-  echo "  HumanAvatar:  $(sqlite3 "$DB_PATH" 'SELECT COUNT(*) FROM HumanAvatar;' 2>/dev/null || echo '?')"
-  echo "  AvatarVideo:  $(sqlite3 "$DB_PATH" 'SELECT COUNT(*) FROM AvatarVideo;' 2>/dev/null || echo '?')"
-  echo "  Completed:    $(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM AvatarVideo WHERE status='completed';" 2>/dev/null || echo '?')"
-  echo "  Failed:        $(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM AvatarVideo WHERE status='failed';" 2>/dev/null || echo '?')"
-  echo "  Stuck (>10m):  $(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM AvatarVideo WHERE status NOT IN ('completed','failed') AND updatedAt < datetime('now','-10 minutes');" 2>/dev/null || echo '?')"
-else
-  echo "  sqlite3 or DB not found"
-fi
+printf '\n[5/5] MySQL / migration history:\n'
+printf '  Not queried by this read-only script. Use the approved least-privilege inventory procedure in MIGRATION-RECOVERY-PLAN.md.\n'
+printf '  No SQLite file/database is expected or inspected.\n'
 
-# 6. Recent errors (dev.log / server.log)
-echo ""
-echo "[6/6] Recent errors (last 20):"
-tail -200 "$APP_DIR/dev.log" "$APP_DIR/server.log" 2>/dev/null | grep -iE "error|fail|exception" | grep -viE "prisma:query|telemetry|Cross origin|middleware|proxy.ts" | tail -10 || echo "  none"
-
-echo ""
-echo "[$(date -Iseconds)] monitoring complete"
+printf '\n[%s] monitoring snapshot complete; no services or data were changed\n' "$(date -Iseconds)"

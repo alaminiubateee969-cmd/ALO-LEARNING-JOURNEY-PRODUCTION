@@ -1,103 +1,124 @@
+import { scryptSync, timingSafeEqual } from "node:crypto";
+import { getServerSession } from "next-auth";
+import type { NextAuthOptions, Session } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { consumeAdminOtp } from "@/lib/admin-otp";
+import {
+  isAdminAuthenticationConfigured,
+  isAdminOtpRequired,
+} from "@/lib/auth-config";
+
+export { isAdminOtpRequired };
+export const DEV_OWNER_ID = "dev-admin";
+
+function safeEqualText(actual: string, expected: string): boolean {
+  const actualBytes = Buffer.from(actual, "utf8");
+  const expectedBytes = Buffer.from(expected, "utf8");
+  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
+}
+
 /**
- * ALO Authentication & Authorization Library
- *
- * Production auth using NextAuth v4 credentials provider.
- * - Single admin user seeded from env (ALO_ADMIN_EMAIL / ALO_ADMIN_PASSWORD_HASH)
- * - Session enforced by middleware on all protected paths
- * - ownerId scoping enforced at the data layer (see requireOwner)
- *
- * In DEV mode (no NextAuth secret configured), falls back to a dev session
- * with a fixed ownerId="dev-admin" so the app remains usable locally.
- * This dev fallback is logged loudly and must NOT be enabled in production.
+ * Password hashes use `scrypt$<base64url salt>$<base64url hash>`.
+ * Credentials are configured out-of-band; there is no built-in password.
  */
+export function verifyAdminCredentials(email: string, password: string): boolean {
+  const configuredEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const encodedHash = process.env.ADMIN_PASSWORD_HASH;
+  if (!configuredEmail || !encodedHash || !email || !password) return false;
+  if (!safeEqualText(email.trim().toLowerCase(), configuredEmail)) return false;
 
-import { getServerSession } from 'next-auth';
-import type { NextAuthOptions, Session } from 'next-auth';
-import CredentialsProvider from 'next-auth/providers/credentials';
-import bcrypt from 'bcryptjs';
+  const [algorithm, encodedSalt, encodedExpected] = encodedHash.split("$");
+  if (algorithm !== "scrypt" || !encodedSalt || !encodedExpected) return false;
+  try {
+    const salt = Buffer.from(encodedSalt, "base64url");
+    const expected = Buffer.from(encodedExpected, "base64url");
+    if (salt.length < 16 || expected.length < 32 || expected.length > 128) return false;
+    const actual = scryptSync(password, salt, expected.length);
+    return timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+}
 
-export const DEV_OWNER_ID = 'dev-admin';
-const ADMIN_EMAIL = process.env.ALO_ADMIN_EMAIL;
-const ADMIN_PASSWORD_HASH = process.env.ALO_ADMIN_PASSWORD_HASH; // bcrypt hash
-const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET;
-const NEXTAUTH_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-
-export const IS_DEV_AUTH = !NEXTAUTH_SECRET || !ADMIN_EMAIL || !ADMIN_PASSWORD_HASH;
-
-if (IS_DEV_AUTH && process.env.NODE_ENV === 'production') {
-  // NO throw — allow boot — but every protected request will 401 until configured.
-  console.warn('[auth] PRODUCTION WARNING: NEXTAUTH_SECRET/ALO_ADMIN_EMAIL/ALO_ADMIN_PASSWORD_HASH not set. All protected APIs will return 401.');
+export function isAdminAuthConfigured(): boolean {
+  return isAdminAuthenticationConfigured();
 }
 
 export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET || (process.env.NODE_ENV === "production" ? undefined : "alo-local-development-only-secret"),
+  session: { strategy: "jwt", maxAge: 60 * 60 * 8 },
+  pages: { signIn: "/login" },
   providers: [
     CredentialsProvider({
-      name: 'ALO Admin',
+      name: "ALO administrator",
       credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' },
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+        otp: { label: "SMS one-time code", type: "text" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
-        if (IS_DEV_AUTH) {
-          // dev fallback — accept any non-empty creds as dev-admin
-          return { id: DEV_OWNER_ID, email: credentials.email, role: 'admin' } as any;
-        }
-        if (credentials.email !== ADMIN_EMAIL) return null;
-        const ok = await bcrypt.compare(credentials.password, ADMIN_PASSWORD_HASH!);
-        if (!ok) return null;
-        return { id: ADMIN_EMAIL, email: ADMIN_EMAIL, role: 'admin' } as any;
+        const email = credentials?.email ?? "";
+        const password = credentials?.password ?? "";
+        if (!isAdminAuthenticationConfigured() || !verifyAdminCredentials(email, password)) return null;
+        if (isAdminOtpRequired() && !await consumeAdminOtp(credentials?.otp ?? "")) return null;
+        return {
+          id: DEV_OWNER_ID,
+          name: "ALO Administrator",
+          email: process.env.ADMIN_EMAIL!.trim().toLowerCase(),
+          role: "admin",
+        } as any;
       },
     }),
   ],
-  session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
-  secret: NEXTAUTH_SECRET || 'dev-insecure-secret-do-not-use-in-prod',
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = (user as any).role || 'admin';
-        token.ownerId = IS_DEV_AUTH ? DEV_OWNER_ID : (user as any).id || (user as any).email;
+        token.sub = DEV_OWNER_ID;
+        (token as any).ownerId = DEV_OWNER_ID;
+        (token as any).role = "admin";
       }
       return token;
     },
     async session({ session, token }): Promise<Session> {
-      (session as any).userId = token.ownerId as string;
-      (session as any).role = token.role as string;
+      (session as any).userId = (token as any).ownerId || DEV_OWNER_ID;
+      (session as any).role = (token as any).role || "admin";
+      if (session.user) session.user.name = "ALO Administrator";
       return session;
     },
   },
-  pages: { signIn: '/' },
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === "production"
+        ? "__Secure-next-auth.session-token"
+        : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+  },
 };
 
 /**
- * Returns the authenticated ownerId for the current request context.
- * Throws 401 if unauthenticated (caller should catch and return 401).
- * In dev mode, returns DEV_OWNER_ID.
+ * Resolve the single configured administrator after auth. In development only,
+ * API work may use a local preview owner when auth is intentionally unconfigured.
+ * A production process with incomplete authentication always fails closed.
  */
 export async function requireOwner(): Promise<{ ownerId: string; role: string }> {
-  if (IS_DEV_AUTH) {
-    return { ownerId: DEV_OWNER_ID, role: 'admin' };
+  if (!isAdminAuthenticationConfigured()) {
+    if (process.env.NODE_ENV !== "production") return { ownerId: DEV_OWNER_ID, role: "admin" };
+    const error = new Error("ADMIN_AUTH_NOT_CONFIGURED");
+    (error as Error & { statusCode?: number }).statusCode = 503;
+    throw error;
   }
+
   const session = await getServerSession(authOptions);
   if (!session) {
-    const err = new Error('UNAUTHORIZED');
-    (err as any).statusCode = 401;
-    throw err;
+    const error = new Error("UNAUTHORIZED");
+    (error as Error & { statusCode?: number }).statusCode = 401;
+    throw error;
   }
-  const ownerId = (session as any).userId as string;
-  const role = (session as any).role as string;
-  if (!ownerId) {
-    const err = new Error('UNAUTHORIZED');
-    (err as any).statusCode = 401;
-    throw err;
-  }
-  return { ownerId, role };
-}
-
-/**
- * Hash a plaintext password using bcrypt. Used by the seeding/admin tooling.
- * Usage: bun run scripts/hash-password.ts <password>
- */
-export async function hashPassword(plaintext: string): Promise<string> {
-  return bcrypt.hash(plaintext, 12);
+  return { ownerId: DEV_OWNER_ID, role: "admin" };
 }

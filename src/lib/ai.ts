@@ -4,6 +4,7 @@
 // Every call returns { provider, usedFallback } so the UI can show the truth.
 
 import ZAI from "z-ai-web-dev-sdk";
+import { generateLocalChatJson } from "@/lib/local-models";
 
 export interface AIResult<T> {
   ok: boolean;
@@ -99,6 +100,367 @@ async function chatJSON<T>(
   }
 }
 
+export type QualityAgentPass = {
+  agentId: string;
+  role: string;
+  status: "complete" | "fallback" | "skipped";
+  provider: string;
+  latencyMs: number;
+  summary: string;
+};
+
+type LocalPromptReviewResult<T> = {
+  data: T;
+  provider: string;
+  usedFallback: boolean;
+  latencyMs: number;
+  qualityPipeline: QualityAgentPass[];
+  error?: string;
+};
+
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(text.trim());
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      const parsed: unknown = JSON.parse(match[0]);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function isTemplateFallback(model: string): boolean {
+  return model.includes("(built-in-local)");
+}
+
+async function runLocalPromptReview<T>(options: {
+  task: string;
+  agentPrefix: string;
+  writerSystem: string;
+  writerUser: string;
+  critiqueSystem: string;
+  finalistSystem: string;
+  fallback: T;
+  parseDraft: (value: unknown) => T | null;
+}): Promise<LocalPromptReviewResult<T>> {
+  const startedAt = Date.now();
+  const passes: QualityAgentPass[] = [];
+  const addPass = (pass: QualityAgentPass) => passes.push(pass);
+
+  let writer: { content: string; model: string };
+  try {
+    writer = await generateLocalChatJson(options.writerSystem, options.writerUser, 12_000);
+  } catch {
+    addPass({
+      agentId: `${options.agentPrefix}_writer`,
+      role: "Draft generation",
+      status: "fallback",
+      provider: "local-template",
+      latencyMs: Date.now() - startedAt,
+      summary: "The configured local model was unavailable; a built-in template is returned.",
+    });
+    addPass({
+      agentId: `${options.agentPrefix}_critic`,
+      role: "Prompt-based critique",
+      status: "skipped",
+      provider: "none",
+      latencyMs: 0,
+      summary: "No local model critique or independent quality/safety review was run.",
+    });
+    addPass({
+      agentId: `${options.agentPrefix}_finalist`,
+      role: "Final draft",
+      status: "skipped",
+      provider: "none",
+      latencyMs: 0,
+      summary: "No finalist pass ran; review the template draft yourself.",
+    });
+    return {
+      data: options.fallback,
+      provider: "local-template",
+      usedFallback: true,
+      latencyMs: Date.now() - startedAt,
+      qualityPipeline: passes,
+      error: "Local model unavailable; template output requires human review.",
+    };
+  }
+
+  const writerDuration = Date.now() - startedAt;
+  const writerData = isTemplateFallback(writer.model) ? null : options.parseDraft(parseJsonObject(writer.content));
+  if (!writerData) {
+    addPass({
+      agentId: `${options.agentPrefix}_writer`,
+      role: "Draft generation",
+      status: "fallback",
+      provider: isTemplateFallback(writer.model) ? "local-template" : writer.model,
+      latencyMs: writerDuration,
+      summary: "No validated model draft was returned; a built-in template is used instead.",
+    });
+    addPass({
+      agentId: `${options.agentPrefix}_critic`,
+      role: "Prompt-based critique",
+      status: "skipped",
+      provider: "none",
+      latencyMs: 0,
+      summary: "No critique was run; a template fallback is not an independent quality or safety check.",
+    });
+    addPass({
+      agentId: `${options.agentPrefix}_finalist`,
+      role: "Final draft",
+      status: "skipped",
+      provider: "none",
+      latencyMs: 0,
+      summary: "No finalist pass ran; review the template draft yourself.",
+    });
+    return {
+      data: options.fallback,
+      provider: isTemplateFallback(writer.model) ? "local-template" : writer.model,
+      usedFallback: true,
+      latencyMs: Date.now() - startedAt,
+      qualityPipeline: passes,
+      error: "No valid local model draft; template output requires human review.",
+    };
+  }
+
+  addPass({
+    agentId: `${options.agentPrefix}_writer`,
+    role: "Draft generation",
+    status: "complete",
+    provider: writer.model,
+    latencyMs: writerDuration,
+    summary: "The configured local model returned a structured draft; its claims are not fact-checked.",
+  });
+
+  const critiqueStartedAt = Date.now();
+  let critique: { content: string; model: string };
+  try {
+    critique = await generateLocalChatJson(
+      options.critiqueSystem,
+      `Draft for ${options.task}:\n${writer.content}\nReturn a JSON critique only.`,
+      12_000
+    );
+  } catch {
+    addPass({
+      agentId: `${options.agentPrefix}_critic`,
+      role: "Prompt-based critique",
+      status: "fallback",
+      provider: "local-template",
+      latencyMs: Date.now() - critiqueStartedAt,
+      summary: "Critique unavailable; no independent quality or safety review was run.",
+    });
+    addPass({
+      agentId: `${options.agentPrefix}_finalist`,
+      role: "Final draft",
+      status: "skipped",
+      provider: "none",
+      latencyMs: 0,
+      summary: "Finalist pass skipped because no critique result was available.",
+    });
+    return {
+      data: writerData,
+      provider: writer.model,
+      usedFallback: true,
+      latencyMs: Date.now() - startedAt,
+      qualityPipeline: passes,
+      error: "Local critique unavailable; the writer draft requires human review.",
+    };
+  }
+
+  if (isTemplateFallback(critique.model) || !parseJsonObject(critique.content)) {
+    addPass({
+      agentId: `${options.agentPrefix}_critic`,
+      role: "Prompt-based critique",
+      status: "fallback",
+      provider: isTemplateFallback(critique.model) ? "local-template" : critique.model,
+      latencyMs: Date.now() - critiqueStartedAt,
+      summary: "No usable critique was returned; no independent quality or safety review was run.",
+    });
+    addPass({
+      agentId: `${options.agentPrefix}_finalist`,
+      role: "Final draft",
+      status: "skipped",
+      provider: "none",
+      latencyMs: 0,
+      summary: "Finalist pass skipped because no usable critique was returned.",
+    });
+    return {
+      data: writerData,
+      provider: writer.model,
+      usedFallback: true,
+      latencyMs: Date.now() - startedAt,
+      qualityPipeline: passes,
+      error: "No usable local critique; the writer draft requires human review.",
+    };
+  }
+
+  addPass({
+    agentId: `${options.agentPrefix}_critic`,
+    role: "Prompt-based critique",
+    status: "complete",
+    provider: critique.model,
+    latencyMs: Date.now() - critiqueStartedAt,
+    summary: "A separate prompt to the same configured local model returned critique; this is not independent verification.",
+  });
+
+  const finalistStartedAt = Date.now();
+  try {
+    const finalist = await generateLocalChatJson(
+      options.finalistSystem,
+      `Writer draft for ${options.task}:\n${writer.content}\n\nModel critique (unverified):\n${critique.content}\nReturn the final JSON draft.`,
+      12_000
+    );
+    const finalistData = isTemplateFallback(finalist.model) ? null : options.parseDraft(parseJsonObject(finalist.content));
+    if (finalistData) {
+      addPass({
+        agentId: `${options.agentPrefix}_finalist`,
+        role: "Final draft",
+        status: "complete",
+        provider: finalist.model,
+        latencyMs: Date.now() - finalistStartedAt,
+        summary: "The same local model returned a revised draft; no factual or safety certification is implied.",
+      });
+      return {
+        data: finalistData,
+        provider: finalist.model,
+        usedFallback: false,
+        latencyMs: Date.now() - startedAt,
+        qualityPipeline: passes,
+      };
+    }
+  } catch {
+    // Keep the valid writer draft below and label the missing finalist pass.
+  }
+
+  addPass({
+    agentId: `${options.agentPrefix}_finalist`,
+    role: "Final draft",
+    status: "fallback",
+    provider: "local-template",
+    latencyMs: Date.now() - finalistStartedAt,
+    summary: "No valid finalist response was returned; the earlier local-model draft is retained for human review.",
+  });
+  return {
+    data: writerData,
+    provider: writer.model,
+    usedFallback: true,
+    latencyMs: Date.now() - startedAt,
+    qualityPipeline: passes,
+    error: "Local finalist unavailable; the writer draft requires human review.",
+  };
+}
+
+export interface NarrationScriptDraft {
+  title: string;
+  lines: string[];
+}
+
+export interface SongLyricsDraft {
+  title: string;
+  lyrics: string;
+  styleNote: string;
+}
+
+export interface EmailMarketingDraft {
+  draft: string;
+}
+
+function parseNarrationDraft(value: unknown): NarrationScriptDraft | null {
+  const object = value as Record<string, unknown> | null;
+  if (!object || typeof object.title !== "string" || !Array.isArray(object.lines)) return null;
+  const lines = object.lines.filter((line): line is string => typeof line === "string" && line.trim().length > 0);
+  return lines.length ? { title: object.title.trim(), lines } : null;
+}
+
+function parseSongLyricsDraft(value: unknown): SongLyricsDraft | null {
+  const object = value as Record<string, unknown> | null;
+  if (!object || typeof object.title !== "string" || typeof object.lyrics !== "string") return null;
+  return {
+    title: object.title.trim(),
+    lyrics: object.lyrics.trim(),
+    styleNote: typeof object.styleNote === "string" ? object.styleNote.trim() : "",
+  };
+}
+
+function parseEmailMarketingDraft(value: unknown): EmailMarketingDraft | null {
+  const object = value as Record<string, unknown> | null;
+  return object && typeof object.draft === "string" && object.draft.trim()
+    ? { draft: object.draft.trim() }
+    : null;
+}
+
+export async function generateNarrationScript(
+  topic: string,
+  audience: string
+): Promise<LocalPromptReviewResult<NarrationScriptDraft>> {
+  const fallback: NarrationScriptDraft = {
+    title: `${topic} — খসড়া`,
+    lines: [
+      `${topic} নিয়ে একটি সংক্ষিপ্ত আলোচনা দিয়ে শুরু করুন।`,
+      `${audience}-এর প্রয়োজন অনুযায়ী নির্ভরযোগ্য তথ্য যাচাই করে নিন।`,
+      "ব্যক্তিভেদে অভিজ্ঞতা আলাদা হতে পারে; নিশ্চিত তথ্য ছাড়া ফলাফলের প্রতিশ্রুতি দেবেন না।",
+      "শিশুর স্বাস্থ্য বা বিকাশ নিয়ে উদ্বেগ থাকলে উপযুক্ত বিশেষজ্ঞের পরামর্শ নিন।",
+    ],
+  };
+  return runLocalPromptReview({
+    task: "narration script",
+    agentPrefix: "voice_script",
+    writerSystem: "You are a Video Scriptwriter. Draft a warm Bengali narration script. Do not invent facts or promise outcomes. Return only JSON {title:string, lines:string[]}. This is a draft, not a fact or safety check.",
+    writerUser: `Topic: "${topic}"\nAudience: "${audience}"\nReturn a short narration script as JSON.`,
+    critiqueSystem: "You are a prompt-based script critic. Return only JSON {strengths:string[], issues:string[], revisionPlan:string[]}. Flag unverified claims, medical advice, and guarantees. Do not claim facts or safety were verified and do not assign an approval score.",
+    finalistSystem: "You are a final script editor. Use the critique to revise the Bengali draft, keep uncertainty clear, and return only JSON {title:string, lines:string[]}. Do not claim fact-checking or safety approval.",
+    fallback,
+    parseDraft: parseNarrationDraft,
+  });
+}
+
+export async function generateSongLyrics(
+  topic: string,
+  mood: string
+): Promise<LocalPromptReviewResult<SongLyricsDraft>> {
+  const fallback: SongLyricsDraft = {
+    title: `${topic} — শেখার গান`,
+    lyrics: `আলোর পথে ছোট্ট পা, গল্পে ভরা দিন,\nভালোবাসায় শেখার মাঝে স্বপ্ন রঙিন।\n\nধীরে ধীরে হাতটি ধরি, শুনি মনের ভাষা,\nতুলনা নয়, পাশে থাকি—জাগুক নতুন আশা।`,
+    styleNote: `${mood} অনুভূতির জন্য সাধারণ স্থানীয় টেমপ্লেট; মানব পর্যালোচনা প্রয়োজন।`,
+  };
+  return runLocalPromptReview({
+    task: "song lyrics",
+    agentPrefix: "music_lyrics",
+    writerSystem: "You are a Songwriter. Draft original Bengali lyrics for a family-learning theme. Return only JSON {title:string, lyrics:string, styleNote:string}. Do not imply that the audio has sung vocals or that lyrics were independently reviewed.",
+    writerUser: `Theme: "${topic}"\nMood: ${mood}\nReturn lyrics as JSON.`,
+    critiqueSystem: "You are a prompt-based lyric critic. Return only JSON {strengths:string[], issues:string[], revisionPlan:string[]}. Flag unclear or unsupported claims. This is not independent review; do not assign a verified quality or safety score.",
+    finalistSystem: "You are a lyric editor. Use the critique to revise the Bengali lyrics and return only JSON {title:string, lyrics:string, styleNote:string}. Do not claim independent quality or safety verification.",
+    fallback,
+    parseDraft: parseSongLyricsDraft,
+  });
+}
+
+export async function generateEmailMarketingDraft(
+  draft: string,
+  audience: string,
+  objective: string
+): Promise<LocalPromptReviewResult<EmailMarketingDraft>> {
+  const fallback: EmailMarketingDraft = { draft };
+  return runLocalPromptReview({
+    task: "email marketing draft",
+    agentPrefix: "email_draft",
+    writerSystem: "You are an email marketing copywriter. Revise the supplied email draft for clarity and the stated objective. Do not invent offers, dates, links, evidence, unsubscribe controls, or consent. Return only JSON {draft:string}. No email is sent.",
+    writerUser: `Original email draft:\n${draft}\nAudience: ${audience}\nObjective: ${objective}\nReturn a proposed draft as JSON.`,
+    critiqueSystem: "You are a prompt-based email draft critic. Return only JSON {strengths:string[], issues:string[], revisionPlan:string[]}. Flag invented facts, missing human verification, and unverified consent/delivery statements. This is not a legal, factual, or independent compliance review.",
+    finalistSystem: "You are an email marketing copywriter. Use the critique to revise the draft conservatively. Preserve placeholders and do not add claims, links, unsubscribe instructions, or consent assertions that are not present in the supplied draft. Return only JSON {draft:string}. No email is sent.",
+    fallback,
+    parseDraft: parseEmailMarketingDraft,
+  });
+}
+
 export interface IdeaOut {
   topic: string;
   hook: string;
@@ -152,9 +514,10 @@ export interface ContentPackageOut {
 export async function generateContentPackage(
   topic: string,
   audience: string,
-  ragContext: string
+  ragContext: string,
+  availableSources: { title: string; type: string }[] = []
 ): Promise<AIResult<ContentPackageOut>> {
-  const sys = `You are the ContentWriter + HookOptimizer + SEO + Caption + Hashtag + ImagePrompt + Voice + QualityCritic agents of ALO Learning Journey. Produce ONE complete content package in Bengali (warm, hopeful, non-shaming tone). Return ONLY JSON matching the schema. Captions object keys must be: facebook, instagram, youtube, tiktok, linkedin, x, whatsapp, threads, pinterest, telegram. qualityScore 0-100. ragCitations is an array of {title,type,relevance}.`;
+  const sys = `You are a Bengali content-drafting model for ALO Learning Journey. Produce one complete content package in a warm, hopeful, non-shaming tone. Return ONLY JSON matching the schema. Captions object keys must be: facebook, instagram, youtube, tiktok, linkedin, x, whatsapp, threads, pinterest, telegram. Set qualityScore to 0 because no independent score is run. Do not claim that content was fact-checked, safety-reviewed, or quality-certified. ragCitations may include only exact document titles present in the supplied context; do not invent sources or relevance scores.`;
   const user = `Topic: "${topic}". Audience: "${audience}". RAG context:\n${ragContext}\n\nGenerate the full content package.`;
   const fallback: ContentPackageOut = {
     reelScript: `[হুক — ৩ সেকেন্ড] ${topic} নিয়ে আজ জানবো সহজ উপায় 💛\n\n[সমস্যা] অনেক পিতামাতাই এ বিষয়ে দ্বিধায় ভোগেন।\n\n[সমাধান] ৩টি সহজ ধাপ — ধৈর্য, সংবেদনশীলতা, ধারাবাহিকতা।\n\n[CTA] আপনার অভিজ্ঞতা কমেন্টে শেয়ার করুন ✨`,
@@ -181,13 +544,18 @@ export async function generateContentPackage(
     voiceDirection: "Warm Bangla mother voice, gentle pace, hopeful tone",
     cta: "আপনার অভিজ্ঞতা কমেন্টে শেয়ার করুন ✨",
     disclaimerBn: "প্রয়োজনে pediatrician, child specialist বা speech therapist-এর পরামর্শ নিন 💛",
-    qualityScore: 78,
-    ragCitations: [
-      { title: "Parenting Handbook v2", type: "pdf", relevance: 0.88 },
-      { title: "Child Development Milestones", type: "doc", relevance: 0.82 },
-    ],
+    qualityScore: 0,
+    ragCitations: [],
   };
-  return chatJSON<ContentPackageOut>(sys, user, fallback);
+  const result = await chatJSON<ContentPackageOut>(sys, user, fallback);
+  const sourcesByTitle = new Map(availableSources.map((source) => [source.title.trim().toLocaleLowerCase(), source]));
+  const verifiedTitleMatches = (Array.isArray(result.data.ragCitations) ? result.data.ragCitations : [])
+    .flatMap((citation) => {
+      if (!citation || typeof citation.title !== "string") return [];
+      const source = sourcesByTitle.get(citation.title.trim().toLocaleLowerCase());
+      return source ? [{ title: source.title, type: source.type, relevance: 0 }] : [];
+    });
+  return { ...result, data: { ...result.data, qualityScore: 0, ragCitations: verifiedTitleMatches } };
 }
 
 export interface SafetyOut {
@@ -204,23 +572,17 @@ export async function runProtectiveMode(
   content: string,
   type: string
 ): Promise<AIResult<SafetyOut>> {
-  const sys = `You are the SafetyGuardianAgent of ALO Learning Journey. Run Protective Mode on the given ${type}. Return ONLY JSON {approved, riskLevel, blockedReasons[], requiredEdits[], finalDisclaimer, needsHumanReview, checksPassed[]}. If any developmental/medical concern, set finalDisclaimer to: "প্রয়োজনে pediatrician, child specialist বা speech therapist-এর পরামর্শ নিন 💛". Never approve fear-based, parent-shaming, guaranteed-outcome, or unsafe content.`;
+  const sys = `Provide only a preliminary, unverified model suggestion about the supplied ${type}; you are not an independent safety reviewer and must not certify, fact-check, or approve content. Return ONLY JSON {approved:false, riskLevel, blockedReasons[], requiredEdits[], finalDisclaimer, needsHumanReview:true, checksPassed:[]}. If any developmental/medical concern, include this disclaimer: "প্রয়োজনে pediatrician, child specialist বা speech therapist-এর পরামর্শ নিন 💛". Flag fear-based, parent-shaming, guaranteed-outcome, or potentially unsafe content for human assessment.`;
   const user = `Content to review:\n"""\n${content}\n"""`;
   const fallback: SafetyOut = {
-    approved: true,
-    riskLevel: "low",
-    blockedReasons: [],
-    requiredEdits: [],
+    approved: false,
+    riskLevel: "medium",
+    blockedReasons: ["Automated review unavailable; no safety decision was made."],
+    requiredEdits: ["A human reviewer must check this item before approval or publication."],
     finalDisclaimer:
       "প্রয়োজনে pediatrician, child specialist বা speech therapist-এর পরামর্শ নিন 💛",
-    needsHumanReview: false,
-    checksPassed: [
-      "Child safety",
-      "Bengali grammar",
-      "Brand tone",
-      "CTA safety",
-      "Comment safety",
-    ],
+    needsHumanReview: true,
+    checksPassed: [],
   };
   return chatJSON<SafetyOut>(sys, user, fallback);
 }
@@ -240,10 +602,10 @@ export async function classifyComment(
   const sys = `You are the CommentModerationAgent of ALO Learning Journey. Classify the user comment into exactly ONE category: safe_general, question, praise, complaint, medical_sensitive, development_sensitive, abuse_risk, emergency, spam, toxic. Set autoReplyAllowed=true ONLY for safe_general, question, praise. Set riskLevel high for medical_sensitive/development_sensitive/abuse_risk/emergency/toxic. Return ONLY JSON {category, riskLevel, rationale, autoReplyAllowed}. Bengali rationale ok.`;
   const user = `Comment: """${text}"""`;
   const fallback: CommentClassifyOut = {
-    category: "safe_general",
-    riskLevel: "low",
-    rationale: "নিরাপদ সাধারণ মন্তব্য।",
-    autoReplyAllowed: true,
+    category: "review_required",
+    riskLevel: "medium",
+    rationale: "Comment classification is unavailable; human review is required.",
+    autoReplyAllowed: false,
   };
   return chatJSON<CommentClassifyOut>(sys, user, fallback, { timeoutMs: 12000 });
 }
@@ -298,110 +660,8 @@ export async function generateImageFile(
   }
 }
 
-// ===== SELF-CORRECTION ENGINE =====
-// Retries a task with quality validation. If quality fails, regenerates.
-// Respects maxAttempts to prevent infinite loops.
-
-export interface QualityCheck {
-  score: number;
-  passed: boolean;
-  issues: string[];
-}
-
-export interface SelfCorrectionResult<T> {
-  data: T;
-  quality: QualityCheck;
-  attempts: number;
-  finalProvider: string;
-  corrections: string[];
-  escalated: boolean;
-}
-
-export async function withSelfCorrection<T>(
-  generateFn: () => Promise<AIResult<T>>,
-  validateFn: (data: T) => QualityCheck,
-  maxAttempts = 3,
-  threshold = 85
-): Promise<SelfCorrectionResult<T>> {
-  const corrections: string[] = [];
-  let lastResult: AIResult<T> | null = null;
-  let lastQuality: QualityCheck = { score: 0, passed: false, issues: [] };
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    lastResult = await generateFn();
-    lastQuality = validateFn(lastResult.data);
-
-    if (lastQuality.passed || lastQuality.score >= threshold) {
-      return {
-        data: lastResult.data,
-        quality: lastQuality,
-        attempts: attempt,
-        finalProvider: lastResult.provider,
-        corrections,
-        escalated: false,
-      };
-    }
-
-    const issueSummary = `Attempt ${attempt}: score ${lastQuality.score}/100 — ${lastQuality.issues.join(", ")}`;
-    corrections.push(issueSummary);
-
-    if (attempt === maxAttempts) {
-      return {
-        data: lastResult.data,
-        quality: lastQuality,
-        attempts: attempt,
-        finalProvider: lastResult.provider,
-        corrections,
-        escalated: true,
-      };
-    }
-  }
-
-  return {
-    data: lastResult!.data,
-    quality: lastQuality,
-    attempts: maxAttempts,
-    finalProvider: lastResult!.provider,
-    corrections,
-    escalated: true,
-  };
-}
-
-export function validateContentPackage(pkg: ContentPackageOut): QualityCheck {
-  const issues: string[] = [];
-  let score = 100;
-
-  if (!pkg.reelScript || pkg.reelScript.length < 50) {
-    issues.push("reelScript too short");
-    score -= 20;
-  }
-  if (!pkg.hooks || pkg.hooks.length < 3) {
-    issues.push("insufficient hooks (need 3)");
-    score -= 15;
-  }
-  if (!pkg.captions || Object.keys(pkg.captions).length < 10) {
-    issues.push(`only ${Object.keys(pkg.captions ?? {}).length} captions (need 10)`);
-    score -= 15;
-  }
-  if (!pkg.cta || pkg.cta.length < 10) {
-    issues.push("weak CTA");
-    score -= 10;
-  }
-  if (!pkg.disclaimerBn) {
-    issues.push("missing Bengali disclaimer");
-    score -= 10;
-  }
-  if (pkg.qualityScore < 70) {
-    issues.push(`quality score ${pkg.qualityScore} below 70`);
-    score -= 15;
-  }
-
-  return {
-    score: Math.max(0, score),
-    passed: score >= 85,
-    issues,
-  };
-}
+// No independent quality-scoring or self-correction engine is implemented.
+// Generated content remains draft material and must be reviewed by a person.
 
 // ===== GROWTH LOOP: Content Opportunity + Hook Testing =====
 
@@ -479,7 +739,7 @@ export async function generateContentBrief(
   category: string,
   ageGroup: string
 ): Promise<AIResult<ContentBrief>> {
-  const sys = `You are the SEO AI + Content Strategy Agent for ALO Learning Journey. Generate a complete content brief for a Bengali parenting article. Return ONLY JSON matching the ContentBrief schema. All text in Bengali (natural, not machine-translated). Category: ${category}. Age group: ${ageGroup}. Include 3-5 outline sections with 2-3 points each. Include 3 FAQs. SEO title <60 chars. Meta description <160 chars. qualityScore 0-100.`;
+  const sys = `Draft a Bengali content brief for a parenting article. Return ONLY JSON matching the ContentBrief schema. All text in Bengali (natural, not machine-translated). Category: ${category}. Age group: ${ageGroup}. Include 3-5 outline sections with 2-3 points each. Include 3 FAQs. SEO title <60 chars. Meta description <160 chars. Set qualityScore to 0 because no independent quality, factual, or SEO verification is run.`;
   const user = `Topic: "${topic}". Category: ${category}. Age group: ${ageGroup}. Generate the complete content brief.`;
   const fallback: ContentBrief = {
     title: `${topic} — ${ageGroup} বয়সের জন্য গাইড`,
@@ -502,9 +762,10 @@ export async function generateContentBrief(
     schemaType: "Article",
     internalLinks: [],
     estimatedReadTime: 3,
-    qualityScore: 82,
+    qualityScore: 0,
   };
-  return chatJSON<ContentBrief>(sys, user, fallback, { timeoutMs: 20000 });
+  const result = await chatJSON<ContentBrief>(sys, user, fallback, { timeoutMs: 20000 });
+  return { ...result, data: { ...result.data, qualityScore: 0 } };
 }
 
 // ===== NATURAL LANGUAGE COMMAND PARSER =====

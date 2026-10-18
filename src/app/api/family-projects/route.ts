@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureSeeded } from "@/lib/seed";
 
-// Family projects + media generation pipeline tracking
+// Family-project drafts and historical media-generation records (unverified).
 export async function GET() {
   await ensureSeeded();
   const projects = await db.familyProject.findMany({
@@ -13,77 +13,48 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
     take: 20,
   });
-  return NextResponse.json({ projects, generations });
+  return NextResponse.json({
+    projects: projects.map((project) => ({ ...project, executionVerified: false })),
+    generations: generations.map((generation) => ({ ...generation, executionVerified: false })),
+    pipelineStatus: "not_implemented",
+    message: "No identity-aware family-media worker is configured. Persisted stages, scores, and completion labels are not verified by this application.",
+  });
 }
 
 export async function POST(req: Request) {
   await ensureSeeded();
   const body = await req.json().catch(() => ({}));
 
-  if (body.action === "start_pipeline" && body.projectId) {
-    const project = await db.familyProject.findUnique({ where: { id: body.projectId } });
-    if (!project) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if ((body.action === "start_pipeline" || body.action === "run_pipeline") && (body.projectId || body.id)) {
+    const projectId = String(body.projectId || body.id);
+    const project = await db.familyProject.findUnique({ where: { id: projectId } });
+    if (!project) return NextResponse.json({ error: "project_not_found" }, { status: 404 });
 
-    // Update project to running
-    await db.familyProject.update({
-      where: { id: body.projectId },
-      data: { status: "running", currentStage: "creative_director" },
-    });
-
-    // Create media generation records for each pipeline stage
-    // This is the structured pipeline: Creative Director → Script → Storyboard →
-    // Scene → Casting → Identity → Image → Video → Motion → Voice → Lip-Sync →
-    // Camera → Lighting → Audio → Editing → Upscaling → Quality Judge → Final Director
-    const stages = [
-      "creative_director", "script", "storyboard", "scene", "casting",
-      "identity", "image", "video", "motion", "voice", "lip_sync",
-      "camera", "lighting", "audio", "editing", "upscaling",
-      "quality_judge", "final_director"
-    ];
-
-    const created: Awaited<ReturnType<typeof db.mediaGeneration.create>>[] = [];
-    for (const stage of stages) {
-      const gen = await db.mediaGeneration.create({
-        data: {
-          projectId: body.projectId,
-          stage,
-          status: "pending",
-          maxAttempts: 3,
-          provider: "local",
-        },
-      });
-      created.push(gen);
-    }
-
-    await db.auditLog.create({
-      data: {
-        actor: "admin",
-        action: "family_project.start_pipeline",
-        detail: `Started ${stages.length}-stage pipeline for project "${project.title}"`,
-        severity: "info",
+    // Do not manufacture completed stages, scores, or media outputs. The
+    // identity-aware family production pipeline is not implemented yet.
+    return NextResponse.json(
+      {
+        error: "family_media_pipeline_not_implemented",
+        status: "unavailable",
+        projectId,
+        message: "No family-media stages were started or marked complete. General local video rendering is separate and does not consume family profile assets.",
       },
-    });
-
-    return NextResponse.json({
-      projectId: body.projectId,
-      stagesCreated: created.length,
-      stages,
-      message: "Pipeline initialized. Real execution needs worker infrastructure (BLOCKED_EXTERNAL_SETUP for video/voice/lip-sync stages).",
-    });
+      { status: 409, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
-  if (body.action === "update_stage" && body.generationId) {
-    const gen = await db.mediaGeneration.update({
-      where: { id: body.generationId },
-      data: {
-        status: body.status ?? "running",
-        qualityScore: body.qualityScore ?? 0,
-        identityScore: body.identityScore ?? 0,
-        issuesJson: body.issues ? JSON.stringify(body.issues) : undefined,
-        outputJson: body.output ? JSON.stringify(body.output) : undefined,
-      },
-    });
-    return NextResponse.json({ generation: gen });
+  if (body.action === "update_stage") {
+    return NextResponse.json(
+      { error: "media_stage_updates_unavailable", message: "Stage status and quality scores can only be written by a verified media worker; no such family-media worker is configured." },
+      { status: 409, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
+  if (body.action === "delete" && (body.projectId || body.id)) {
+    const projectId = String(body.projectId || body.id);
+    await db.mediaGeneration.deleteMany({ where: { projectId } });
+    await db.familyProject.delete({ where: { id: projectId } });
+    return NextResponse.json({ ok: true });
   }
 
   return NextResponse.json({ error: "unknown action" }, { status: 400 });

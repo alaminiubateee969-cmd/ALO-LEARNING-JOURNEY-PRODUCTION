@@ -1,17 +1,51 @@
-# ALO Learning Journey — Worklog
+# ALO Learning Journey — Historical Worklog Archive
 
-## Environment Constraint (IMPORTANT)
-This sandbox runs **Next.js 16 + TypeScript + Prisma/SQLite + shadcn/ui** only.
-It cannot compile, run, or deploy PHP/cPanel code.
-The uploaded `ALO-Learning-Journey-cPanel-Ready.zip` contains 17 minimal PHP stubs
-that cannot execute in this environment.
+> **ARCHIVAL ONLY — NOT CURRENT RELEASE OR PRODUCTION EVIDENCE.** This long-form
+> log combines notes from multiple earlier checkouts and sessions. It contains
+> conflicting stacks and claims, including SQLite/Bun instructions, “production
+> ready” verdicts, lip-sync/quality/safety claims, and test results that were not
+> run against the current tree. Treat all entries below as historical context;
+> do not run an old deployment, migration, cleanup, or database command from
+> this file. Nothing here proves the current application, production host,
+> database, CI, backup, or public site is healthy or live.
+>
+> For current repository-only status and limitations, use
+> [`deploy/docs/PRODUCTION_READINESS.md`](deploy/docs/PRODUCTION_READINESS.md)
+> and [`deploy/docs/TEST_REPORT.md`](deploy/docs/TEST_REPORT.md). Operational
+> guardrails are in [`DEPLOYMENT.md`](DEPLOYMENT.md) and
+> [`MIGRATION-RECOVERY-PLAN.md`](MIGRATION-RECOVERY-PLAN.md). The current repair
+> has not accessed or changed production.
 
-## Decision
-Build a faithful, **functional** Next.js realization of the ALO Learning Journey
-admin command center — capturing the full vision (40 AI agents, RAG, protective
-mode, approval queue, content pipeline, social connections, analytics, Telegram
-center, Bengali branding) with **real AI integration** via the LLM and
-image-generation skills.
+## Current repair-branch note — 2026-10-18
+
+This repair keeps production on MySQL, keeps admissions `Lead` separate from
+marketing `MarketingLead`, and leaves generic OTP delivery disabled until a
+real provider is implemented and verified. The current avatar pipeline does
+not integrate lip-sync output; legacy `lipSyncUsed=true` values are not proof
+that lip-sync reached the final video. SEO/content outputs are drafts, with no
+independent factual, safety, legal, or quality certification. GitHub CI generated the Prisma Client and passed typecheck, production build,
+and fresh disposable-MySQL migration checks on candidate commit
+`2453def298cb4fe45dd70cfe8897d5aefd59f457`; local Prisma generation is still
+blocked by sandbox TLS. Production deployment/migration remain blocked pending
+dependency triage, a verified backup restore, schema/history reconciliation,
+restored-copy rehearsal, and VPS/public-domain checks. The live host and
+production database were not accessed.
+
+The source-level check results and PR state are maintained in the current
+readiness/test reports linked above. Every dated task entry below—including
+older “production ready” verdicts, unverified or model-provided quality scores,
+SQLite/Bun deployment notes, and lip-sync integration instructions—is retained
+as history only and is superseded for the current repair.
+
+## Historical environment note (early entry)
+The early sandbox notes below describe **Next.js 16 + TypeScript + Prisma/SQLite + shadcn/ui** and a PHP/cPanel archive. This is not the current production database or release configuration; production is required to remain on MySQL.
+
+## Historical project framing (not a verified feature list)
+An early plan described a Next.js admin command center with AI agents, RAG,
+protective mode, an approval queue, social connections, analytics, Telegram,
+Bengali branding, and model/image-generation integrations. These were aspirations
+and historical implementation claims, not proof that those features are
+complete, independently verified, or operational today.
 
 ---
 Task ID: 0
@@ -2594,7 +2628,7 @@ Task: Implement reference-inspired advanced features — OTP service, Voice Stud
   - GET: 8 style presets (parenting-warm, education-clean, marketing-bold, social-square, cinematic, minimal-line, watercolor-soft, isometric-3d), 7 supported sizes with purpose descriptions, gallery of 24 recent images from `/public/generated/`
   - POST: accepts `prompts` as string or string[] (max 8 per batch), applies preset enrichment, MD5-cache by prompt+size hash (returns cached instantly), generates via `zai.images.generations.create`, returns per-image results with url/bytes/cached flag
 - **UI** `ImageStudioView.tsx`: prompts textarea (one per line, max 8), 8-preset picker grid, 7-size dropdown, generate button with batch progress, results grid with hover-zoom + download + copy, recent gallery, presets reference
-- **Verified**: 
+- **Verified**:
   - Single gen: `parenting-warm` preset → 124KB PNG at `/generated/ad80048a...png`, enrichedPrompt captured
   - Cache hit: 2nd identical call returned `cached:1` instantly
   - UI renders presets/sizes/gallery, "15 cached" badge

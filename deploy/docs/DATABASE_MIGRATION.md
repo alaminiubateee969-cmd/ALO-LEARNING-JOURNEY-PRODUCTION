@@ -1,52 +1,48 @@
-# Database Migration Guide
+# MySQL Database and Migration Guide
 
-## Provider
-SQLite (dev, default) — `DATABASE_URL="file:./db/custom.db"`
-MySQL/Postgres (prod) — set `DATABASE_URL` accordingly.
+## Production data policy
 
-## Schema (Human Avatar system)
+Production remains MySQL. Preserve all existing users, records, permissions, stored media, and relationships. Do not switch production to SQLite, rewrite applied migration history, run destructive SQL, or apply a migration before the live schema/history have been reviewed against a verified backup restored to an isolated MySQL instance.
 
-### HumanAvatar
-- `id` (cuid PK), `ownerId` (tenant isolation), `name`, `persona`, `gender`, `ageRange`
-- `faceDescription`, `voiceProfile`, `voiceSpeed`, `consistencySeed`
-- `portraitUrl`, `portraitStatus` (pending|generated|failed)
-- `outfitStyle`, `sceneContext`, `active`, `videoCount`
-- Indexes: `ownerId`, `persona`, `active`
+Never run `prisma migrate reset`, `prisma migrate dev`, `prisma db push`, `DROP`, or `TRUNCATE` against production. Do not use migration commands as a substitute for inspecting schema and migration history.
 
-### AvatarVideo
-- `id`, `ownerId`, `avatarId` (FK → HumanAvatar ON DELETE CASCADE)
-- `prompt`, `script`, `scenesJson`, `targetDuration`, `actualDuration`
-- `videoUrl`, `thumbnailUrl` (signed-token URLs)
-- `status` (pending|scripting|generating_audio|generating_images|composing|completed|failed)
-- `progress` (0-100), `currentStep`, `errorMessage`
-- `lipSyncUsed` (true ONLY on verified success), `lipSyncReason` (success|not_configured|http_error|invalid_output|timeout|provider_error)
-- `quality` (standard|hd|cinematic)
-- Indexes: `ownerId`, `avatarId`, `status`
+## Operator-provided database target (not verified)
 
-## Migration File
-```
-prisma/migrations/20261007000000_human_avatar_ownership/migration.sql
-```
-Additive: adds `ownerId` + `lipSyncReason` columns + indexes. Backfills existing rows to `ownerId='dev-admin'`. No destructive changes.
+- MySQL schema: `db_learn`
+- Host/port: `127.0.0.1:3306`
+- Production application: `/home/aloedu/LEARNING-JOURNEY`
 
-## Apply
+Do not print or paste `DATABASE_URL`, credentials, SQL rows, or full dumps. Use the approved secret manager and least-privilege accounts.
 
-### Development (fast)
-```bash
-bun run db:push
-```
+## Checked-in migrations
 
-### Production (reproducible)
-```bash
-bun run db:migrate:deploy
-```
+1. `20261001000000_initial_baseline`
+2. `20261007000000_human_avatar_ownership`
+3. `20261010000000_admissions_crm_quotes`
+4. `20261010000001_admin_otp_challenges`
+5. `20261018000000_v2_additive_mysql_tables`
 
-## Backfill / Reassign Ownership
-```sql
-UPDATE HumanAvatar SET ownerId = '<real-user-id>' WHERE name = 'Megha';
-UPDATE AvatarVideo SET ownerId = '<real-user-id>'
-WHERE avatarId IN (SELECT id FROM HumanAvatar WHERE ownerId = '<real-user-id>');
-```
+The checked-in schema currently has 42 Prisma models plus one implicit relation table. `npm run verify:migrations` is static verification only; it does not establish production compatibility or history.
 
-## Foreign Key Cascade
-`AvatarVideo.avatarId` → `HumanAvatar.id` with `ON DELETE CASCADE`. Use the `DELETE /api/human-avatars` endpoint to also clean up files on disk.
+Keep the admissions CRM (`Lead`, `LeadActivity`, `Quotation`, `QuotationItem`) separate from the marketing CRM (`MarketingLead`, `MarketingCampaign`). Preserve existing admin OTP challenge data and generic OTP request data separately. The generic OTP route is currently disabled; no simulated OTP should be generated or returned.
+
+The human-avatar migration was changed from the incoming SQLite form to MySQL DDL, which changes its checksum. If production history records a different checksum or avatar tables/data already exist, stop and prepare a reviewed restored-copy reconciliation; do not edit applied migration history or mark the migration applied based only on table names.
+
+## Required baseline reconciliation and rehearsal
+
+Follow [`MIGRATION-RECOVERY-PLAN.md`](../../MIGRATION-RECOVERY-PLAN.md) before any production operation. At a minimum:
+
+1. Capture a private, read-only inventory of all production tables, columns, defaults, indexes, foreign keys, views/triggers as relevant, engine/version, and `_prisma_migrations` entries/checksums.
+2. Take a complete verified backup, store it outside Git with restrictive permissions, and restore it to a new isolated compatible MySQL instance.
+3. Compare every existing table and relationship to the checked-in schema/migrations. Account for existing data and all CRM/OTP relationships.
+4. On the disposable restored copy only, rehearse baseline reconciliation. Use `prisma migrate resolve --applied 20261001000000_initial_baseline` only after every baseline object is proven to match; if objects are missing, rehearse only the reviewed additive SQL on the disposable copy. `IF NOT EXISTS` does not repair a wrong table shape.
+5. Inspect each later migration target independently. Apply only the exact checksum-verified ordered pending suffix on the restored copy, then verify schema, history, data preservation, auth, CRM, OTP, health, and key routes. Restore the backup again and repeat from a clean state.
+6. Record exact release SHA, migration checksums, restore evidence, inventory comparison, and approvals outside the repository.
+
+No such production-backup restore or migration rehearsal has been completed in this repair. Never treat the static verifier, compressed dump integrity, or a successful `migrate status` as substitute evidence.
+
+## Deployment guardrails
+
+The production deploy path requires an already reconciled baseline and refuses empty, failed, rolled-back, unknown, out-of-order, checksum-mismatched, or non-suffix history. It requires backup/restore and schema-preflight evidence tied to the exact release SHA. It runs migration deploy only for an approved, rehearsed pending suffix. Code rollback does not roll back database DDL.
+
+See [`DEPLOYMENT.md`](../../DEPLOYMENT.md) for GitHub Environment and VPS gates. Leave `VPS_DEPLOY_ENABLED` unset until the restore and schema/history work is approved.

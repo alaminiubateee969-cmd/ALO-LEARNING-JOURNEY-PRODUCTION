@@ -1,74 +1,36 @@
-# Human Avatar Operations Runbook
+# Human Avatar Operations — Current Limitations and Safe Checks
 
-## Daily Operations
+This runbook is repository-level guidance only. The production host and media directories have not been verified. Confirm the live app root and release layout read-only before inspecting or touching files. The operator-provided target is `/home/aloedu/LEARNING-JOURNEY`, PM2 `learn-aloeducation`, port `3017`; do not assume it is live.
 
-### Health check
+## What the video pipeline currently does
+
+When all configured local/provider dependencies are available, the route drafts a script, creates scene audio and still images, and uses FFmpeg to assemble motion clips. The route validates that the final file has video and audio streams and expects a 1080x1920 output. These checks do not certify content accuracy, face consistency, visual quality, consent, or child safety.
+
+The lip-sync adapter exists in the repository, but its output is not integrated into the final compositor. The generation route does not call it and records `lipSyncUsed=false` with `lipSyncReason=not_integrated`. Do not claim that generated videos are lip-synced. Older rows with `lipSyncUsed=true` contain unverified legacy metadata, not proof that the final video contains lip-sync. TTS and image generation depend on configured services/tools; do not assume they are installed or available.
+
+## Read-only checks
+
+After verifying host identity and authorization, inspect PM2 without changing it:
+
 ```bash
-curl https://your-domain/api/health
+pm2 jlist
+pm2 describe learn-aloeducation
+pm2 logs learn-aloeducation --lines 50 --nostream
+ss -lnt
 ```
 
-### Check stuck jobs
-```bash
-# Cron every 5 min (auto-recovers)
-curl -X POST -H "x-cron-secret: $CRON_SECRET" \
-  "https://your-domain/api/recovery/sweep?timeoutMinutes=10"
+The expected app port is `3017`. If the process is absent or not online, stop; the release deployment script will not start it. Do not restart, resurrect, or replace PM2 services without an approved first-install/recovery plan.
 
-# Manual dry-run (no mutation)
-curl https://your-domain/api/recovery/sweep
-```
+Use the guarded health script only after confirming the correct host and process. `/api/health` has a public minimal response; detailed checks require the authenticated admin session. A health response is not proof of user-flow, database-history, backup, or public-domain correctness.
 
-### Monitor generation logs
-Structured JSON to stdout. Each entry has `jobId` for correlation:
-```json
-{"ts":"2026-10-07T21:01:57Z","level":"info","message":"ffmpeg-compose-complete","jobId":"job_...","durationSec":81.32,"hasVideo":true,"hasAudio":true}
-```
+## Data and media handling
 
-Filter:
-```bash
-pm2 logs alo | grep -E 'pipeline-start|llm-script-complete|tts-complete|image-gen-complete|ffmpeg-compose|pipeline-complete|pipeline-failed|lipsync-'
-```
+Avatar/video delete APIs remove database records and files. Treat deletion as destructive. Do not use them for cleanup until the owner/retention decision and verified backup are explicit. Never delete files by wildcard, move/overwrite existing assets, or copy a production asset set into Git. Preserve unknown assets until provenance and use are reviewed.
 
-### Verify a completed video
-```bash
-# Get video URL
-curl https://your-domain/api/avatar-video | jq '.videos[0].videoUrl'
-# ffprobe — MUST show video AND audio
-ffprobe -show_streams <url> | grep codec_type
-```
+For incident response, record release SHA, job ID, relevant redacted logs, and a private media/database backup reference. Do not log prompts containing personal data, session tokens, `.env` values, or database rows. Do not add new third-party or paid services without approval.
 
-## Failure Diagnosis
+## Related documents
 
-### Video stuck in generating_images
-1. Check z-ai image-gen: `curl https://your-domain/api/image-studio` (200?)
-2. Check the record: `curl https://your-domain/api/avatar-video | jq '.videos[] | select(.status=="generating_images")'`
-3. If stuck > 10 min, sweep auto-fails it. Or force: `curl -X POST 'https://your-domain/api/recovery/sweep?timeoutMinutes=1'`
-4. User retries by POSTing to `/api/avatar-video` again.
-
-### Lip-sync returns http_error
-1. Check `LIPSYNC_SERVICE_URL` reachable from server
-2. Check `LIPSYNC_API_KEY` if service requires auth
-3. Increase `LIPSYNC_TIMEOUT_MS` (default 120s)
-4. Check lip-sync service logs
-
-### Lip-sync returns invalid_output
-1. Provider returned non-video or stream-missing output
-2. Verify field names: `LIPSYNC_IMAGE_FIELD`, `LIPSYNC_AUDIO_FIELD`
-3. ffprobe the provider's raw response to diagnose
-
-### Audio missing in final MP4
-Pipeline validates output + refuses to mark `completed` if audio missing. If you see `failed` with `Output validation failed: video=true audio=false`:
-- Check FFmpeg version supports `anullsrc` + `aac`
-- Check DejaVu font path
-- Check disk space in `storage/avatar-videos/`
-
-## Disk Cleanup
-```bash
-ls -lh public/avatar-videos/ public/avatar-audio/ public/avatar-scenes/ public/avatars/
-```
-Deleting avatars/videos via API auto-cleans their files.
-
-## Backup
-```bash
-cp db/custom.db "backups/custom-$(date +%Y%m%d).db"
-tar czf "backups/media-$(date +%Y%m%d).tar.gz" public/avatars public/avatar-videos public/avatar-audio public/avatar-scenes public/avatar-thumbs
-```
+- [`DEPLOYMENT.md`](../../DEPLOYMENT.md)
+- [`MIGRATION-RECOVERY-PLAN.md`](../../MIGRATION-RECOVERY-PLAN.md)
+- [`PRODUCTION_READINESS.md`](./PRODUCTION_READINESS.md)

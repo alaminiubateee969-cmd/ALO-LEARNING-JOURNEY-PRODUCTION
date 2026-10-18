@@ -134,6 +134,7 @@ export default function Home() {
   const pick = (s: Section) => {
     setSection(s);
     setMobileOpen(false);
+    if (s !== "studio") setStudioSeed(null);
   };
 
   const promoteToStudio = (topic: string, audience: string) => {
@@ -246,7 +247,7 @@ export default function Home() {
             </span>
           </div>
           <div key={section} className="p-4 sm:p-6 max-w-7xl mx-auto alo-fade-up">
-            {section === "dashboard" && <Dashboard onNavigate={(s) => setSection(s as Section)} />}
+            {section === "dashboard" && <Dashboard onNavigate={(s) => pick(s as Section)} />}
             {section === "agents" && <AgentsView />}
             {section === "workflow" && <WorkflowView />}
             {section === "loop" && <LoopAIView />}
@@ -256,7 +257,7 @@ export default function Home() {
             {section === "crm" && <CrmView />}
             {section === "seo" && <SeoView />}
             {section === "topics" && <TopicsView onPromote={promoteToStudio} />}
-            {section === "studio" && <ContentStudio seed={studioSeed} onConsumeSeed={() => setStudioSeed(null)} />}
+            {section === "studio" && <ContentStudio seed={studioSeed} />}
             {section === "approval" && <ApprovalQueue />}
             {section === "rag" && <RagView />}
             {section === "history" && <PackageHistoryView onDuplicate={(topic) => promoteToStudio(topic, "পিতামাতা")} />}
@@ -287,7 +288,7 @@ export default function Home() {
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
-        onNavigate={(s) => setSection(s as Section)}
+        onNavigate={(s) => pick(s as Section)}
       />
 
       {/* Onboarding tour (first visit) */}

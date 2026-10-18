@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     data: {
       actor: "admin",
       action: "marketing.email_draft_refine",
-      detail: `Email draft ${result.usedFallback ? "kept as local fallback" : "refined with local agents"}; ${result.qualityPipeline?.length ?? 0} review-stage records; no email sent.`,
+      detail: `Email draft ${result.usedFallback ? "kept as local fallback" : "revised through prompts to the same local model"}; ${result.qualityPipeline?.length ?? 0} prompt-stage records; no independent compliance review and no email sent.`,
       severity: result.usedFallback ? "warn" : "info",
     },
   });
@@ -34,7 +34,6 @@ export async function POST(req: Request) {
     usedFallback: result.usedFallback,
     latencyMs: result.latencyMs,
     qualityPipeline: result.qualityPipeline ?? [],
-    qualityScore: result.qualityPipeline?.at(-1)?.scoreAfter ?? 0,
     status: result.usedFallback ? "fallback_draft_only" : "refined_draft_only",
     humanReviewRequired: true,
     deliveryEnabled: false,

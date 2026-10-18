@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, CornerDownLeft, ArrowUp, ArrowDown } from "lucide-react";
 import { AGENTS } from "@/lib/agents";
 import { PLATFORMS } from "@/lib/platforms";
-import { TELEGRAM_COMMANDS } from "@/lib/platforms";
+import { ADMIN_COMMANDS } from "@/lib/platforms";
 
 interface PaletteItem {
   id: string;
@@ -70,11 +70,11 @@ export default function CommandPalette({
     action: () => onNavigate("social"),
   }));
 
-  const telegramItems: PaletteItem[] = TELEGRAM_COMMANDS.slice(0, 8).map((c) => ({
+  const telegramItems: PaletteItem[] = ADMIN_COMMANDS.slice(0, 8).map((c) => ({
     id: `tg-${c.cmd}`,
     label: c.cmd,
     bn: c.desc,
-    group: "Telegram Commands",
+    group: "Admin Console Commands",
     icon: "✈️",
     action: () => onNavigate("telegram"),
   }));
@@ -106,21 +106,18 @@ export default function CommandPalette({
 
   const flatFiltered = groups.flatMap((g) => g.items);
 
-  // Reset query and active index when opened
+  // Focus the input when opened. Search/selection state is updated by input
+  // and keyboard events rather than synchronously from an effect.
   useEffect(() => {
-    if (open) {
-      setQ("");
-      setActiveIdx(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (!open) return;
+    const timeout = window.setTimeout(() => inputRef.current?.focus(), 50);
+    return () => window.clearTimeout(timeout);
   }, [open]);
 
-  // Keep active index in range
-  useEffect(() => {
-    if (activeIdx >= flatFiltered.length) setActiveIdx(0);
-  }, [flatFiltered.length, activeIdx]);
+  const activeIndex = Math.min(activeIdx, Math.max(0, flatFiltered.length - 1));
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (flatFiltered.length === 0) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIdx((i) => Math.min(flatFiltered.length - 1, i + 1));
@@ -129,7 +126,7 @@ export default function CommandPalette({
       setActiveIdx((i) => Math.max(0, i - 1));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const item = flatFiltered[activeIdx];
+      const item = flatFiltered[activeIndex];
       if (item) {
         item.action();
         onOpenChange(false);
@@ -173,7 +170,7 @@ export default function CommandPalette({
                   </p>
                   {g.items.map((it) => {
                     const idx = runningIdx++;
-                    const isActive = idx === activeIdx;
+                    const isActive = idx === activeIndex;
                     return (
                       <button
                         key={it.id}

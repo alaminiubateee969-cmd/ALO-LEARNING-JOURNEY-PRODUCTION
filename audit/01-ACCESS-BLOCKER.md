@@ -1,5 +1,14 @@
 # 01 — ACCESS BLOCKER: this session is not on your VPS
 
+> **Historical snapshot — not current production evidence.** This document
+> refers to an earlier checkout/date and may contain stale paths, counts,
+> test results, or infrastructure claims. Use the current repository
+> baseline at `../COMPLETE-AUDIT-REPORT.md`, deployment blockers at
+> `../DEPLOYMENT.md`, and migration procedure at
+> `../MIGRATION-RECOVERY-PLAN.md`. Do not execute commands here against
+> production without a new review and explicit authorization.
+
+
 Your instructions were explicit: *"Inspect the actual server and repository state
 before making changes. Do not guess."* I followed that. The inspection showed
 that **the actual server is not reachable from this session**, so the VPS-side

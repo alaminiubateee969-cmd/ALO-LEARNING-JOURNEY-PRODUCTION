@@ -1,138 +1,70 @@
 #!/usr/bin/env bash
-# ALO Learning Journey — Ubuntu VPS Bootstrap Script
-# Usage: bash deploy/deploy-vps.sh
-# Idempotent — safe to re-run.
+# Read-only VPS deployment preflight. This intentionally performs no bootstrap
+# installs, service restarts, firewall/proxy edits, chmod/chown, cron changes,
+# directory migrations, database writes, or DNS changes.
+set -Eeuo pipefail
+cd /
 
-set -euo pipefail
+APP_DIR="${APP_DIR:-/home/aloedu/LEARNING-JOURNEY}"
+APP_NAME="${PM2_APP_NAME:-learn-aloeducation}"
+PORT="${APP_PORT:-3017}"
+DOMAIN="${PUBLIC_BASE_URL:-https://learn.aloeducation.com}"
+[ "$APP_DIR" = "/home/aloedu/LEARNING-JOURNEY" ] || { echo '[preflight] ERROR: APP_DIR must be /home/aloedu/LEARNING-JOURNEY' >&2; exit 1; }
+[ "$APP_NAME" = "learn-aloeducation" ] || { echo '[preflight] ERROR: PM2 process name must be learn-aloeducation' >&2; exit 1; }
+[ "$PORT" = "3017" ] || { echo '[preflight] ERROR: APP_PORT must be 3017' >&2; exit 1; }
+[ "$DOMAIN" = "https://learn.aloeducation.com" ] || { echo '[preflight] ERROR: public URL must be https://learn.aloeducation.com' >&2; exit 1; }
 
-# ---- Config ----
-APP_DIR="/home/aloedu/learn-app"
-APP_USER="aloedu"
-APP_PORT="${PORT:-3017}"
-DOMAIN="${DOMAIN:-learn.aloeducation.com}"
-NODE_VERSION="20"
-BUN_VERSION="1.3.14"
+printf '%s\n' 'Read-only deployment preflight — no server configuration or data will be changed.'
+printf '[preflight] expected app path: %s\n' "$APP_DIR"
+printf '[preflight] expected PM2 name: %s\n' "$APP_NAME"
+printf '[preflight] expected app port: %s\n' "$PORT"
+printf '[preflight] expected public domain: %s\n' "$DOMAIN"
+printf '[preflight] current user: %s\n' "$(id -un)"
 
-echo "=========================================="
-echo "ALO Learning Journey — Ubuntu VPS Deploy"
-echo "Domain: $DOMAIN"
-echo "App dir: $APP_DIR"
-echo "Port:   $APP_PORT"
-echo "=========================================="
-
-# ---- 1. System packages ----
-echo "[1/9] Installing system packages..."
-sudo apt-get update -y
-sudo apt-get install -y \
-  curl git build-essential \
-  ffmpeg fonts-dejavu-core \
-  ca-certificates gnupg \
-  sqlite3 \
-  ufw fail2ban
-sudo mkdir -p /etc/apt/keyrings
-
-# ---- 2. Node.js ----
-echo "[2/9] Installing Node.js $NODE_VERSION..."
-if ! command -v node &>/dev/null || [[ "$(node -v)" != v$NODE_VERSION* ]]; then
-  curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | sudo -E bash -
-  sudo apt-get install -y nodejs
+failed=0
+for cmd in git node npm pm2 mysql mysqldump curl ss; do
+  if command -v "$cmd" >/dev/null; then printf '[preflight] found %s\n' "$cmd"; else printf '[preflight] MISSING %s\n' "$cmd"; failed=1; fi
+done
+if command -v node >/dev/null; then
+  NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
+  if [ "$NODE_MAJOR" = "22" ]; then printf '[preflight] Node.js %s (expected 22)\n' "$(node -v)"; else printf '[preflight] MISMATCH Node.js %s (deployment expects major 22)\n' "$(node -v)"; failed=1; fi
 fi
-echo "  node: $(node -v)"
-
-# ---- 3. Bun ----
-echo "[3/9] Installing Bun..."
-if ! command -v bun &>/dev/null; then
-  curl -fsSL https://bun.sh/install | bash
-  export BUN_INSTALL="$HOME/.bun"
-  export PATH="$BUN_INSTALL/bin:$PATH"
-  # persist for non-interactive shells
-  grep -q 'BUN_INSTALL' ~/.bashrc || echo "export BUN_INSTALL=\"\$HOME/.bun\"" >> ~/.bashrc
-  grep -q 'BUN_INSTALL/bin' ~/.bashrc || echo "export PATH=\"\$BUN_INSTALL/bin:\$PATH\"" >> ~/.bashrc
+if [ -d "$APP_DIR" ]; then printf '[preflight] app directory exists\n'; else printf '[preflight] MISSING app directory\n'; failed=1; fi
+if [ -f "$APP_DIR/shared/.env" ]; then
+  printf '[preflight] shared environment file exists (contents not displayed)\n'
+elif [ -f "$APP_DIR/.env" ]; then
+  printf '[preflight] app environment file exists (contents not displayed)\n'
+else
+  printf '[preflight] MISSING environment file\n'
+  failed=1
 fi
-echo "  bun: $(bun --version 2>/dev/null || echo 'pending shell restart')"
+if [ -L "$APP_DIR/current" ] && [ -f "$APP_DIR/current/RELEASE_SHA" ]; then printf '[preflight] current release pointer and SHA marker exist\n'; else printf '[preflight] no atomic current-release marker; first deployment/repair needs a separately reviewed runbook\n'; failed=1; fi
 
-# ---- 4. PM2 ----
-echo "[4/9] Installing PM2..."
-sudo npm install -g pm2@latest
-echo "  pm2: $(pm2 --version)"
-
-# ---- 5. Caddy (reverse proxy + auto-HTTPS) ----
-echo "[5/9] Installing Caddy..."
-if ! command -v caddy &>/dev/null; then
-  sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-  sudo apt-get update -y
-  sudo apt-get install -y caddy
+if ! command -v pm2 >/dev/null; then
+  printf '[preflight] PM2 is unavailable\n'
+  failed=1
+elif ! pm2 jlist 2>/dev/null | node -e '
+let input=""; process.stdin.setEncoding("utf8"); process.stdin.on("data",x=>input+=x).on("end",()=>{
+  try { const rows=JSON.parse(input).filter(p=>p.name===process.argv[1]); process.exit(rows.length===1 && rows[0]?.pm2_env?.status==="online" ? 0 : 1); }
+  catch { process.exit(1); }
+});' "$APP_NAME"; then
+  printf '[preflight] PM2 process %s is missing or not online; no start/restart attempted\n' "$APP_NAME"
+  failed=1
+else
+  printf '[preflight] PM2 process %s is online\n' "$APP_NAME"
 fi
-echo "  caddy: $(caddy version 2>/dev/null | head -c 60)"
 
-# ---- 6. App user + directory ----
-echo "[6/9] Setting up app user + directory..."
-if ! id "$APP_USER" &>/dev/null; then
-  sudo useradd -m -s /bin/bash "$APP_USER"
+if command -v ss >/dev/null && ss -lntH | awk '$4 ~ /:3017$/ { found=1 } END { exit !found }'; then
+  printf '[preflight] port 3017 is listening\n'
+else
+  printf '[preflight] port 3017 is not listening\n'
+  failed=1
 fi
-sudo mkdir -p "$APP_DIR"
-sudo chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
-# ---- 7. Firewall ----
-echo "[7/9] Configuring firewall (ufw)..."
-sudo ufw allow OpenSSH || true
-sudo ufw allow 80/tcp || true
-sudo ufw allow 443/tcp || true
-sudo ufw --force enable || true
-
-# ---- 8. Caddy config ----
-echo "[8/9] Writing Caddyfile..."
-sudo mkdir -p /etc/caddy
-sudo tee /etc/caddy/Caddyfile > /dev/null <<CADDYEOF
-$DOMAIN {
-    reverse_proxy localhost:$APP_PORT
-    encode gzip
-    header {
-        X-Content-Type-Options nosniff
-        X-Frame-Options DENY
-        X-XSS-Protection "1; mode=block"
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
-        Referrer-Policy no-referrer
-        Permissions-Policy "camera=(), microphone=(), geolocation=()"
-    }
-}
-CADDYEOF
-sudo systemctl reload caddy || sudo systemctl restart caddy
-sudo systemctl enable caddy
-
-# ---- 9. PM2 startup hook ----
-echo "[9/9] Configuring PM2 startup..."
-sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u "$APP_USER" --hp "/home/$APP_USER" || true
-sudo env PATH=$PATH:/usr/bin pm2 save || true
-
-# ---- Backup cron ----
-echo "[backup] Installing daily backup cron..."
-sudo mkdir -p /home/aloedu/backups
-CRON_LINE="0 3 * * * cd $APP_DIR && sqlite3 db/custom.db '.backup /home/aloedu/backups/db-\$(date +\%Y\%m\%d).db' && find /home/aloedu/backups -name 'db-*.db' -mtime +14 -delete"
-( crontab -u "$APP_USER" -l 2>/dev/null; echo "$CRON_LINE" ) | sort -u | crontab -u "$APP_USER" -
-
-# ---- Recovery sweep cron (every 5 min) ----
-echo "[sweep] Installing recovery sweep cron (every 5 min)..."
-SWEEP_LINE="*/5 * * * * curl -sf -X POST -H 'x-cron-secret: \${CRON_SECRET}' http://localhost:$APP_PORT/api/recovery/sweep?timeoutMinutes=10 >> /home/aloedu/sweep.log 2>&1"
-( crontab -u "$APP_USER" -l 2>/dev/null; echo "$SWEEP_LINE" ) | sort -u | crontab -u "$APP_USER" -
-
-echo ""
-echo "=========================================="
-echo "✅ VPS bootstrap complete"
-echo ""
-echo "Next steps (run as $APP_USER):"
-echo "  cd $APP_DIR"
-echo "  git clone <repo> ."
-echo "  bun install"
-echo "  cp .env.example .env  # fill in secrets"
-echo "  bun run db:migrate:deploy"
-echo "  bun run db:generate"
-echo "  bun run build:prod"
-echo "  pm2 start ecosystem.config.js"
-echo "  pm2 save"
-echo ""
-echo "Domain: https://$DOMAIN"
-echo "Health: https://$DOMAIN/api/health"
-echo "=========================================="
+if command -v df >/dev/null && [ -d "$APP_DIR" ]; then df -h "$APP_DIR"; fi
+if command -v free >/dev/null; then free -h; fi
+if [ "$failed" -ne 0 ]; then
+  printf '[preflight] BLOCKED: resolve missing/mismatched prerequisites manually; no changes were made.\n' >&2
+  exit 1
+fi
+printf '[preflight] prerequisites look present; this report does not prove DB schema compatibility, backup restoreability, or public-domain health. No changes were made.\n'

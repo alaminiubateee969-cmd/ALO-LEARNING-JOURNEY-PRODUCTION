@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SectionHeader, StatusPill, ProviderTag } from "./primitives";
+import { SectionHeader, ProviderTag } from "./primitives";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Loader2, FileText, CheckCircle2 } from "lucide-react";
+import { Search, Loader2, FileText } from "lucide-react";
 import { CATEGORIES, AGE_GROUPS, SEO_CLUSTERS } from "@/lib/content-categories";
 
 interface Brief {
@@ -51,8 +51,8 @@ export default function SeoView() {
       setBrief(data.brief);
       setProvider(data.provider);
       toast({
-        title: data.publishReady ? "SEO Brief তৈরি ✅ (publish-ready)" : `স্কোর: ${data.brief.qualityScore}/100`,
-        description: `Provider: ${data.provider}`,
+        title: "SEO brief draft created · human verification required",
+        description: `Provider: ${data.provider}; no independent SEO, fact, or quality review was run.`,
       });
     } finally { setLoading(false); }
   };
@@ -62,7 +62,7 @@ export default function SeoView() {
       <SectionHeader
         title="SEO Command Center"
         bn="এসইও কমান্ড সেন্টার"
-        desc="রিয়েল LLM দিয়ে কনটেন্ট ব্রিফ তৈরি — keyword cluster, content outline, FAQ, SEO title, meta description, schema। ৮৫+ স্কোর = publish-ready।"
+        desc="LLM বা fallback দিয়ে কনটেন্ট ব্রিফের খসড়া তৈরি — keyword cluster, outline, FAQ, SEO title, meta description, schema। স্বাধীন SEO, factual, safety বা quality review হয় না; প্রকাশের আগে মানবীয় যাচাই আবশ্যক।"
         icon={<Search className="h-5 w-5" />}
       />
 
@@ -126,9 +126,7 @@ export default function SeoView() {
             </h3>
             <div className="flex items-center gap-2">
               <ProviderTag provider={provider} fallback={provider === "local-fallback"} />
-              <Badge className={brief.qualityScore >= 85 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
-                {brief.qualityScore >= 85 ? <><CheckCircle2 className="h-3 w-3 mr-0.5" />Publish-ready</> : `Score: ${brief.qualityScore}`}
-              </Badge>
+              <Badge className="bg-amber-100 text-amber-800">Not independently scored · human review required</Badge>
             </div>
           </div>
 

@@ -1,100 +1,46 @@
-# Test Report — v1.1.0
+# Test Report — Current Repair Worktree
 
-**Date:** 2026-10-07
-**Branch:** `repair/human-avatar-production`
+**As of:** 2026-10-18
+**Branch:** `arena/6d490018-alo-learning-journey-productio`
+**Status:** Local checks plus a GitHub CI snapshot for code candidate `2453def298cb4fe45dd70cfe8897d5aefd59f457`; no production tests have run. The merge commit is pushed to PR #19, which was still open at last observation. Check GitHub again if the PR head or merge state has advanced since this report.
 
-## Quality Gates (all PASS)
+## Local checks
 
-| Gate | Status | Evidence |
-|------|--------|----------|
-| Lint | ✅ PASS | 0 errors |
-| TypeScript | ✅ PASS | build compiles |
-| Production build | ✅ PASS | `next build` succeeds |
-| DB migration | ✅ PASS | applied + reproducible |
-| Human Avatar E2E | ✅ PASS | Anjali video: 81.32s, audio+video |
-| Browser verification | ✅ PASS | agent-browser confirmed |
-| Final MP4 ffprobe | ✅ PASS | h264 video + aac audio |
-| Final MP4 audio extraction | ✅ PASS | 13.5 MB WAV |
-| Authentication | ✅ PASS | dev-fallback; prod would 401 |
-| Ownership | ✅ PASS | ownerId in all responses |
-| Stuck recovery | ✅ PASS | sweep recovered 2 stuck videos |
-| Cleanup | ✅ PASS | 9 files deleted per video |
-| Rate limit | ✅ PASS | 3/10min + 1 concurrent |
-| Validation | ✅ PASS | whitespace/invalid/empty → 400 |
-| Regression | ✅ PASS | 0 regressions across 36 endpoints |
-| **UI delete buttons** | ✅ PASS | avatar cards + video cards + play dialog |
-| **UI honest lip-sync states** | ✅ PASS | 4 distinct badges displayed |
+| Check | Result | Evidence / limitation |
+|---|---|---|
+| `npm test` | PASS | 52/52 tests passed. Includes auth/OTP, CRM/health, migration guards, release-script safeguards, bounded uploads, and tests that prevent unverified SEO/lip-sync claims. Node emitted a non-failing module-type performance warning for `src/lib/auth-config.ts`. |
+| `npm run lint` | PASS | 0 errors, 0 warnings after replacing build-time Google font downloads with the repository's licensed self-hosted Hind Siliguri fonts and system fallbacks. |
+| `npm run verify:migrations` | PASS, static only | 42 Prisma models, 480 scalar column types, indexes/unique constraints/PKs/FKs, and one implicit relation table map to five checked-in MySQL migrations. No selected destructive SQL pattern found. This is not a live database comparison. |
+| `npm run typecheck` | FAIL / BLOCKED | One reported error: `src/lib/db.ts(1,10): @prisma/client has no exported member PrismaClient` because the schema-specific generated client is absent. |
+| `npm run build` | FAIL / BLOCKED | Next.js compiled successfully; type-check then failed on the same missing generated Prisma Client. No complete production build artifact was produced. Middleware-to-proxy deprecation warning remains. |
+| Prisma Client generation | BLOCKED | The prior `npx prisma generate --schema=prisma/schema.prisma --no-engine` attempt could not download Prisma's schema engine/checksum from `binaries.prisma.sh` because of sandbox TLS/network restrictions. Do not mask this with a fake client. |
+| `npm audit` | FAIL / triage required | Registry report: 13 findings (9 high, 4 moderate, 0 critical). `npm audit --omit=dev`: 8 (4 high, 4 moderate). Proposed fixes include major-version changes; none were applied blindly. |
+| `bash -n` | PASS | Seven deployment/preflight/backup/health scripts parsed successfully, including the read-only monitor. |
+| Workflow/Compose YAML | PASS, syntax only | `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, `.github/workflows/datadog-synthetics.yml`, and `docker-compose.yml` parsed with `js-yaml`; this is not proof of a GitHub Actions run. |
+| `git diff --check` and `git diff --cached --check` | PASS at last run | Both working-tree and staged diff whitespace checks passed after normalizing imported text artifacts. Re-run after final staging. |
+| GitHub CI / PR checks | PASS on candidate `2453def` | `CI / validate` passed Prisma validation/client generation, migrations twice on a fresh disposable MySQL service, lint, unit tests/rollback simulation, typecheck, and production build. The optional Datadog Synthetics `build` job was skipped because `DATADOG_SYNTHETICS_ENABLED` is false/unset. This is not a restored production database rehearsal. |
 
-## Test Matrix
+## What the static migration check means
 
-### API Tests
-| Test | Expected | Actual | Pass |
-|------|----------|--------|------|
-| GET avatars | 200 | 200 | ✅ |
-| POST seed_presets | 200 + count | 200, 6 seeded | ✅ |
-| POST create custom | 200 + avatar | 200, Anjali created | ✅ |
-| POST create — missing fields | 400 | 400 | ✅ |
-| POST create — invalid persona | 400 | 400 | ✅ |
-| POST generate_portrait — bad id | 404 | 404 | ✅ |
-| POST video — missing prompt | 400 | 400 | ✅ |
-| POST video — whitespace prompt | 400 | 400 "cannot be empty/whitespace" | ✅ |
-| POST video — duration out of range | 400 | 400 | ✅ |
-| POST video — invalid quality | 400 | 400 | ✅ |
-| POST video — nonexistent avatar | 404 | 404 | ✅ |
-| POST video — full pipeline | 200 | 200, 81.32s MP4 | ✅ |
-| DELETE video | 200 + filesDeleted | 200, 9 files | ✅ |
-| DELETE avatar (cascade) | 200 + cascadedVideos | 200 | ✅ |
-| POST recovery sweep | 200 + recovered | 200, recovered: 2 | ✅ |
-| Empty body | 400 | 400 "Request body is empty" | ✅ |
-| Invalid JSON | 400 | 400 "Invalid JSON" | ✅ |
+The verifier covers the checked-in Prisma model/migration mapping and selected SQL safety patterns. It does **not** prove production schema, existing data, indexes, foreign keys, checksums/history, or backup restoreability. No production DB connection or restored-copy migration rehearsal has occurred. Preserve admissions/OTP records and relationships, and keep admissions `Lead` separate from marketing `MarketingLead`.
 
-### Video Tests (Fresh E2E — Anjali)
-| Test | Result | Evidence |
-|------|--------|----------|
-| Audio stream exists | ✅ PASS | `stream,1,aac,audio,44100,2` |
-| Audio extraction | ✅ PASS | 13.5 MB WAV |
-| Video duration | ✅ PASS | 81.28s |
-| Video resolution | ✅ PASS | 1080×1920 |
-| Video codec | ✅ PASS | h264 High |
-| Audio codec | ✅ PASS | aac, 44100Hz, stereo |
-| Browser playback | ✅ PASS | agent-browser |
-| Lip-sync | ⚠️ NOT TESTED | external service not deployed |
+## Product-behavior safeguards covered in source/tests
 
-### Security Tests
-| Test | Result |
-|------|--------|
-| Unauthenticated (prod) | ✅ would 401; dev returns dev-fallback header |
-| Prompt injection | ✅ flagged; LLM treats as topic |
-| Path traversal | ✅ 404 |
-| IDOR / guessable URL | ✅ signed token required |
-| Rate limit | ✅ 429 on 4th request |
-| Concurrent | ✅ 409 on 2nd concurrent |
+- Generic OTP delivery remains disabled; it does not generate, store, or return simulated codes. Administrator sign-in OTP is a separate flow.
+- SEO briefs are drafts, remain `publishReady: false`, and are not independently scored or fact/safety/SEO certified. The unused self-correction helper that treated model-supplied `qualityScore` as validation was removed; no independent scoring engine replaces it.
+- Avatar generation records `lipSyncUsed=false` / `lipSyncReason=not_integrated`. The compositor does not use adapter output. Historical `lipSyncUsed=true` metadata is shown as an unverified legacy flag, not proof of lip-sync.
+- The monitoring script targets the operator-provided `/home/aloedu/LEARNING-JOURNEY`, `learn-aloeducation`, port `3017`; it is read-only, does not query SQLite/MySQL, and does not start/restart PM2.
 
-### Failure Tests
-| Test | Result |
-|------|--------|
-| Interrupted job | ✅ sweep marks failed |
-| Lip-sync timeout | ✅ adapter returns `timeout` |
-| Lip-sync malformed | ✅ adapter returns `invalid_output` |
-| Storage failure | ✅ throws → failed |
-| Duplicate request | ✅ rate limit blocks |
+## Explicitly not tested or verified
 
-### UI Tests (agent-browser)
-| Test | Result |
-|------|--------|
-| Avatars tab renders | ✅ Anjali + Rina + Supti + 5 presets |
-| Generate Video tab renders | ✅ form + progress |
-| Video Library tab renders | ✅ completed videos |
-| Avatar delete button present | ✅ "Delete avatar + all videos" × 4 |
-| Video delete button present | ✅ "Delete video + files" × 5 |
-| Honest lip-sync badge — unavailable | ✅ "Lip-sync unavailable" |
-| Honest lip-sync badge — no lip-sync | ✅ "No lip-sync" |
-| Failed video error display | ✅ (when status=failed) |
-| Play dialog download button | ✅ "Download MP4" |
-| Play dialog delete button | ✅ "Delete" |
+- Prisma Client generated-type checking and a complete production build.
+- Applying migrations against a disposable MySQL instance restored from a verified production backup.
+- Live CRM/OTP rows and relationship preservation.
+- VPS, PM2 process/cwd, port `3017`, reverse proxy, DNS/TLS, or public HTTPS health.
+- Production deployment, public-domain availability, real OTP/SMS delivery, external social publishing, comment delivery, or media quality/lip-sync.
 
-## Known Limitations
-1. Lip-sync: adapter implemented; external GPU service NOT deployed → talking-portrait mode.
-2. Dev-auth fallback when NEXTAUTH_SECRET/ALO_ADMIN_EMAIL/ALO_ADMIN_PASSWORD_HASH unset.
-3. In-memory rate limit (single-instance only).
-4. Other portal sections (Workflow, Video Pipeline, Communications) remain mock/placeholder — out of scope.
+## Next required checks
+
+1. If the PR head advances beyond candidate `2453def`, verify required checks and clean merge state on the new exact SHA before merging; honor any configured review requirements.
+2. Before any production release, triage the current npm audit findings; avoid unreviewed major upgrades.
+3. Complete the separately documented read-only production inventory, verified backup restore, and exact migration rehearsal before any deployment decision.

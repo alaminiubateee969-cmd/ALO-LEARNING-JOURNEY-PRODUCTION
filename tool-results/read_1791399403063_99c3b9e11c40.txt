@@ -495,7 +495,7 @@
   2594→  - GET: 8 style presets (parenting-warm, education-clean, marketing-bold, social-square, cinematic, minimal-line, watercolor-soft, isometric-3d), 7 supported sizes with purpose descriptions, gallery of 24 recent images from `/public/generated/`
   2595→  - POST: accepts `prompts` as string or string[] (max 8 per batch), applies preset enrichment, MD5-cache by prompt+size hash (returns cached instantly), generates via `zai.images.generations.create`, returns per-image results with url/bytes/cached flag
   2596→- **UI** `ImageStudioView.tsx`: prompts textarea (one per line, max 8), 8-preset picker grid, 7-size dropdown, generate button with batch progress, results grid with hover-zoom + download + copy, recent gallery, presets reference
-  2597→- **Verified**: 
+  2597→- **Verified**:
   2598→  - Single gen: `parenting-warm` preset → 124KB PNG at `/generated/ad80048a...png`, enrichedPrompt captured
   2599→  - Cache hit: 2nd identical call returned `cached:1` instantly
   2600→  - UI renders presets/sizes/gallery, "15 cached" badge

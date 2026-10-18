@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { SectionHeader, StatusPill } from "./primitives";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,19 +22,6 @@ interface Post {
   createdAt: string;
   publishedAt: string | null;
   scheduledAt: string | null;
-}
-
-function fmtCountdown(scheduledAt: string | null) {
-  if (!scheduledAt) return null;
-  const diff = new Date(scheduledAt).getTime() - Date.now();
-  if (diff <= 0) return "এখনই";
-  const h = Math.floor(diff / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  if (h > 24) {
-    const d = Math.floor(h / 24);
-    return `${d}দিন ${h % 24}ঘ`;
-  }
-  return `${h}ঘ ${m}মি`;
 }
 
 export default function PublishingQueueView() {
@@ -72,8 +58,22 @@ export default function PublishingQueueView() {
         body: JSON.stringify({ action: "publish_now", id }),
       });
       const data = await res.json();
-      toast({ title: "প্রকাশিত হয়েছে ✅", description: `${data.post.platform} · ${data.post.providerPostId}` });
+      if (!res.ok) throw new Error(data.error ?? "Could not check publishing setup.");
+      if (data.status === "external_setup_required") {
+        toast({
+          title: "Delivery blocked — no provider contacted",
+          description: data.message ?? "No post was sent; the record was marked as requiring external setup.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Provider response recorded",
+          description: "Review the returned provider status; delivery is not independently verified here.",
+        });
+      }
       load();
+    } catch (error) {
+      toast({ title: "Delivery block not recorded", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
     } finally {
       setBusy(null);
     }
@@ -82,13 +82,17 @@ export default function PublishingQueueView() {
   const cancel = async (id: string) => {
     setBusy(`cancel-${id}`);
     try {
-      await fetch("/api/publishing", {
+      const res = await fetch("/api/publishing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "cancel", id }),
       });
-      toast({ title: "বাতিল করা হয়েছে", variant: "destructive" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not update the queue record.");
+      toast({ title: "Queue record marked failed", description: "No external post was cancelled or deleted." });
       load();
+    } catch (error) {
+      toast({ title: "Queue record not updated", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
     } finally {
       setBusy(null);
     }
@@ -102,15 +106,19 @@ export default function PublishingQueueView() {
     setBusy("schedule");
     try {
       const scheduledAt = new Date(Date.now() + Number(formHours) * 3600000).toISOString();
-      await fetch("/api/publishing", {
+      const res = await fetch("/api/publishing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "schedule", platform: formPlatform, topic: formTopic, scheduledAt }),
       });
-      toast({ title: "সারিবদ্ধ হয়েছে ✅", description: `${formPlatform} · ${formHours}ঘ পরে` });
+      const data = await res.json();
+      if (!res.ok || !data.post) throw new Error(data.error ?? "Could not save the schedule record.");
+      toast({ title: "Schedule record saved", description: "No background publisher is configured; nothing will publish automatically." });
       setFormTopic("");
       setShowForm(false);
       load();
+    } catch (error) {
+      toast({ title: "Schedule record not saved", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
     } finally {
       setBusy(null);
     }
@@ -118,36 +126,29 @@ export default function PublishingQueueView() {
 
   const filtered = posts.filter((p) => filter === "all" || p.status === filter);
 
-  const statusIcon: Record<string, React.ReactNode> = {
-    scheduled: <Clock className="h-3.5 w-3.5 text-amber-600" />,
-    queued: <Clock className="h-3.5 w-3.5 text-sky-600" />,
-    published: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />,
-    failed: <XCircle className="h-3.5 w-3.5 text-rose-600" />,
-    external_setup_required: <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />,
-  };
-
   return (
     <div className="alo-fade-up space-y-5">
       <SectionHeader
         title="Publishing Queue"
         bn="প্রকাশনা সারি"
-        desc="নির্ধারিত ও সারিবদ্ধ পোস্ট দেখুন। PublisherAgent অনুমোদনের পর আসল provider post ID ও URL সংগ্রহ করে।"
+        desc="This is a database record queue, not a delivery service. No background publisher, implemented social OAuth flow, or provider publishing client exists here; scheduled dates do not trigger automatic publication."
         icon={<Send className="h-5 w-5" />}
         action={
           <Button onClick={() => setShowForm(!showForm)} className="bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white">
-            <Plus className="h-4 w-4 mr-1.5" /> নতুন পোস্ট নির্ধারণ
+            <Plus className="h-4 w-4 mr-1.5" /> নতুন schedule record
           </Button>
         }
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: "নির্ধারিত", value: stats.scheduled, icon: <Clock className="h-3.5 w-3.5" />, tone: "bg-amber-100 text-amber-700" },
           { label: "সারিবদ্ধ", value: stats.queued, icon: <Clock className="h-3.5 w-3.5" />, tone: "bg-sky-100 text-sky-700" },
-          { label: "প্রকাশিত", value: stats.published, icon: <CheckCircle2 className="h-3.5 w-3.5" />, tone: "bg-emerald-100 text-emerald-700" },
-          { label: "ব্যর্থ", value: stats.failed, icon: <XCircle className="h-3.5 w-3.5" />, tone: "bg-rose-100 text-rose-700" },
-          { label: "মোট", value: stats.total, icon: <Send className="h-3.5 w-3.5" />, tone: "bg-violet-100 text-violet-700" },
+          { label: "Marked published · unverified", value: stats.published, icon: <CheckCircle2 className="h-3.5 w-3.5" />, tone: "bg-emerald-100 text-emerald-700" },
+          { label: "Failed", value: stats.failed, icon: <XCircle className="h-3.5 w-3.5" />, tone: "bg-rose-100 text-rose-700" },
+          { label: "External setup required", value: stats.externalSetup, icon: <AlertTriangle className="h-3.5 w-3.5" />, tone: "bg-amber-100 text-amber-700" },
+          { label: "Total records", value: stats.total, icon: <Send className="h-3.5 w-3.5" />, tone: "bg-violet-100 text-violet-700" },
         ].map((s) => (
           <Card key={s.label} className="p-3 alo-card-grad border-0">
             <div className="flex items-center gap-2">
@@ -165,7 +166,7 @@ export default function PublishingQueueView() {
       {showForm && (
         <Card className="p-4 alo-border-anim">
           <h3 className="font-semibold mb-3 flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-amber-600" /> নতুন পোস্ট নির্ধারণ
+            <Calendar className="h-4 w-4 text-amber-600" /> নতুন schedule record
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
@@ -191,7 +192,7 @@ export default function PublishingQueueView() {
           <div className="flex gap-2 mt-3">
             <Button onClick={schedule} disabled={busy === "schedule"} className="bg-amber-500 hover:bg-amber-600">
               {busy === "schedule" ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Calendar className="h-4 w-4 mr-1" />}
-              নির্ধারণ করুন
+              Save schedule record
             </Button>
             <Button variant="outline" onClick={() => setShowForm(false)}>বাতিল</Button>
           </div>
@@ -233,7 +234,6 @@ export default function PublishingQueueView() {
         <div className="space-y-2">
           {filtered.map((p, i) => {
             const pdef = PLATFORMS.find((x) => x.id === p.platform);
-            const countdown = fmtCountdown(p.scheduledAt);
             return (
               <Card
                 key={p.id}
@@ -249,9 +249,9 @@ export default function PublishingQueueView() {
                     </div>
                     <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5 flex-wrap">
                       <span className="capitalize">{p.platform}</span>
-                      {countdown && p.status === "scheduled" && (
+                      {p.scheduledAt && p.status === "scheduled" && (
                         <span className="flex items-center gap-0.5 text-amber-600 font-medium">
-                          <Clock className="h-2.5 w-2.5" /> {countdown}
+                          <Clock className="h-2.5 w-2.5" /> Saved schedule: {new Date(p.scheduledAt).toLocaleString()}
                         </span>
                       )}
                       {p.providerPostId && (
@@ -266,12 +266,14 @@ export default function PublishingQueueView() {
                     {(p.status === "scheduled" || p.status === "queued") && (
                       <Button
                         size="sm"
-                        className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
+                        variant="outline"
+                        className="h-7 text-xs border-amber-300 text-amber-800 hover:bg-amber-50"
                         onClick={() => publishNow(p.id)}
                         disabled={busy === `publish-${p.id}`}
+                        title="Marks this queue record as blocked; no provider is contacted and no post is sent."
                       >
-                        {busy === `publish-${p.id}` ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Send className="h-3 w-3 mr-1" />}
-                        এখন প্রকাশ
+                        {busy === `publish-${p.id}` ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <AlertTriangle className="h-3 w-3 mr-1" />}
+                        Mark delivery blocked
                       </Button>
                     )}
                     {p.url && (

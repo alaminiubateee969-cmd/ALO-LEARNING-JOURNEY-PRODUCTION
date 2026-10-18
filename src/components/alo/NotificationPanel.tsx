@@ -41,9 +41,12 @@ export default function NotificationPanel() {
   };
 
   useEffect(() => {
-    load();
-    const t = setInterval(load, 30000);
-    return () => clearInterval(t);
+    const initialLoad = window.setTimeout(load, 0);
+    const interval = window.setInterval(load, 30000);
+    return () => {
+      window.clearTimeout(initialLoad);
+      window.clearInterval(interval);
+    };
   }, []);
 
   const markAll = async () => {

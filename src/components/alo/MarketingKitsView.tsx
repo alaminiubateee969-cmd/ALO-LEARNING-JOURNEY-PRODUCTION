@@ -131,7 +131,7 @@ export default function MarketingKitsView({ onNavigate }: { onNavigate: (section
       setPolishedBodies((current) => ({ ...current, [activeCacheKey]: renderTemplate(body.draft, fields) }));
       setPolishPipeline((current) => ({ ...current, [activeCacheKey]: body.qualityPipeline ?? [] }));
       toast({
-        title: body.usedFallback ? "Template retained; local model unavailable" : "Three local agents reviewed the email draft",
+        title: body.usedFallback ? "Template retained; local model unavailable" : "Email draft revised through local model prompts",
         description: "Draft only. No email was sent; verify claims, consent, preferences and every placeholder.",
       });
     } catch (error) {
@@ -480,7 +480,7 @@ export default function MarketingKitsView({ onNavigate }: { onNavigate: (section
                           {activeAsset.channel === "Email" && (
                             <Button type="button" size="sm" variant="outline" disabled={polishBusy} onClick={() => void polishEmailDraft()}>
                               {polishBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                              {polishBusy ? "Reviewing…" : "Refine draft with local agents"}
+                              {polishBusy ? "Reviewing…" : "Revise draft with local model prompts"}
                             </Button>
                           )}
                           <Button type="button" size="sm" variant="outline" disabled={humanizeAssetBusy} onClick={() => void humanizeActiveAsset()}>

@@ -69,8 +69,9 @@ export default function InkboxView() {
       });
       const d = await res.json();
       toast({
-        title: d.fallbackUsed ? "Fallback tested ✅" : "Inkbox available",
-        description: d.message?.slice(0, 80),
+        title: d.status === "pending" ? "Test message queued — not delivered" : "Message status checked",
+        description: d.message,
+        variant: d.status === "pending" ? "default" : "destructive",
       });
       load();
     } finally { setTesting(false); }
@@ -85,8 +86,9 @@ export default function InkboxView() {
       });
       const d = await res.json();
       toast({
-        title: `Message ${d.status}`,
-        description: `${sender} → ${recipient} via ${d.channel}${d.fallbackUsed ? " (fallback)" : ""}`,
+        title: d.status === "pending" ? "Message queued — not delivered" : `Message ${d.status}`,
+        description: `${sender} → ${recipient}. ${d.failureReason || "No delivery confirmation received."}`,
+        variant: d.status === "pending" ? "default" : "destructive",
       });
       load();
     } catch (e) {
@@ -109,12 +111,12 @@ export default function InkboxView() {
       <SectionHeader
         title="Inkbox Identity Layer"
         bn="ইনকবক্স আইডেন্টিটি"
-        desc="OPTIONAL communication/identity adapter। ALO কোর (agents + orchestrator + DB) এর উপর Inkbox নির্ভর করে না। Inkbox বিচ্ছিন্ন হলে ALO কাজ চালিয়ে যায়।"
+        desc="Inkbox transport is not implemented or verified. Connection records are metadata only; internal messages remain pending in the database and are not dispatched or delivered."
         icon={<Mail className="h-5 w-5" />}
         action={
           <Button onClick={testFallback} disabled={testing} variant="outline" size="sm" className="h-8">
             {testing ? <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5 mr-1" />}
-            Fallback Test
+            Queue test (not delivered)
           </Button>
         }
       />
@@ -126,11 +128,11 @@ export default function InkboxView() {
         </h3>
         <div className="flex flex-col items-center gap-2 text-xs">
           <div className="rounded-lg bg-amber-100 dark:bg-amber-900/20 px-4 py-2 font-semibold text-amber-700 dark:text-amber-300">
-            🧠 ALO Agents (brains)
+            🧠 ALO agent definitions
           </div>
           <ArrowRight className="h-3 w-3 text-muted-foreground rotate-90" />
           <div className="rounded-lg bg-violet-100 dark:bg-violet-900/20 px-4 py-2 font-semibold text-violet-700 dark:text-violet-300">
-            ⚙️ ALO Orchestrator (manager)
+            ⚙️ Implemented application routes
           </div>
           <ArrowRight className="h-3 w-3 text-muted-foreground rotate-90" />
           <div className="rounded-lg bg-sky-100 dark:bg-sky-900/20 px-4 py-2 font-semibold text-sky-700 dark:text-sky-300">
@@ -138,11 +140,11 @@ export default function InkboxView() {
           </div>
           <ArrowRight className="h-3 w-3 text-muted-foreground rotate-90" />
           <div className={`rounded-lg px-4 py-2 font-semibold border-2 ${h.available ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border-emerald-300" : "bg-muted/40 text-muted-foreground border-dashed border-border"}`}>
-            📬 Inkbox {h.available ? "(connected)" : "(disconnected — ALO still works)"}
+            📬 Inkbox {h.available ? "(verified)" : "(not connected · no delivery)"}
           </div>
           <ArrowRight className="h-3 w-3 text-muted-foreground rotate-90" />
           <div className="rounded-lg bg-rose-100 dark:bg-rose-900/20 px-4 py-2 font-semibold text-rose-700 dark:text-rose-300">
-            🛡️ Human Approval (safety boundary)
+            🛡️ Manual review (where configured)
           </div>
         </div>
         <p className="text-[11px] text-muted-foreground text-center mt-3 max-w-md mx-auto">
@@ -163,11 +165,9 @@ export default function InkboxView() {
 
         <Card className="p-4">
           <h3 className="font-semibold text-sm mb-2">Fallback Channel</h3>
-          <StatusPill status={h.fallbackActive ? "active" : "idle"} />
+          <StatusPill status={h.fallbackActive ? "pending" : "idle"} />
           <p className="text-[11px] text-muted-foreground mt-2">
-            {h.fallbackActive
-              ? "ALO is using internal DB channel for agent communication. All core operations continue normally."
-              : "Inkbox is handling communication. No fallback needed."}
+            Internal DB persistence only. No worker dispatches messages, and queued records remain pending until a transport is implemented.
           </p>
         </Card>
 
@@ -177,7 +177,7 @@ export default function InkboxView() {
             {h.channels.length > 0 ? h.channels.map((c) => (
               <Badge key={c} variant="outline" className="text-[9px]">{c}</Badge>
             )) : (
-              <Badge variant="outline" className="text-[9px] bg-muted">none configured</Badge>
+              <Badge variant="outline" className="text-[9px] bg-muted">none verified</Badge>
             )}
           </div>
           <p className="text-[11px] text-muted-foreground mt-2">
@@ -193,13 +193,13 @@ export default function InkboxView() {
             <ArrowRight className="h-4 w-4 text-amber-600" /> Agent-to-Agent Messages
           </h3>
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => sendMessage("master_orchestrator", "content_writer", "Generate parenting content")}>
-            Test A2A
+            Queue test (not delivered)
           </Button>
         </div>
         {data.messages.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground text-sm">
             <Mail className="h-8 w-8 mx-auto mb-2 opacity-30" />
-            কোনো A2A বার্তা নেই। &quot;Test A2A&quot; চাপুন।
+            No queued messages. A queue test stores a pending record only; it does not trigger an agent.
           </div>
         ) : (
           <ScrollArea className="max-h-72 alo-scrollbar pr-2">
@@ -236,10 +236,10 @@ export default function InkboxView() {
               <div key={ident.id} className="rounded-lg border border-border/60 p-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">{ident.name}</p>
-                  <StatusPill status={ident.status === "connected" ? "connected" : "not_connected"} />
+                  <StatusPill status="not_connected" />
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1">Agent: {ident.agentId}</p>
-                {ident.lastError && <p className="text-[9px] text-amber-600 mt-1">{ident.lastError}</p>}
+                <p className="text-[10px] text-muted-foreground mt-1">Agent: {ident.agentId} · saved metadata only, not verified</p>
+                <p className="text-[9px] text-amber-600 mt-1">No automatic probe or connection will be attempted.</p>
               </div>
             ))}
           </div>

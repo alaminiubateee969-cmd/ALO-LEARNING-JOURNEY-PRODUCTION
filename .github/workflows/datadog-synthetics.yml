@@ -8,8 +8,9 @@
 
 # To get started:
 
-# 1. Add your Datadog API (DD_API_KEY) and Application Key (DD_APP_KEY) as secrets to your GitHub repository. For more information, see: https://docs.datadoghq.com/account_management/api-app-keys/.
-# 2. Start using the action within your workflow
+# Optional third-party check. It is disabled unless DATADOG_SYNTHETICS_ENABLED=true
+# and both keys are configured. Do not enable or add paid-service credentials
+# without explicit approval. For setup details, see Datadog's documentation.
 
 name: Run Datadog Synthetic tests
 
@@ -21,10 +22,21 @@ on:
 
 jobs:
   build:
+    if: ${{ vars.DATADOG_SYNTHETICS_ENABLED == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Check required Datadog secrets without displaying them
+      env:
+        DD_API_KEY: ${{ secrets.DD_API_KEY }}
+        DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+      run: |
+        if [ -z "$DD_API_KEY" ] || [ -z "$DD_APP_KEY" ]; then
+          echo "Datadog synthetics are enabled but required repository secrets are missing." >&2
+          exit 1
+        fi
 
     # Run Synthetic tests within your GitHub workflow.
     # For additional configuration options visit the action within the marketplace: https://github.com/marketplace/actions/datadog-synthetics-ci

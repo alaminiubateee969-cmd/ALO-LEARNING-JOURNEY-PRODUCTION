@@ -1,67 +1,88 @@
-# ALO Learning Journey — Production System
+# ALO Learning Journey — Project Overview (not production sign-off)
 
-## Quick Start
+> **Production status: NOT VERIFIED / NOT READY.** This document describes
+> repository source only. No live server, production database, credentials,
+> domain, HTTPS, authentication provider, Docker runtime, or deployment was
+> accessed in the current audit. Follow [`DEPLOYMENT.md`](./DEPLOYMENT.md) and
+> [`MIGRATION-RECOVERY-PLAN.md`](./MIGRATION-RECOVERY-PLAN.md) before any
+> production action.
+
+## Local development
+
+The project is a Next.js application using Node.js 22, npm, Prisma, and MySQL.
+`package-lock.json` is the npm lockfile. Use only a disposable/local development
+database; do not copy production credentials into this checkout.
 
 ```bash
-# Install dependencies
-bun install
-
-# Configure environment
+npm ci
 cp .env.example .env
-# Edit .env with your values (optional — works without external credentials)
-
-# Push database schema
-bun run db:push
-
-# Start development server
-bun run dev
-
-# Open http://localhost:3000
+# Set DATABASE_URL to a disposable development MySQL database.
+npx prisma generate
+npm run dev
 ```
 
-## Verified Real Features
+The package scripts `db:push`, `db:migrate`, and `db:reset` route through
+`scripts/prisma-dev-guard.mjs`. They refuse production mode and require a clearly
+named dev/test database plus exact database-name confirmations. A remote dev
+DB additionally requires an explicit remote allow-list. Never use these
+commands against production. The production migration path uses the checked-in
+migration chain only after the review and restore requirements in
+`MIGRATION-RECOVERY-PLAN.md`.
 
-1. Content Opportunity Score (zai-llm, 6-dimension scoring)
-2. Hook A/B Testing (zai-llm, 5 variants)
-3. Content Package Generation (zai-llm, full Bengali package)
-4. Protective Mode (zai-llm, safety review)
-5. Comment Classification + Reply (zai-llm)
-6. Image Generation (zai image-gen, real PNG files)
-7. Video Generation 50s (espeak TTS + FFmpeg, ffprobe verified)
-8. Video Generation 5min (espeak TTS + FFmpeg, ffprobe verified)
-9. Cinematic Video 50s (subtitles + scene images + storyboard)
-10. Bengali TTS (espeak bn voice)
-11. Natural Language Command Center (zai-llm, Bengali/English)
-12. SEO Content Brief Generator (zai-llm)
-13. Telegram Commands (real allow-list, real execution)
-14. RAG Search (hybrid keyword + document, 7 citation fields)
-15. CSV/JSON Export (all 8 combinations)
-16. Backups (XOR + DB copy, real .alo.bak files)
-17. Growth Loop Dashboard (real scores, hooks, campaigns)
-18. Content Categories (37 categories × 8 age groups)
-19. Inkbox Adapter Layer (graceful degradation, internal A2A fallback)
-20. Human Approval Architecture
+## Source-level feature inventory (not runtime proof)
 
-## Blocked External Setup (needs credentials)
-- Social publishing (OAuth tokens)
-- Social metrics (platform API access)
-- AI phone calls (Twilio)
-- SMS (Twilio)
-- WhatsApp (WhatsApp Business API)
-- STT (Vosk/Whisper model)
-- Face consistency (ML model)
-- Voice cloning (specialized model)
-- Email (SMTP credentials)
+The repository includes UI/API source for content workflows, approvals,
+analytics, RAG, admissions CRM, quotations, AI/media generation, family media,
+backups, and operations. Source presence does not prove a provider is
+configured or a workflow succeeds live.
 
-## Architecture
-- ALO Agents = brains 🧠
-- ALO Orchestrator = manager ⚙️
-- ALO Database = source of truth 🗄️
-- Inkbox = optional communication/identity layer 📬
-- Human Approval = safety boundary 🛡️
+- **AI and media:** local Ollama/ComfyUI/speech/FFmpeg paths and deterministic
+  template/media fallbacks exist in source. Models, binaries, licenses,
+  hardware performance, production concurrency, and output quality have not
+  been verified on the production host. Local fallbacks are not provider output.
+- **Social/OAuth:** social connection credentials and callback integration are
+  not implemented; the UI/API reports external setup is required.
+- **Telegram-named feature:** `/api/telegram` and its UI are an admin-only
+  in-app command console. There is no Telegram webhook, outbound message
+  delivery, or scheduled report integration.
+- **Publishing/email:** drafts and local status records do not demonstrate
+  external publishing or email delivery. Provider credentials and delivery
+  status are not asserted as verified.
+- **Agents/jobs:** agent definitions and on-demand run records exist. A
+  production background scheduler/worker has not been verified.
 
-## Tech Stack
-- Next.js 16 + TypeScript + Prisma/SQLite + shadcn/ui
-- z-ai-web-dev-sdk (LLM + image generation)
-- espeak (Bengali TTS)
-- FFmpeg/ffprobe (video generation + validation)
+## Database and data handling
+
+Prisma is configured for MySQL. The current schema contains 32 models; the
+checked-in migration chain declares those model tables plus one implicit
+relation table across three migrations. Static table-name checks are not live
+schema/history verification. Production schema, migration history/checksums,
+and user-reported missing tables remain unverified.
+
+The application backup API writes AES-256-GCM-encrypted record snapshots with
+strict file permissions and requires a dedicated 32+ character
+`BACKUP_ENCRYPTION_KEY` in production. These snapshots are marked partial when
+models fail or are excluded, omit OTP challenges, and **cannot restore a
+production database**. Their integrity `verify` action is not a database
+restore. The deploy script's MySQL dump gzip/content probe also is not a restore
+test. Maintain an independent, tested database backup and follow the migration
+recovery runbook.
+
+CRM leads and quotations can contain personal contact details. Minimize data,
+restrict exports, follow an approved retention policy, and do not store
+passports, immigration case files, health data, or payment-card details without
+an approved security/compliance design.
+
+## Authentication and production limitations
+
+The source implements a single-administrator credentials/session flow with
+production fail-closed middleware and an optional/required OTP flow depending
+on environment configuration. This does not provide RBAC, multi-user/team
+isolation, public-user identity management, or a general IP-based rate limit.
+The SMS gateway's accepted/queued response does not prove carrier/handset
+delivery. Production login, proxy cookie behavior, SMS, and route-level
+authorization have not been end-to-end verified in this audit.
+
+See [`SECURITY.md`](./SECURITY.md) for source-level controls and limitations.
+Do not expose this app publicly until the blockers in `DEPLOYMENT.md` and the
+post-repair audit are resolved.

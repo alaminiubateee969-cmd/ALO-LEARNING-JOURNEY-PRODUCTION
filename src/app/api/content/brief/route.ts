@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureSeeded } from "@/lib/seed";
 import { generateContentBrief } from "@/lib/ai";
-import { executeAsAgent } from "@/lib/agent-runtime";
 
 // Generate SEO content brief with LLM
 export async function POST(req: Request) {
@@ -28,23 +27,26 @@ export async function POST(req: Request) {
     data: {
       actor: "SEO_AI",
       action: "content_brief.generate",
-      detail: `Brief for "${topic}" (${category}/${ageGroup}) — score ${result.data.qualityScore}/100 via ${result.provider}`,
-      severity: "info",
+      detail: `Brief draft for "${topic}" (${category}/${ageGroup}) — ${result.usedFallback ? "fallback template" : "model output"} via ${result.provider}; no independent SEO, fact, safety, or quality review was run`,
+      severity: result.usedFallback ? "warn" : "info",
     },
   });
 
 
-  // Update AgentRun with success
   await db.aIAgentRun.update({
     where: { id: agentRun.id },
-    data: { status: "success", finishedAt: new Date() },
+    data: {
+      status: result.usedFallback ? "blocked_external_setup" : "success",
+      errorMsg: result.usedFallback ? (result.error ?? "Fallback draft requires human review.").slice(0, 500) : null,
+      finishedAt: new Date(),
+    },
   });
   await db.auditLog.create({
     data: {
       actor: "seo",
       action: "agent.generate_seo_content_brief",
-      detail: `AgentRun ${agentRun.id}: Generate SEO content brief → success`,
-      severity: "info",
+      detail: `AgentRun ${agentRun.id}: Generate SEO content brief → ${result.usedFallback ? "blocked_external_setup (fallback draft)" : "success"}`,
+      severity: result.usedFallback ? "warn" : "info",
     },
   });
 
@@ -52,6 +54,8 @@ export async function POST(req: Request) {
     brief: result.data,
     provider: result.provider,
     usedFallback: result.usedFallback,
-    publishReady: result.data.qualityScore >= 85,
+    agentStatus: result.usedFallback ? "blocked" : "success",
+    publishReady: false,
+    requiresHumanReview: true,
   });
 }

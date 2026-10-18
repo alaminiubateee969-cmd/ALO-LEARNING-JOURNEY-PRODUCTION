@@ -238,7 +238,7 @@ export const DIAGRAM_PRESETS: DiagramPreset[] = [
       { id: "gate", tag: "GATE", label: "3-Agent Quality Council", sublabel: "Writer → Critic → Finalist", col: 2, row: 0, focal: true },
       { id: "crm", tag: "CRM", label: "Admissions & Quotations", sublabel: "Leads · Activities · BDT Quotes", col: 0, row: 1 },
       { id: "ai", tag: "AI", label: "Private LAN AI Engine", sublabel: "Ollama · ComfyUI · Local Synth", col: 2, row: 1, focal: true },
-      { id: "db", tag: "DB", label: "Prisma MySQL + JSON Store", sublabel: "31 models · AES-256-GCM backup", col: 1, row: 2 },
+      { id: "db", tag: "DB", label: "Prisma MySQL + JSON Store", sublabel: "32 models · partial AES-256-GCM snapshot", col: 1, row: 2 },
       { id: "media", tag: "AV", label: "FFmpeg + Speech + Sharp", sublabel: "1080x1920 MP4 · WAV · SRT", col: 2, row: 2 },
     ],
     edges: [
@@ -400,7 +400,7 @@ export const DIAGRAM_TYPES_45: DiagramTypeCatalogItem[] = [
   { id: "dependency-graph", name: "Dependency Graph", category: "Systems & Data", whenToUse: "Module and package dependency directed graph" },
   { id: "uml-class", name: "UML Class Diagram", category: "Systems & Data", whenToUse: "Domain types, methods, and composition boundaries" },
   { id: "story-map", name: "User Story Map", category: "Strategy & Product", whenToUse: "Backbone activities across horizontal release slices" },
-  { id: "db-schema", name: "Database Schema", category: "Systems & Data", whenToUse: "31 Prisma tables, primary/foreign keys, and index constraints" },
+  { id: "db-schema", name: "Database Schema", category: "Systems & Data", whenToUse: "32 Prisma models, primary/foreign keys, and index constraints" },
 ];
 
 function escapeXml(text: string): string {

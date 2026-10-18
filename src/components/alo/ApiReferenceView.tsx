@@ -73,14 +73,14 @@ export default function ApiReferenceView() {
       <SectionHeader
         title="API Reference"
         bn="OpenAPI 3.1"
-        desc="Machine-readable endpoint contract for the first-party CRM and quotation API. Requests use same-origin session cookies and workspace scoping."
+        desc="Machine-readable endpoint contract for the admin-only CRM and quotation API. One administrator account currently controls every active workspace; workspace selection is not per-company authorization."
         icon={<BookOpenText className="h-5 w-5" />}
         action={<Button type="button" variant="outline" size="sm" onClick={() => window.open("/api/openapi.json", "_blank", "noopener,noreferrer")}><ExternalLink className="h-4 w-4" />Open OpenAPI JSON</Button>}
       />
 
       <div className="grid gap-3 md:grid-cols-3">
         <Card className="flex gap-3 p-4"><div className="rounded-lg bg-amber-500/10 p-2 text-amber-700"><LockKeyhole className="h-4 w-4" /></div><div><p className="text-sm font-semibold">Admin session</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Production routes require the administrator session cookie. This is not a public API key.</p></div></Card>
-        <Card className="flex gap-3 p-4"><div className="rounded-lg bg-sky-500/10 p-2 text-sky-700"><ShieldCheck className="h-4 w-4" /></div><div><p className="text-sm font-semibold">Workspace scope</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Send <code>x-alo-company-id</code> to select the active workspace; omitting it chooses the first active workspace.</p></div></Card>
+        <Card className="flex gap-3 p-4"><div className="rounded-lg bg-sky-500/10 p-2 text-sky-700"><ShieldCheck className="h-4 w-4" /></div><div><p className="text-sm font-semibold">Workspace scope</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground"><code>x-alo-company-id</code> filters the single admin session to a workspace. It is not a membership token or authorization boundary; omitting it selects the first active workspace.</p></div></Card>
         <Card className="flex gap-3 p-4"><div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-700"><Braces className="h-4 w-4" /></div><div><p className="text-sm font-semibold">No side effects hidden</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Quote and activity endpoints only record data. They do not publish posts or send email, SMS, or WhatsApp.</p></div></Card>
       </div>
 

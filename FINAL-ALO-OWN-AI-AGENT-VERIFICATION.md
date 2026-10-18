@@ -1,4 +1,10 @@
-# ALO Learning Journey — Final ALO-Owned AI Agent Verification
+# ALO Learning Journey — Historical ALO-Owned AI Agent Verification
+
+> **Historical snapshot, not current or production verification.** This report's
+> run counts, route behavior, model count, and success claims refer to an earlier
+> environment/checkout and were not reproduced in the 2026-10-18 repair pass.
+> Current source inventory and verified checks are recorded in
+> `COMPLETE-AUDIT-REPORT.md` and `POST-REPAIR-AUDIT-REPORT.md`.
 
 ## CRITICAL BUG FIXED: chatJSON array handling
 

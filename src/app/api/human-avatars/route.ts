@@ -14,7 +14,6 @@ import {
 import { requireOwner } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { log, newJobId, truncatePrompt } from '@/lib/observability';
-import { cleanupAvatarFiles, cleanupVideoFiles } from '@/lib/cleanup';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -79,26 +78,13 @@ export async function POST(req: NextRequest) {
     if (!avatar) {
       return NextResponse.json({ ok: false, error: 'Avatar not found' }, { status: 404 });
     }
-    // fetch dependent videos for cleanup
-    const videos = await db.avatarVideo.findMany({
-      where: { avatarId: avatar.id },
-      select: { id: true, videoUrl: true, thumbnailUrl: true, scenesJson: true },
+    // Archive in place: retain avatar/video records and all user media files.
+    const archived = await db.humanAvatar.update({
+      where: { id: avatar.id },
+      data: { active: false },
     });
-    // delete avatar (cascade deletes videos via Prisma relation)
-    await db.humanAvatar.delete({ where: { id: avatar.id } });
-    // cleanup files (portrait + all video files)
-    const cleanup = cleanupAvatarFiles({
-      avatarId: avatar.id,
-      portraitUrl: avatar.portraitUrl?.split('?')[0],
-      videos: videos.map((v) => ({
-        id: v.id,
-        videoUrl: v.videoUrl?.split('?')[0],
-        thumbnailUrl: v.thumbnailUrl?.split('?')[0],
-        scenesJson: v.scenesJson,
-      })),
-    });
-    log('info', 'avatar-deleted', { ownerId, avatarId: avatar.id, filesDeleted: cleanup.deleted.length });
-    return NextResponse.json({ ok: true, id: avatar.id, filesDeleted: cleanup.deleted.length, cascadedVideos: videos.length });
+    log('info', 'avatar-archived', { ownerId, avatarId: archived.id });
+    return NextResponse.json({ ok: true, id: archived.id, archived: true, recordsDeleted: 0 });
   }
 
   // ---------- SEED PRESETS ----------
@@ -287,31 +273,24 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, avatar, fromPreset: !!presetId });
 }
 
-// DELETE — delete avatar (owner-scoped, cascade)
+// DELETE — archive the avatar; keep linked videos and all media files intact.
 export async function DELETE(req: NextRequest) {
+  let ownerId: string;
   try {
-    const owner = await requireOwner();
-    const parsed = await parseJsonBody(req);
-    if (!parsed.ok) return badRequest('body', parsed.error);
-    const idV = validateId(parsed.value.id, 'id');
-    if (!idV.ok) return badRequest('id', idV.error);
-    const avatar = await db.humanAvatar.findFirst({ where: { id: idV.value, ownerId: owner.ownerId } });
-    if (!avatar) return NextResponse.json({ ok: false, error: 'Avatar not found' }, { status: 404 });
-    const videos = await db.avatarVideo.findMany({
-      where: { avatarId: avatar.id },
-      select: { id: true, videoUrl: true, thumbnailUrl: true, scenesJson: true },
-    });
-    await db.humanAvatar.delete({ where: { id: avatar.id } });
-    const cleanup = cleanupAvatarFiles({
-      avatarId: avatar.id,
-      portraitUrl: avatar.portraitUrl?.split('?')[0],
-      videos: videos.map((v) => ({
-        id: v.id, videoUrl: v.videoUrl?.split('?')[0], thumbnailUrl: v.thumbnailUrl?.split('?')[0], scenesJson: v.scenesJson,
-      })),
-    });
-    log('info', 'avatar-deleted', { ownerId: owner.ownerId, avatarId: avatar.id, filesDeleted: cleanup.deleted.length });
-    return NextResponse.json({ ok: true, id: avatar.id, filesDeleted: cleanup.deleted.length, cascadedVideos: videos.length });
+    ownerId = (await requireOwner()).ownerId;
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const parsed = await parseJsonBody(req);
+  if (!parsed.ok) return badRequest('body', parsed.error);
+  const idV = validateId(parsed.value.id, 'id');
+  if (!idV.ok) return badRequest('id', idV.error);
+  const avatar = await db.humanAvatar.findFirst({ where: { id: idV.value, ownerId } });
+  if (!avatar) return NextResponse.json({ ok: false, error: 'Avatar not found' }, { status: 404 });
+  const archived = await db.humanAvatar.update({
+    where: { id: avatar.id },
+    data: { active: false },
+  });
+  log('info', 'avatar-archived', { ownerId, avatarId: archived.id });
+  return NextResponse.json({ ok: true, id: archived.id, archived: true, recordsDeleted: 0 });
 }

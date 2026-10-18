@@ -1,64 +1,76 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { ensureSeeded } from "@/lib/seed";
+import { LEAD_STAGES } from "@/lib/crm-constants";
+import { createLeadSchema } from "@/lib/crm-validation";
+import { parseJson, resolveCompanyScope, scopeError, validationError } from "@/lib/crm-server";
 
-export async function GET(req: Request) {
-  await ensureSeeded();
-  const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status");
-  const leads = await db.lead.findMany({
-    where: status ? { status } : undefined,
-    orderBy: { createdAt: "desc" },
-  });
-  const stats = {
-    total: leads.length,
-    new: leads.filter(l => l.status === "new").length,
-    qualified: leads.filter(l => l.status === "qualified").length,
-    won: leads.filter(l => l.status === "won").length,
-    lost: leads.filter(l => l.status === "lost").length,
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  const scope = await resolveCompanyScope(request);
+  if (scope.error) return scopeError(scope);
+
+  const url = new URL(request.url);
+  const search = (url.searchParams.get("q") ?? "").trim().slice(0, 120);
+  const requestedStage = url.searchParams.get("stage");
+  if (requestedStage && !LEAD_STAGES.includes(requestedStage as (typeof LEAD_STAGES)[number])) {
+    return NextResponse.json({ error: "invalid_lead_stage" }, { status: 400 });
+  }
+  const stage = requestedStage ?? undefined;
+  const dueOnly = url.searchParams.get("due") === "1";
+  const where = {
+    companyId: scope.companyId,
+    ...(stage ? { stage } : dueOnly ? { stage: { notIn: ["enrolled", "lost"] } } : {}),
+    ...(dueOnly ? { nextFollowUp: { lte: new Date() } } : {}),
+    ...(search ? {
+      OR: [
+        { fullName: { contains: search } },
+        { email: { contains: search } },
+        { phone: { contains: search } },
+        { courseInterest: { contains: search } },
+        { targetCountry: { contains: search } },
+      ],
+    } : {}),
   };
-  return NextResponse.json({ leads, stats });
+
+  const [leads, total, newCount, dueCount, quoteCount] = await Promise.all([
+    db.lead.findMany({
+      where,
+      orderBy: [{ nextFollowUp: "asc" }, { updatedAt: "desc" }],
+      take: 250,
+      include: { _count: { select: { activities: true, quotations: true } } },
+    }),
+    db.lead.count({ where: { companyId: scope.companyId } }),
+    db.lead.count({ where: { companyId: scope.companyId, stage: "new" } }),
+    db.lead.count({ where: { companyId: scope.companyId, nextFollowUp: { lte: new Date() }, stage: { notIn: ["enrolled", "lost"] } } }),
+    db.quotation.count({ where: { lead: { companyId: scope.companyId }, status: { in: ["draft", "sent"] } } }),
+  ]);
+
+  return NextResponse.json(
+    { leads, stats: { total, new: newCount, followUpsDue: dueCount, openQuotations: quoteCount } },
+    { headers: { "Cache-Control": "private, no-store" } }
+  );
 }
 
-export async function POST(req: Request) {
-  await ensureSeeded();
-  const body = await req.json();
-  
-  if (body.action === "create") {
-    const lead = await db.lead.create({
-      data: {
-        name: body.name,
-        email: body.email || null,
-        phone: body.phone || null,
-        company: body.company || null,
-        source: body.source || "website",
-        service: body.service || null,
-        budget: body.budget || null,
-        status: "new",
-        notes: body.notes || null,
-      },
-    });
-    await db.auditLog.create({
-      data: { actor: "system", action: "lead.create", detail: `New lead: ${body.name}`, severity: "info" },
-    });
-    return NextResponse.json({ lead });
+export async function POST(request: Request) {
+  const scope = await resolveCompanyScope(request);
+  if (scope.error) return scopeError(scope);
+
+  const parsedBody = await parseJson(request);
+  if ("response" in parsedBody) return parsedBody.response;
+  const parsed = createLeadSchema.safeParse(parsedBody.body);
+  if (!parsed.success) return validationError(parsed.error.issues);
+  if (parsed.data.consentStatus === "consented" && parsed.data.consentRecordedAt && parsed.data.consentRecordedAt > new Date()) {
+    return NextResponse.json({ error: "Consent capture date cannot be in the future." }, { status: 400 });
   }
 
-  if (body.action === "update_status" && body.id) {
-    const lead = await db.lead.update({
-      where: { id: body.id },
-      data: { status: body.status, notes: body.notes || undefined },
-    });
-    await db.auditLog.create({
-      data: { actor: "admin", action: "lead.update", detail: `Lead ${body.id} → ${body.status}`, severity: "info" },
-    });
-    return NextResponse.json({ lead });
-  }
+  const lead = await db.$transaction(async (tx) => {
+    const created = await tx.lead.create({ data: { ...parsed.data, company: { connect: { id: scope.companyId } } } });
+    await tx.leadActivity.create({ data: { leadId: created.id, type: "created", body: "Enquiry record created." } });
+    await tx.auditLog.create({ data: { actor: "admin", action: "crm.lead.created", detail: `Created lead record ${created.id}`, severity: "info" } });
+    return created;
+  });
 
-  if (body.action === "delete" && body.id) {
-    await db.lead.delete({ where: { id: body.id } });
-    return NextResponse.json({ ok: true });
-  }
-
-  return NextResponse.json({ error: "unknown action" }, { status: 400 });
+  return NextResponse.json({ lead }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
 }

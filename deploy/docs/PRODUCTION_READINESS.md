@@ -1,109 +1,55 @@
-# ALO Human Avatar System — Production Readiness Report v1.1.0
+# Production Readiness — Current Repository Evidence
 
-**Version:** 1.1.0-production-repair (UI hardening complete)
-**Date:** 2026-10-07
-**Branch:** `repair/human-avatar-production`
+**As of:** 2026-10-18
+**Status: PR #19 CI GREEN / PRODUCTION BLOCKED — DO NOT DEPLOY**
 
-## Executive Verdict
+This is a repository-only assessment. The VPS, production MySQL database, backup, PM2 process, proxy, DNS/TLS, and public domain have not been accessed or independently verified. The target values are operator-provided: `/home/aloedu/LEARNING-JOURNEY`, PM2 `learn-aloeducation`, port `3017`, `learn.aloeducation.com`, and MySQL `db_learn` at `127.0.0.1:3306`.
 
-# ⚠️ PRODUCTION READY WITH EXTERNAL DEPENDENCY
+## Current check results
 
-All mandatory blockers fixed and runtime-verified. The single remaining external dependency is the lip-sync GPU service (Wav2Lip/SadTalker) — its adapter is fully implemented and activates when `LIPSYNC_SERVICE_URL` is set.
+| Gate | Result | Evidence / limitation |
+|---|---|---|
+| Automated tests | PASS | `npm test`: 52/52 tests passed on the current worktree; see [`TEST_REPORT.md`](TEST_REPORT.md). |
+| ESLint | PASS | `npm run lint`: 0 errors, 0 warnings. |
+| Static migration verification | PASS, static only | Five MySQL migrations map to 42 Prisma models, 480 scalar column types, keys/indexes/relations, and one implicit relation table. This does not check production schema/history. |
+| TypeScript | PASS in CI / local sandbox blocked | GitHub CI generated the schema-specific client and typecheck passed on candidate `2453def`. Local `npm run typecheck` still fails because this sandbox cannot fetch the Prisma engine/client. |
+| Prisma generation | PASS in CI / local sandbox blocked | CI completed `prisma validate` and `prisma generate`; local `prisma generate --no-engine` could not fetch the schema-engine checksum from `binaries.prisma.sh` due sandbox TLS/network restrictions. |
+| Production build | PASS in CI / local sandbox blocked | GitHub CI completed the production build after generating Prisma Client. Local build compiled, then type-check stopped on the missing generated client. Middleware-to-proxy deprecation warning remains. |
+| Dependency audit | FAIL / triage required | `npm audit`: 13 findings (9 high, 4 moderate); `npm audit --omit=dev`: 8 (4 high, 4 moderate). Proposed fixes include major-version changes; none were applied blindly. |
+| Workflow/Compose YAML | PASS, syntax only | CI, deploy, Datadog, and Compose YAML parse; this does not prove workflow execution. |
+| Shell syntax | PASS | Seven deployment/preflight/backup/health scripts pass `bash -n`. |
+| GitHub PR checks | PASS / OPTIONAL CHECK SKIPPED | On candidate `2453def298cb4fe45dd70cfe8897d5aefd59f457`, `CI / validate` passed all steps; optional Datadog Synthetics `build` was skipped because it is disabled by default. GitHub reports a clean merge state. |
+| MySQL/restored-copy rehearsal | NOT DONE | No verified production backup or disposable restored MySQL copy is available. |
+| VPS / PM2 / public health | NOT VERIFIED | No SSH/VPS operation or public-domain verification has occurred. |
 
-## v1.1.0 Additions (this release)
+The static migration verifier is not evidence that a migration matches production schema/history. See [`MIGRATION-RECOVERY-PLAN.md`](../../MIGRATION-RECOVERY-PLAN.md) for the required safe procedure.
 
-Beyond v1.0.0, this release adds:
-- **Delete buttons** on avatar cards + video cards + play dialog (with confirm + file cleanup)
-- **Honest lip-sync state badges** in UI:
-  - `Lip-synced` (green/fuchsia) — only when `lipSyncUsed=true` (verified success)
-  - `Lip-sync unavailable` (slate) — when `lipSyncReason=not_configured` (env unset)
-  - `Lip-sync failed` (red) — when `lipSyncReason` is http_error/invalid_output/timeout/provider_error
-  - `No lip-sync` (slate) — fallback for legacy records
-- **Failed-video error display** — red error box with `errorMessage` on failed video cards
-- **Download MP4 button** in play dialog
-- **lipSyncReason propagation** through polling → result card
+## Merge status
 
-## Critical Fixes Applied (v1.0.0)
+PR #19 is the existing PR and has been updated rather than duplicated. At last observation it was `OPEN`, `CLEAN`, head `2453def298cb4fe45dd70cfe8897d5aefd59f457`. `CI / validate` passed, including Prisma generation, two deployments of the checked-in migrations to a fresh CI MySQL service, lint, tests, typecheck, and production build. The optional Datadog `build` job was skipped by its explicit opt-in guard. The PR was unmerged at that snapshot; check GitHub for any later state. No branch-protection API details or required-review requirements were available to this repository integration.
 
-| ID | Blocker | Status | Evidence |
-|----|---------|--------|----------|
-| B1 | Final MP4 silent (no audio) | ✅ FIXED | ffprobe shows video+audio; extraction yields 13.5 MB WAV |
-| B2 | Lip-sync was a stub | ✅ IMPLEMENTED (external dep) | `src/lib/lipsync.ts` real HTTP + ffprobe validation |
-| B3 | No authentication | ✅ FIXED | NextAuth JWT + `requireOwner()` + signed media tokens |
-| B4 | Stuck jobs never recovered | ✅ FIXED | `/api/recovery/sweep` + `src/lib/recovery-sweep.ts` |
+## Production safety gates still open
 
-## Runtime Evidence (Fresh E2E — Anjali, Mother, Bengali)
+1. CI generated the matching Prisma Client and passed typecheck/build on candidate `2453def`; rerun required checks for any later commit. Local sandbox engine download remains blocked.
+2. Before production release, triage the current dependency audit findings without unreviewed major upgrades.
+3. Read-only inventory of live MySQL schema, data relationships, and `_prisma_migrations` checksums/history.
+4. Verify a complete database/media backup by restoring it to an isolated compatible MySQL instance; rehearse the exact migration plan there. Preserve legacy admissions/OTP data and relationships; keep admissions `Lead` separate from marketing `MarketingLead`.
+5. Independently verify live app path, PM2 process/cwd, port, storage, proxy, auth, and health. The reported PM2 list is empty; deployment scripts intentionally do not start an absent process.
+6. After all approvals, deploy one exact commit and verify local health plus the public HTTPS endpoint report that exact SHA.
 
-| Stage | Result |
-|-------|--------|
-| Script generation | ✅ 3-scene Bengali script via z-ai LLM |
-| TTS | ✅ 3 WAVs (pcm_s16le, 24kHz, mono) |
-| Scene images | ✅ 3 PNGs (768×1344) |
-| FFmpeg compose | ✅ 1080×1920 H.264 + AAC, 81.28s |
-| **Audio in final MP4** | ✅ `stream,1,aac,audio,44100,2,80.51s` |
-| Audio extraction | ✅ 13.5 MB WAV, 76.88s |
-| Lip-sync | `not_configured` (honest — env unset) |
-| DB persistence | ✅ status=completed, actualDuration=81.32 |
-| UI honest state | ✅ "Lip-sync unavailable" badge displayed |
+## Repository asset and secret review
 
-## Human Avatar Capability Matrix
+A limited review scanned 230 incoming text-like files and 11 generated images; it found no obvious credential filenames or apparent personal data. This is not a comprehensive secrets/DLP or image-content audit. Provenance and consent for uploaded/user media remain unverified. No user assets were deleted or blindly rewritten, and no production data was accessed; obtain owner confirmation before reusing uploaded media publicly.
 
-| Capability | Result | Evidence |
-|------------|--------|----------|
-| Bengali script | ✅ PASS | LLM produced valid 3-scene JSON |
-| TTS | ✅ PASS | 3 WAVs, ffprobe-verified |
-| Portrait | ✅ PASS | 864×1152 PNG on disk |
-| Scene generation | ✅ PASS | 3 PNGs on disk |
-| Face consistency | ✅ PASS | VLM: "SAME PERSON" |
-| **Audio in final MP4** | ✅ PASS | `stream,1,aac,audio` |
-| Lip-sync | ⚠️ NOT TESTED | Adapter implemented; external service not deployed |
-| FFmpeg | ✅ PASS | H.264 High, 25fps, 1080×1920 |
-| Storage | ✅ PASS | MP4 on disk |
-| Browser playback | ✅ PASS | agent-browser confirmed |
-| **Delete avatar** | ✅ PASS | UI button → DELETE API → files + cascade videos removed |
-| **Delete video** | ✅ PASS | UI button → DELETE API → 9 files cleaned |
-| **Honest lip-sync UI** | ✅ PASS | 4 distinct states displayed correctly |
+## Product behavior caveats
 
-## Security Result
+- Content and SEO generation produce drafts. There is no independent fact/safety/legal review or verified quality score; SEO briefs remain not publish-ready and require human verification. The unused self-correction helper that trusted model-provided scores was removed; no independent scoring engine replaces it.
+- Approval actions create an internal queue item; they do not publish to a social platform.
+- Comment replies can be saved as drafts only. `send` returns `503 external_reply_delivery_not_configured` and does not change reply status.
+- RAG search is lexical keyword/overlap matching, not vector search. Content generation passes up to three stored documents as context; it does not query-rank them.
+- Avatar videos use still-image scenes, generated/local speech, FFmpeg motion, and output stream/resolution validation. These checks do not establish visual quality, identity consistency, or lip-sync. Adapter output is not integrated into the final compositor; new records report `lipSyncUsed=false` and `lipSyncReason=not_integrated`. Legacy `lipSyncUsed=true` metadata is unverified, not proof of lip-sync.
+- General OTP delivery is disabled; no simulated code is generated, stored, or returned. Admin sign-in OTP is a separate flow.
 
-| Check | Status |
-|-------|--------|
-| Authentication | ✅ NextAuth JWT enforced (dev-fallback when secret unset) |
-| Authorization | ✅ `requireOwner()` on every handler |
-| Ownership | ✅ `ownerId` filter on all queries |
-| Prompt injection | ✅ System/user separation + sanitization + schema validation |
-| Rate limiting | ✅ 3/10min + 1 concurrent per owner |
-| Path safety | ✅ `resolvePublicPath()` blocks `..` + null bytes |
-| File access | ✅ Signed HMAC tokens on media URLs |
+## Decision
 
-## Recovery Result
-
-| Check | Status |
-|-------|--------|
-| Generation interruption | ✅ caught, status→failed, error persisted |
-| Timeout recovery | ✅ `/api/recovery/sweep` recovered 2 stuck test videos |
-| Retry | ✅ user can re-request after failure |
-| Cleanup | ✅ 9 files deleted per video; 0 orphaned |
-
-## Build Result
-
-| Gate | Status |
-|------|--------|
-| Lint | ✅ 0 errors |
-| TypeScript | ✅ build compiles |
-| Production build | ✅ `next build` succeeds |
-| DB migration | ✅ applied + reproducible |
-| E2E video test | ✅ audio + video in final MP4 |
-| Browser verification | ✅ agent-browser confirmed render + delete + lip-sync states |
-| Authentication | ✅ dev-fallback; prod would 401 |
-| Ownership | ✅ ownerId in all responses |
-| Stuck recovery | ✅ sweep marks stuck as failed |
-| Cleanup | ✅ 9 files deleted, 0 orphaned |
-| Regression | ✅ 0 regressions across 36 endpoints |
-
-## Known Limitations
-
-1. **Lip-sync requires external GPU service** — deploy Wav2Lip/SadTalker, set `LIPSYNC_SERVICE_URL`. Without it: talking-portrait mode (avatar + voice + motion, no mouth movement).
-2. **Dev-auth fallback** — when `NEXTAUTH_SECRET`/`ALO_ADMIN_EMAIL`/`ALO_ADMIN_PASSWORD_HASH` unset. MUST configure all three for prod.
-3. **In-memory rate limit** — single-instance only.
-4. **Other portal sections** — 18 REAL, 10 PARTIAL, 2 MOCK, 1 PLACEHOLDER remain (out of scope).
+**Keep production untouched.** Do not set `VPS_DEPLOY_ENABLED`, run `prisma migrate deploy`, bootstrap/restart PM2, or claim the release is live until the code/CI, database, backup, migration, host, and approval evidence above is complete. No public-domain health check has been performed.

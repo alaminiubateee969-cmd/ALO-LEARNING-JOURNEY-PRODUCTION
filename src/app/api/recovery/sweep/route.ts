@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { recoverStuckVideos } from '@/lib/recovery-sweep';
 import { requireOwner } from '@/lib/auth';
@@ -12,19 +13,39 @@ import { log } from '@/lib/observability';
  * for longer than the configured timeout as `failed`.
  */
 
+function hasValidCronSecret(request: NextRequest): boolean {
+  const expected = process.env.CRON_SECRET ?? '';
+  const supplied = request.headers.get('x-cron-secret') ?? '';
+  if (!expected || !supplied) return false;
+  const expectedBytes = Buffer.from(expected);
+  const suppliedBytes = Buffer.from(supplied);
+  return expectedBytes.length === suppliedBytes.length && timingSafeEqual(expectedBytes, suppliedBytes);
+}
+
 export async function POST(req: NextRequest) {
-  try {
-    const owner = await requireOwner();
-    const url = new URL(req.url);
-    const timeoutMinutes = parseInt(url.searchParams.get('timeoutMinutes') || '10', 10);
-    if (timeoutMinutes < 1 || timeoutMinutes > 1440) {
-      return NextResponse.json({ ok: false, error: 'timeoutMinutes must be 1-1440' }, { status: 400 });
+  let actor = 'recovery_cron';
+  if (!hasValidCronSecret(req)) {
+    try {
+      actor = (await requireOwner()).ownerId;
+    } catch (error) {
+      const statusCode = typeof error === 'object' && error && 'statusCode' in error
+        ? Number((error as { statusCode: unknown }).statusCode)
+        : 401;
+      return NextResponse.json({ error: statusCode === 503 ? 'authentication_not_configured' : 'unauthorized' }, { status: statusCode === 503 ? 503 : 401 });
     }
+  }
+  const url = new URL(req.url);
+  const rawTimeout = url.searchParams.get('timeoutMinutes') ?? '10';
+  const timeoutMinutes = Number(rawTimeout);
+  if (!Number.isInteger(timeoutMinutes) || timeoutMinutes < 1 || timeoutMinutes > 1440) {
+    return NextResponse.json({ ok: false, error: 'timeoutMinutes must be an integer from 1 to 1440' }, { status: 400 });
+  }
+  try {
     const result = await recoverStuckVideos(timeoutMinutes);
-    log('info', 'recovery-sweep-complete', { ownerId: owner.ownerId, ...result });
+    log('info', 'recovery-sweep-complete', { actor, ...result });
     return NextResponse.json({ ok: true, ...result });
   } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'recovery_sweep_failed' }, { status: 503 });
   }
 }
 

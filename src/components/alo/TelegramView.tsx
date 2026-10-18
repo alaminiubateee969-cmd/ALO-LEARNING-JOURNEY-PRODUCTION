@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { TELEGRAM_COMMANDS } from "@/lib/platforms";
+import { ADMIN_COMMANDS } from "@/lib/platforms";
 import { Send, Terminal, Loader2, ShieldCheck } from "lucide-react";
 
 interface Cmd {
@@ -29,8 +29,12 @@ export default function TelegramView() {
 
   const load = () =>
     fetch("/api/telegram")
-      .then((r) => r.json())
-      .then((d) => setCommands(d.commands))
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error ?? "command_history_unavailable");
+        setCommands(Array.isArray(data.commands) ? data.commands : []);
+      })
+      .catch(() => setCommands([]))
       .finally(() => setLoading(false));
 
   useEffect(() => {
@@ -48,9 +52,12 @@ export default function TelegramView() {
         body: JSON.stringify({ command: c }),
       });
       const data = await res.json();
-      toast({ title: data.row.status === "executed" ? "কমান্ড সফল ✅" : data.row.status, description: data.row.response });
+      if (!res.ok || !data.row) throw new Error(data.error ?? "command_failed");
+      toast({ title: data.row.status, description: data.row.response });
       setInput("");
       load();
+    } catch (error) {
+      toast({ title: "কমান্ড ব্যর্থ", description: error instanceof Error ? error.message : "command_failed", variant: "destructive" });
     } finally {
       setSending(false);
     }
@@ -61,11 +68,11 @@ export default function TelegramView() {
       <SectionHeader
         title="Telegram Command Center"
         bn="টেলিগ্রাম কমান্ড"
-        desc="অনুমোদিত অ্যাডমিন chat ID ছাড়া কেউ কমান্ড চালাতে পারবে না। প্রতিদিনের রিপোর্ট স্বয়ংক্রিয়ভাবে পাঠানো হয়।"
+        desc="This is an administrator-only in-app command console. It is not connected to a Telegram bot, does not receive webhook updates, and does not send scheduled reports."
         icon={<Send className="h-5 w-5" />}
         action={
           <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100">
-            <ShieldCheck className="h-3 w-3 mr-1" /> Allow-list সক্রিয়
+            <ShieldCheck className="h-3 w-3 mr-1" /> Admin console only
           </Badge>
         }
       />
@@ -89,10 +96,10 @@ export default function TelegramView() {
             </Button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-            {TELEGRAM_COMMANDS.slice(0, 9).map((c) => (
+            {ADMIN_COMMANDS.slice(0, 9).map((c) => (
               <button
                 key={c.cmd}
-                onClick={() => send(c.cmd.replace(/<[^>]+>/, ""))}
+                onClick={() => setInput(c.cmd.replace(/ <[^>]+>/, "").trim() + " ")}
                 className="text-left rounded-lg bg-muted hover:bg-cyan-50 hover:text-cyan-700 p-2 transition-colors"
               >
                 <p className="text-[11px] font-mono font-medium truncate">{c.cmd}</p>
@@ -107,7 +114,7 @@ export default function TelegramView() {
           <h3 className="font-semibold mb-3">সকল কমান্ড</h3>
           <ScrollArea className="h-72 alo-scrollbar pr-2">
             <div className="space-y-1">
-              {TELEGRAM_COMMANDS.map((c) => (
+              {ADMIN_COMMANDS.map((c) => (
                 <div key={c.cmd} className="flex items-start gap-2 py-1.5 border-b border-border/40 last:border-0">
                   <code className="text-[11px] font-mono bg-muted px-1.5 py-0.5 rounded shrink-0">{c.cmd}</code>
                   <span className="text-[11px] text-muted-foreground flex-1">{c.desc}</span>

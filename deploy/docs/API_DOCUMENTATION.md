@@ -1,104 +1,57 @@
-# ALO Human Avatar — API Documentation
+# API Behavior Notes — Repository Snapshot
 
-## Base URL
-`https://your-domain/api`
+This is a concise guide to selected routes in the current source tree, not a live API verification. Production routes are protected by the NextAuth middleware unless explicitly public (for example, the minimal `/api/health` response and authentication routes). Local development can bypass admin auth unless `ALO_REQUIRE_AUTH=true`; do not treat that preview behavior as production security.
 
-## Authentication
-All protected endpoints require a NextAuth JWT session cookie. In dev mode (no `NEXTAUTH_SECRET`), pass-through with `x-alo-auth: dev-fallback` header. In production, unauthenticated → 401.
+## Content and review
 
----
+### `POST /api/content/generate`
+Creates one content draft using a configured model or fallback template and passes up to three stored documents as prompt context. This is not query-ranked retrieval and does not run independent agents, fact-checking, safety certification, or a verified quality score. Stored score is set to `0` (not independently scored), safety remains pending, and the draft is placed in the internal approval queue for human review.
 
-## Human Avatars
+### `POST /api/content/brief`
+Creates an SEO brief draft. `publishReady` remains false and human verification is required. The generated/model-provided content is not independently fact-checked or SEO-certified; no score makes it publish-ready.
 
-### `GET /api/human-avatars`
-List owner's avatars + presets + stats.
+### `POST /api/protective-review`
+Returns an unverified model suggestion. The route always forces `approved=false`, `needsHumanReview=true`, and clears machine “checks passed.” Model-reported observations are unverified. This endpoint is not a safety certification and does not approve an item.
 
-### `POST /api/human-avatars`
-**Actions:**
-- `seed_presets` — create all 6 preset avatars
-- `create` (with `presetId` or custom fields) — create + optional portrait gen
-- `generate_portrait` — regen portrait for existing avatar
-- `delete` — delete avatar + cascade videos + cleanup files
+### `POST /api/approvals`
+Records an admin decision. Approving content adds an item to the app’s internal publishing queue; it does not post to a social network. Verify the selected artifact yourself before approval.
 
-### `DELETE /api/human-avatars`
-Body: `{ "id": "<avatar-id>" }` → deletes avatar + videos + files.
+## Comments
 
----
+### `GET /api/comments`
+Returns the comment inbox and counts for an authenticated admin.
 
-## Avatar Video
+### `POST /api/comments`
+Supports classification, unsent reply drafting, local draft saving, escalation, and ignore actions. If the classifier falls back, the result is marked `review_required`. Sensitive/unclassified comments cannot receive generated drafts. The `send` action returns `503 external_reply_delivery_not_configured`; it does not send a message or mark a comment replied. No external social inbox/reply provider is configured here.
 
-### `GET /api/avatar-video`
-List owner's videos. Optional `?avatarId=<id>` filter.
+## RAG search
 
-### `POST /api/avatar-video`
-Generate a full avatar video.
+### `POST /api/rag/search`
+Performs lexical keyword/overlap matching over stored chunks/documents. It is not vector search or semantic retrieval, and relevance scores are heuristic. Content citations are restricted to exact titles in the selected context, but matching a title does not prove the document supports the content.
 
-**Request:**
-```json
-{
-  "avatarId": "<id>",
-  "prompt": "বাচ্চাদের স্ক্রিন টাইম কমানোর উপায়",
-  "targetDuration": 60,
-  "quality": "standard"
-}
-```
+## OTP
 
-**Validation:**
-- `prompt`: required, non-whitespace, max 2000 chars
-- `targetDuration`: integer 30–3600
-- `quality`: `standard` | `hd` | `cinematic`
+### `POST /api/otp`
+Generic SMS/email/WhatsApp/voice OTP delivery remains disabled until a real provider has been implemented and verified. The route must not generate, store, or return simulated OTP codes. Administrator sign-in OTP is a separate flow with hashed challenges and separate provider configuration.
 
-**Rate limit:** 3 requests / 10 min / owner. 1 concurrent / owner.
+## Human avatar / video
 
-**Response 200:**
-```json
-{
-  "ok": true,
-  "video": { "id":"...", "status":"completed", "actualDuration":81.32, ... },
-  "title": "...",
-  "scenes": [...],
-  "lipSyncUsed": false,
-  "lipSyncReason": "not_configured",
-  "hasAudio": true,
-  "hasVideo": true
-}
-```
+### `/api/human-avatars`, `/api/avatar-video`
+These routes support authenticated avatar/video operations. Generation depends on configured tools/services and may fail or return fallback content. FFmpeg stream/resolution validation is not a quality, identity-consistency, consent, or safety review. The final compositor currently uses still scene images; lip-sync output is not integrated, no lip-sync provider is called by the route, and new video records report `lipSyncUsed=false` / `lipSyncReason=not_integrated`.
 
-### `DELETE /api/avatar-video`
-Body: `{ "id": "<video-id>" }` → deletes record + 9 files (MP4, thumbnail, scene images, audio).
+Delete operations remove database rows and files; treat them as destructive and require an explicit retention decision and verified backup. Do not use undocumented wildcard cleanup.
 
-### `GET /api/avatar-video/file?id=<video-id>`
-Authenticated owner-scoped media streaming (HTTP range support).
-
----
-
-## Recovery Sweep
+## Recovery and health
 
 ### `GET /api/recovery/sweep`
-Dry-run preview of stuck jobs.
+Read-only preview of stuck jobs.
 
-### `POST /api/recovery/sweep?timeoutMinutes=10`
-Marks non-terminal jobs older than timeout as `failed`. Idempotent. Cron-protectable via `x-cron-secret` header.
+### `POST /api/recovery/sweep`
+Protected by the admin session or configured `x-cron-secret`. The write action can mark stale jobs failed; it does not regenerate work or verify the public site.
 
----
+### `GET /api/health`
+The unauthenticated response is intentionally minimal. Detailed checks require admin authentication. A health response alone does not establish database migration compatibility, backup restoreability, or user-flow correctness.
 
-## Error Responses
+## Source of truth
 
-| Status | When |
-|--------|------|
-| 400 | malformed/invalid client input |
-| 401 | unauthenticated |
-| 404 | not found (ownership-scoped) |
-| 409 | concurrent generation conflict |
-| 429 | rate-limited |
-| 500 | server error (with `jobId` for correlation) |
-
-## Lip-Sync States
-
-The `lipSyncReason` field honestly reports:
-- `success` — lip-sync applied + verified (only when `lipSyncUsed=true`)
-- `not_configured` — `LIPSYNC_SERVICE_URL` env unset (talking-portrait mode)
-- `http_error` — provider returned non-2xx
-- `invalid_output` — provider returned non-video or stream-missing output
-- `timeout` — provider exceeded `LIPSYNC_TIMEOUT_MS`
-- `provider_error` — uncaught provider error
+Inspect the matching route in `src/app/api/` before integrating a client. This guide is not evidence of deployed behavior, external provider availability, or public-domain health.

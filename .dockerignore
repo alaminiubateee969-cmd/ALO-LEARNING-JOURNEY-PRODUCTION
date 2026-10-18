@@ -19,6 +19,7 @@ out
 download
 storage
 db
+public/generated
 agent-ctx
 skills
 examples

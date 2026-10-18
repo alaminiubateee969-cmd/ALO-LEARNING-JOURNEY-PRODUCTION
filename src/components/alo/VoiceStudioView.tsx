@@ -195,7 +195,8 @@ export default function VoiceStudioView() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    const timeout = window.setTimeout(() => { void loadData(); }, 0);
+    return () => window.clearTimeout(timeout);
   }, [loadData]);
 
   // ---------------------------------------------------------

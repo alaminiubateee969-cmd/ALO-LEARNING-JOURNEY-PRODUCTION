@@ -1,4 +1,4 @@
-# Route Inventory (generated 2026-10-17 from the filesystem)
+# Route Inventory (generated 2026-10-18 UTC from src/app)
 
 ## Pages
 /

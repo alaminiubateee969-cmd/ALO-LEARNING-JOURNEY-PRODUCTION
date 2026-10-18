@@ -184,7 +184,8 @@ export default function ImageStudioView() {
   }, [toast]);
 
   useEffect(() => {
-    loadMeta();
+    const timeout = window.setTimeout(() => { void loadMeta(); }, 0);
+    return () => window.clearTimeout(timeout);
   }, [loadMeta]);
 
   // Generate images

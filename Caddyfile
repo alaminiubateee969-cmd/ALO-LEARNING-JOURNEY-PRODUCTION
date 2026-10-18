@@ -1,74 +1,13 @@
-# ALO Learning Journey — Caddyfile (production)
-# Caddy provides reverse proxy + automatic HTTPS (Let's Encrypt).
-# Edit the domain below to match your real domain.
-
+# DEPRECATED REFERENCE ONLY — this repository does not establish whether the
+# live server uses Caddy, Nginx, or another proxy. Inspect the running service
+# and authoritative configuration read-only before making any proxy change.
+# Do not install this file without an explicit, reviewed proxy decision.
 learn.aloeducation.com {
-    reverse_proxy localhost:3017 {
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-    }
-
-    encode gzip zstd
-
-    # Security headers
+    reverse_proxy 127.0.0.1:3017
+    encode gzip
     header {
         X-Content-Type-Options nosniff
         X-Frame-Options DENY
         X-XSS-Protection "1; mode=block"
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        Referrer-Policy no-referrer
-        Permissions-Policy "camera=(), microphone=(), geolocation=()"
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
-        # Remove Caddy's Server header for slight obfuscation
-        -Server
-    }
-
-    # Static asset caching
-    @static path /_next/static/* /avatars/* /avatar-videos/* /avatar-audio/* /avatar-scenes/* /avatar-thumbs/* /generated/* /voice-studio/* /asr-output/*
-    handle @static {
-        header Cache-Control "public, max-age=86400, immutable"
-        reverse_proxy localhost:3017
-    }
-
-    # Health check (no caching)
-    @health path /api/health
-    handle @health {
-        header Cache-Control "no-store, must-revalidate"
-        reverse_proxy localhost:3017
-    }
-
-    # Rate limit avatar-video generation (defense in depth — app also limits)
-    @videogen path /api/avatar-video
-    handle @videogen {
-        rate_limit {
-            zone videogen {
-                key {remote_host}
-                events 3
-                window 10m
-            }
-        }
-        reverse_proxy localhost:3017
-    }
-
-    handle {
-        reverse_proxy localhost:3017
-    }
-
-    # Access logs
-    log {
-        output file /var/log/caddy/alo-access.log {
-            roll_size 100mb
-            roll_keep 10
-            roll_keep_for 720h
-        }
-        format json
-    }
-
-    # Compression for API JSON responses
-    @api path /api/*
-    handle @api {
-        header Cache-Control "no-store, must-revalidate"
-        reverse_proxy localhost:3017
     }
 }

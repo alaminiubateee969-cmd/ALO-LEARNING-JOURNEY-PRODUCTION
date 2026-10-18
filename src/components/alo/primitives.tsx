@@ -75,9 +75,11 @@ export function StatusPill({ status }: { status: string }) {
     approved: { c: "bg-emerald-100 text-emerald-700", label: "Approved" },
     rejected: { c: "bg-rose-100 text-rose-700", label: "Rejected" },
     revised: { c: "bg-sky-100 text-sky-700", label: "Revised" },
-    published: { c: "bg-emerald-100 text-emerald-700", label: "Published" },
+    published: { c: "bg-emerald-100 text-emerald-700", label: "Marked published" },
     queued: { c: "bg-amber-100 text-amber-700", label: "Queued" },
     active: { c: "bg-emerald-100 text-emerald-700", label: "Active" },
+    configured: { c: "bg-slate-100 text-slate-600", label: "Catalog entry" },
+    unverified: { c: "bg-amber-100 text-amber-700", label: "Unverified" },
     idle: { c: "bg-slate-100 text-slate-600", label: "Idle" },
     running: { c: "bg-sky-100 text-sky-700", label: "Running" },
     blocked_external_setup: { c: "bg-amber-100 text-amber-700", label: "Blocked · external" },
@@ -131,9 +133,134 @@ export function ProviderTag({ provider, fallback }: { provider: string; fallback
         "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium",
         fallback ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
       )}
-      title={fallback ? "Local fallback used — no paid model ran" : "Live model"}
+      title={fallback ? "Local fallback used — no paid model ran" : "Configured model response; no quality certification implied"}
     >
       {fallback ? "fallback" : provider}
     </span>
+  );
+}
+
+type SegmentOption<T extends string> = {
+  id: T;
+  label: string;
+  count?: number;
+  icon?: React.ReactNode;
+};
+
+export function SegmentedControl<T extends string>({
+  value,
+  onChange,
+  options,
+  ariaLabel = "Choose view",
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: SegmentOption<T>[];
+  ariaLabel?: string;
+}) {
+  return (
+    <div role="group" aria-label={ariaLabel} className="inline-flex flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
+      {options.map((option) => {
+        const selected = option.id === value;
+        return (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onChange(option.id)}
+            className={cn(
+              "inline-flex min-h-8 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+              selected ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
+            )}
+          >
+            {option.icon}
+            <span>{option.label}</span>
+            {typeof option.count === "number" && <span className="text-[10px] opacity-70">{option.count}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const beaconColors: Record<string, string> = {
+  frontend: "bg-cyan-300 text-slate-950",
+  backend: "bg-emerald-300 text-slate-950",
+  database: "bg-violet-300 text-slate-950",
+  cloud: "bg-amber-300 text-slate-950",
+  security: "bg-rose-300 text-slate-950",
+};
+
+export function ArchifyToolbarButton({
+  label,
+  beacon,
+  role,
+  active = false,
+  onClick,
+}: {
+  label: string;
+  beacon: string;
+  role: keyof typeof beaconColors;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-1.5 font-mono text-xs transition-colors",
+        active ? "border-slate-500 bg-slate-800 text-white" : "border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
+      )}
+    >
+      <span className={cn("rounded px-1.5 py-0.5 text-[9px] font-bold", beaconColors[role])}>{beacon}</span>
+      {label}
+    </button>
+  );
+}
+
+export function EditorialButton({
+  children,
+  variant = "paper",
+  tag,
+  onClick,
+}: {
+  children: React.ReactNode;
+  variant?: "accent" | "paper" | "link";
+  tag?: string;
+  onClick?: () => void;
+}) {
+  const variantClass = {
+    accent: "border-[#bf4520] bg-[#bf4520] text-white hover:bg-[#a83b1c]",
+    paper: "border-[#2d3142]/40 bg-white text-[#2d3142] hover:bg-[#f5f5f5]",
+    link: "border-transparent bg-transparent text-[#2d3142] underline underline-offset-4 hover:bg-black/5",
+  }[variant];
+  return (
+    <button type="button" onClick={onClick} className={cn("inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold", variantClass)}>
+      {tag && <span className="rounded-sm border border-current/30 px-1 py-0.5 font-mono text-[9px] uppercase tracking-wide">{tag}</span>}
+      {children}
+    </button>
+  );
+}
+
+export function HotkeyButton({
+  label,
+  hotkey,
+  onClick,
+}: {
+  label: string;
+  hotkey: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex min-h-9 items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:bg-muted"
+    >
+      <span>{label}</span>
+      <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{hotkey}</kbd>
+    </button>
   );
 }
