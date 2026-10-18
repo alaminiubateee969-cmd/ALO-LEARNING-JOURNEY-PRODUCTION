@@ -155,11 +155,7 @@ On the disposable restore only:
    restore. Record exact repository commit, migration file checksums, database
    version, commands, before/after schema inventories, and outcomes.
 
-The CI workflow is configured to use a fresh disposable MySQL 8 service to
-apply the five migrations twice, check migration status, and compare model
-tables/columns. That is useful fresh-database coverage, but it is not a
-substitute for this restored production-schema rehearsal. The updated CI job
-has not yet run for the current repair result.
+The CI workflow applied the five migrations twice to a fresh disposable MySQL 8 service, checked migration status, and compared model tables/columns on candidate commit `2453def298cb4fe45dd70cfe8897d5aefd59f457`; the `CI / validate` job passed. This is useful fresh-database coverage, but it is not a substitute for the required restored production-schema rehearsal. No production backup was restored and no production migration was attempted.
 
 ## Phase D — production go/no-go (manual, after all evidence)
 

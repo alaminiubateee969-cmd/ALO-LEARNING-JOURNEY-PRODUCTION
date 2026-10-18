@@ -23,10 +23,13 @@ marketing `MarketingLead`, and leaves generic OTP delivery disabled until a
 real provider is implemented and verified. The current avatar pipeline does
 not integrate lip-sync output; legacy `lipSyncUsed=true` values are not proof
 that lip-sync reached the final video. SEO/content outputs are drafts, with no
-independent factual, safety, legal, or quality certification. Deployment and
-migration remain blocked pending generated Prisma Client verification, CI,
-backup restore, schema/history reconciliation, isolated migration rehearsal,
-and VPS/public-domain checks. The live host and database were not accessed.
+independent factual, safety, legal, or quality certification. GitHub CI generated the Prisma Client and passed typecheck, production build,
+and fresh disposable-MySQL migration checks on candidate commit
+`2453def298cb4fe45dd70cfe8897d5aefd59f457`; local Prisma generation is still
+blocked by sandbox TLS. Production deployment/migration remain blocked pending
+dependency triage, a verified backup restore, schema/history reconciliation,
+restored-copy rehearsal, and VPS/public-domain checks. The live host and
+production database were not accessed.
 
 The source-level check results and PR state are maintained in the current
 readiness/test reports linked above. Every dated task entry below—including

@@ -20,8 +20,10 @@
 No production migration, database write, PM2 command, proxy change, DNS/SSL
 change, SSH operation, PR merge, or deployment has been performed. The main
 branch integration is committed and pushed to existing PR #19 on the fixed
-Arena branch; the PR remains open and unmerged pending clean merge state,
-required passing checks, and review.
+Arena branch. At last observation, candidate `2453def` had a clean merge state
+and passing CI; the PR was open and unmerged. Production remains blocked by the
+database, backup, dependency, and host-verification gates below. Check GitHub for
+any later PR state.
 
 ## Deployment workflow and safety gates
 

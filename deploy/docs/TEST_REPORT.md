@@ -2,7 +2,7 @@
 
 **As of:** 2026-10-18
 **Branch:** `arena/6d490018-alo-learning-journey-productio`
-**Status:** Local checks plus a GitHub PR-check snapshot for commit `65e2729cdff4a012d95a16b1ebc30b42941c0117`; no production tests have run. The merge commit is pushed to PR #19, which remains open.
+**Status:** Local checks plus a GitHub CI snapshot for code candidate `2453def298cb4fe45dd70cfe8897d5aefd59f457`; no production tests have run. The merge commit is pushed to PR #19, which was still open at last observation. Check GitHub again if the PR head or merge state has advanced since this report.
 
 ## Local checks
 
@@ -18,7 +18,7 @@
 | `bash -n` | PASS | Seven deployment/preflight/backup/health scripts parsed successfully, including the read-only monitor. |
 | Workflow/Compose YAML | PASS, syntax only | `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, `.github/workflows/datadog-synthetics.yml`, and `docker-compose.yml` parsed with `js-yaml`; this is not proof of a GitHub Actions run. |
 | `git diff --check` and `git diff --cached --check` | PASS at last run | Both working-tree and staged diff whitespace checks passed after normalizing imported text artifacts. Re-run after final staging. |
-| GitHub CI / PR checks | PARTIAL / FOLLOW-UP PENDING | On commit `65e2729`, `CI / validate` passed. The separate Datadog Synthetics `build` job failed in its third-party action; run logs could not be fetched in this sandbox, so the exact failure cause is not confirmed. The workflow now requires `DATADOG_SYNTHETICS_ENABLED=true` before running and is disabled by default; this change needs a fresh PR check run. |
+| GitHub CI / PR checks | PASS on candidate `2453def` | `CI / validate` passed Prisma validation/client generation, migrations twice on a fresh disposable MySQL service, lint, unit tests/rollback simulation, typecheck, and production build. The optional Datadog Synthetics `build` job was skipped because `DATADOG_SYNTHETICS_ENABLED` is false/unset. This is not a restored production database rehearsal. |
 
 ## What the static migration check means
 
@@ -41,7 +41,6 @@ The verifier covers the checked-in Prisma model/migration mapping and selected S
 
 ## Next required checks
 
-1. In a trusted network environment, generate the matching Prisma Client and verify its version; then rerun typecheck, lint, tests, migration checks, and production build.
+1. If the PR head advances beyond candidate `2453def`, verify required checks and clean merge state on the new exact SHA before merging; honor any configured review requirements.
 2. Before any production release, triage the current npm audit findings; avoid unreviewed major upgrades.
-3. Commit and push this repair to the existing Arena branch/PR #19, resolve the GitHub merge conflict, and obtain required CI checks and review before merging.
-4. Complete the separately documented read-only production inventory, verified backup restore, and exact migration rehearsal before any deployment decision.
+3. Complete the separately documented read-only production inventory, verified backup restore, and exact migration rehearsal before any deployment decision.

@@ -1,7 +1,7 @@
 # Production Readiness — Current Repository Evidence
 
 **As of:** 2026-10-18
-**Status: BLOCKED — DO NOT MERGE OR DEPLOY UNTIL REQUIRED GATES PASS**
+**Status: PR #19 CI GREEN / PRODUCTION BLOCKED — DO NOT DEPLOY**
 
 This is a repository-only assessment. The VPS, production MySQL database, backup, PM2 process, proxy, DNS/TLS, and public domain have not been accessed or independently verified. The target values are operator-provided: `/home/aloedu/LEARNING-JOURNEY`, PM2 `learn-aloeducation`, port `3017`, `learn.aloeducation.com`, and MySQL `db_learn` at `127.0.0.1:3306`.
 
@@ -12,13 +12,13 @@ This is a repository-only assessment. The VPS, production MySQL database, backup
 | Automated tests | PASS | `npm test`: 52/52 tests passed on the current worktree; see [`TEST_REPORT.md`](TEST_REPORT.md). |
 | ESLint | PASS | `npm run lint`: 0 errors, 0 warnings. |
 | Static migration verification | PASS, static only | Five MySQL migrations map to 42 Prisma models, 480 scalar column types, keys/indexes/relations, and one implicit relation table. This does not check production schema/history. |
-| TypeScript | FAIL / BLOCKED | Only reported error: `src/lib/db.ts(1,10)` cannot import `PrismaClient` because the schema-specific generated `@prisma/client` is absent. |
-| Prisma generation | BLOCKED | `prisma generate --no-engine` could not fetch the schema-engine checksum from `binaries.prisma.sh` due sandbox TLS/network restrictions. |
-| Production build | FAIL / BLOCKED | Next.js compiled successfully, then type-check failed on the missing generated Prisma Client. No complete build artifact was produced. Middleware-to-proxy deprecation warning remains. |
+| TypeScript | PASS in CI / local sandbox blocked | GitHub CI generated the schema-specific client and typecheck passed on candidate `2453def`. Local `npm run typecheck` still fails because this sandbox cannot fetch the Prisma engine/client. |
+| Prisma generation | PASS in CI / local sandbox blocked | CI completed `prisma validate` and `prisma generate`; local `prisma generate --no-engine` could not fetch the schema-engine checksum from `binaries.prisma.sh` due sandbox TLS/network restrictions. |
+| Production build | PASS in CI / local sandbox blocked | GitHub CI completed the production build after generating Prisma Client. Local build compiled, then type-check stopped on the missing generated client. Middleware-to-proxy deprecation warning remains. |
 | Dependency audit | FAIL / triage required | `npm audit`: 13 findings (9 high, 4 moderate); `npm audit --omit=dev`: 8 (4 high, 4 moderate). Proposed fixes include major-version changes; none were applied blindly. |
 | Workflow/Compose YAML | PASS, syntax only | CI, deploy, Datadog, and Compose YAML parse; this does not prove workflow execution. |
 | Shell syntax | PASS | Seven deployment/preflight/backup/health scripts pass `bash -n`. |
-| GitHub PR checks | PARTIAL / FOLLOW-UP PENDING | On commit `65e2729`, `CI / validate` passed, but the Datadog Synthetics `build` job failed in its third-party action. Run logs were not retrievable in this sandbox; the exact failure cause is unconfirmed. The workflow now requires `DATADOG_SYNTHETICS_ENABLED=true` and is disabled by default; that fix is not yet pushed or rechecked. |
+| GitHub PR checks | PASS / OPTIONAL CHECK SKIPPED | On candidate `2453def298cb4fe45dd70cfe8897d5aefd59f457`, `CI / validate` passed all steps; optional Datadog Synthetics `build` was skipped because it is disabled by default. GitHub reports a clean merge state. |
 | MySQL/restored-copy rehearsal | NOT DONE | No verified production backup or disposable restored MySQL copy is available. |
 | VPS / PM2 / public health | NOT VERIFIED | No SSH/VPS operation or public-domain verification has occurred. |
 
@@ -26,12 +26,12 @@ The static migration verifier is not evidence that a migration matches productio
 
 ## Merge status
 
-PR #19 is the existing PR and must be updated rather than duplicated. At the last completed check on commit `65e2729cdff4a012d95a16b1ebc30b42941c0117`, GitHub reported `OPEN`, `UNSTABLE`: `CI / validate` passed and the separate Datadog `build` check failed. The local merge of `2fb44c087c214b0ebb093e1c8b3bb9324d9b532b` is committed and pushed to the fixed branch; the PR itself remains open and unmerged. An opt-in guard for the external Datadog workflow is being prepared and has not yet been pushed or tested. **Do not merge until the follow-up commit produces a clean merge state, required checks pass, and review is complete.**
+PR #19 is the existing PR and has been updated rather than duplicated. At last observation it was `OPEN`, `CLEAN`, head `2453def298cb4fe45dd70cfe8897d5aefd59f457`. `CI / validate` passed, including Prisma generation, two deployments of the checked-in migrations to a fresh CI MySQL service, lint, tests, typecheck, and production build. The optional Datadog `build` job was skipped by its explicit opt-in guard. The PR was unmerged at that snapshot; check GitHub for any later state. No branch-protection API details or required-review requirements were available to this repository integration.
 
 ## Production safety gates still open
 
-1. Generate and verify the repository-matched Prisma Client in a trusted network environment; then resolve the typecheck/build blocker and pass CI.
-2. Triage the current dependency audit findings without unreviewed major upgrades.
+1. CI generated the matching Prisma Client and passed typecheck/build on candidate `2453def`; rerun required checks for any later commit. Local sandbox engine download remains blocked.
+2. Before production release, triage the current dependency audit findings without unreviewed major upgrades.
 3. Read-only inventory of live MySQL schema, data relationships, and `_prisma_migrations` checksums/history.
 4. Verify a complete database/media backup by restoring it to an isolated compatible MySQL instance; rehearse the exact migration plan there. Preserve legacy admissions/OTP data and relationships; keep admissions `Lead` separate from marketing `MarketingLead`.
 5. Independently verify live app path, PM2 process/cwd, port, storage, proxy, auth, and health. The reported PM2 list is empty; deployment scripts intentionally do not start an absent process.
