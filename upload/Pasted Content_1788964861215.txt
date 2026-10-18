@@ -1,0 +1,2381 @@
+# MASTER IMPLEMENTATION PROMPT
+
+## REAL SELF-HOSTED AI VOICE-TO-CINEMATIC VIDEO PLATFORM
+
+### 50 SECONDS → 60 MINUTES | REAL AGENTS | NO MANDATORY PAID API | REAL MEDIA | REAL QA | VIDEO UPLOAD MODIFICATION
+
+You are implementing the production video-generation system inside the existing project.
+
+This is NOT a UI/demo task.
+
+The objective is to make the actual system capable of receiving:
+
+* a real human voice recording
+* existing audio
+* an uploaded video recording
+* photos
+* text
+* a topic
+* a desired style
+* a desired duration
+
+and automatically producing a complete cinematic video from the provided input.
+
+If the user uploads a video recording, the system must be able to modify and improve that video using real processing, editing, AI-assisted analysis where available, and FFmpeg-based composition.
+
+The entire pipeline must be real, testable, asynchronous, persistent, and honest.
+
+---
+
+# 1. ABSOLUTE PRODUCT GOAL
+
+The system must support:
+
+VOICE / AUDIO / VIDEO INPUT
+↓
+FILE VALIDATION
+↓
+MEDIA ANALYSIS
+↓
+SPEECH DETECTION
+↓
+SPEECH-TO-TEXT
+↓
+VIDEO UNDERSTANDING
+↓
+CONTENT UNDERSTANDING
+↓
+SCRIPT / STORY GENERATION
+↓
+CINEMATIC STORYBOARD
+↓
+SCENE GENERATION
+↓
+VISUAL ASSETS
+↓
+VOICE / NARRATION
+↓
+MUSIC
+↓
+SOUND EFFECTS
+↓
+SUBTITLES
+↓
+VIDEO MODIFICATION / CINEMATIC EDITING
+↓
+FFmpeg RENDER
+↓
+REAL MP4
+↓
+ffprobe QA
+↓
+STORAGE
+↓
+PLAYABLE FINAL VIDEO
+
+The user must be able to provide:
+
+* voice recording
+* existing audio
+* uploaded video recording
+* optionally photos
+* optionally video clips
+* optionally text
+* optionally a topic
+* optionally desired style
+* optionally desired duration
+* optionally editing instructions
+
+The system should intelligently determine what is needed and generate or modify the final video.
+
+---
+
+# 2. VIDEO UPLOAD AND MODIFICATION REQUIREMENT
+
+If the user uploads any video recording, the system MUST support real video modification.
+
+The uploaded video must not be ignored, silently replaced, or treated as a fake placeholder.
+
+The system must preserve the original uploaded video and create a separate modified output.
+
+Store:
+
+originalVideoPath
+originalVideoDuration
+originalVideoFormat
+originalVideoCodec
+originalVideoWidth
+originalVideoHeight
+originalVideoFPS
+originalVideoAudioStatus
+modifiedVideoPath
+modificationMode
+modificationInstructions
+modifiedVideoDuration
+modifiedVideoFormat
+modifiedVideoCodec
+modifiedVideoWidth
+modifiedVideoHeight
+modifiedVideoFPS
+
+The original file must remain available for comparison and recovery.
+
+---
+
+# 3. VIDEO MODIFICATION MODES
+
+Support the following real modification modes.
+
+## MODE A — BASIC VIDEO ENHANCEMENT
+
+Apply real processing such as:
+
+* trimming
+* cropping
+* resizing
+* aspect-ratio conversion
+* stabilization where available
+* brightness correction
+* contrast correction
+* color correction
+* saturation adjustment
+* sharpening where appropriate
+* noise reduction
+* audio normalization
+* silence trimming
+* frame-rate conversion
+* resolution conversion
+* background music
+* subtitles
+* watermark or logo
+* intro and outro
+* fade-in
+* fade-out
+
+Every applied modification must be recorded.
+
+## MODE B — CINEMATIC EDITING
+
+Convert the uploaded recording into a more cinematic video using real editing.
+
+Possible operations include:
+
+* scene detection
+* shot selection
+* removal of unwanted sections
+* pacing adjustment
+* cinematic crop
+* camera-style zoom
+* pan effects
+* slow motion where technically valid
+* speed ramping where technically valid
+* transitions
+* color grading
+* cinematic overlays
+* depth or blur effects where available
+* music synchronization
+* sound-effect placement
+* subtitle placement
+* title cards
+* lower thirds
+* intro/outro sequences
+
+Do not claim that a video was AI-generated if the system only performed FFmpeg editing.
+
+## MODE C — VIDEO + VOICE TRANSFORMATION
+
+If the uploaded video contains speech:
+
+* extract audio
+* transcribe speech
+* detect language
+* generate subtitles
+* optionally clean the original voice
+* optionally add translated subtitles
+* optionally create a new narration track
+* synchronize the modified video with the selected audio
+
+The original voice must be distinguished from synthetic voice.
+
+## MODE D — VIDEO RESTRUCTURING
+
+The system may transform a long uploaded video into a shorter or longer structured video.
+
+Possible outputs:
+
+* short-form video
+* educational video
+* social media video
+* cinematic story
+* highlight reel
+* tutorial
+* product video
+* parent/child educational video
+* presentation video
+* documentary-style video
+
+The system must use real source footage where the user has uploaded video.
+
+## MODE E — VIDEO WITH GENERATED SUPPORTING VISUALS
+
+The system may combine uploaded footage with:
+
+* generated images
+* local/open-source AI visuals
+* title cards
+* diagrams
+* illustrations
+* background scenes
+* transitions
+* supporting B-roll
+
+Generated visuals must not falsely appear to be original user footage.
+
+Track which scenes use:
+
+ORIGINAL_USER_VIDEO
+
+GENERATED_VISUAL
+
+STOCK_OR_PROJECT_ASSET
+
+FFMPEG_EFFECT
+
+---
+
+# 4. VIDEO INPUT WORKFLOW
+
+When the user uploads a video recording:
+
+VIDEO FILE
+↓
+validate file
+↓
+scan for unsafe paths and unsupported formats
+↓
+extract metadata with ffprobe
+↓
+extract audio if present
+↓
+detect speech
+↓
+transcribe speech
+↓
+analyze scenes and shots
+↓
+understand user instructions
+↓
+create modification plan
+↓
+select source segments
+↓
+generate supporting assets if needed
+↓
+apply video and audio modifications
+↓
+add subtitles, music, SFX, and graphics
+↓
+assemble timeline
+↓
+render modified video
+↓
+run ffprobe QA
+↓
+store original and modified files
+↓
+return playable modified video
+
+The system must not overwrite the original upload.
+
+---
+
+# 5. VIDEO MODIFICATION AGENT
+
+Create a dedicated Video Modification Agent.
+
+The Video Modification Agent is responsible for:
+
+* reading the uploaded video metadata
+* understanding user editing instructions
+* detecting scenes
+* detecting silence
+* detecting speech segments
+* identifying low-quality or unusable sections
+* selecting important moments
+* creating a modification plan
+* applying real edits
+* preserving source footage where required
+* adding generated assets only when requested or necessary
+* reporting every applied operation
+* validating the final output
+
+The modification plan must be structured JSON.
+
+Example:
+
+{
+"inputVideo": "original-video.mp4",
+"targetDuration": 60,
+"style": "cinematic educational",
+"operations": [
+{
+"type": "trim",
+"start": 0,
+"end": 8,
+"reason": "remove silent opening"
+},
+{
+"type": "color_grade",
+"preset": "warm_cinematic"
+},
+{
+"type": "subtitle",
+"language": "bn"
+},
+{
+"type": "music",
+"source": "local_project_music"
+}
+],
+"sourceSegments": [
+{
+"start": 8,
+"end": 20,
+"purpose": "introduction"
+}
+]
+}
+
+Validate this plan against a schema.
+
+Never trust arbitrary model output.
+
+---
+
+# 6. USER VIDEO EDITING INSTRUCTIONS
+
+The user should be able to request modifications such as:
+
+* make this video cinematic
+* remove silence
+* remove mistakes
+* add Bengali subtitles
+* add English subtitles
+* translate the speech
+* add background music
+* improve audio
+* improve lighting
+* make it shorter
+* make it longer with supporting visuals
+* create a 50-second short
+* create a 5-minute educational video
+* add intro and outro
+* add logo
+* add title
+* add captions
+* create a highlight video
+* create a social media version
+* convert to vertical format
+* convert to landscape format
+* blur the background
+* blur a face where authorized
+* remove unwanted sections
+* add cinematic transitions
+* add child-friendly visuals
+* preserve the original voice
+* replace the narration with authorized synthetic narration
+
+The system must interpret these instructions and convert them into a validated modification plan.
+
+---
+
+# 7. VIDEO SOURCE TRUTH
+
+For uploaded-video workflows, the final output must clearly identify:
+
+* original source video
+* source segments used
+* generated visuals used
+* modified sections
+* removed sections
+* audio source
+* subtitle source
+* music source
+* SFX source
+* rendering method
+
+Do not claim that all content is AI-generated if the output contains user-uploaded footage.
+
+---
+
+# 8. NO MANDATORY PAID API
+
+The core system MUST NOT require paid third-party APIs.
+
+Do NOT make the core pipeline dependent on:
+
+* OpenAI paid API
+* ElevenLabs paid API
+* Runway paid API
+* Kling paid API
+* Google paid AI API
+* Azure paid AI API
+* commercial video-generation API
+* commercial voice-cloning API
+* any other mandatory paid inference provider
+
+The architecture should prioritize:
+
+LOCAL / SELF-HOSTED / OPEN-SOURCE MODELS.
+
+Possible categories include:
+
+* local LLM
+* local speech recognition
+* local TTS
+* local image generation
+* local video generation
+* local embedding model
+* local vision model
+* local audio processing
+* local video analysis
+* FFmpeg
+* local ML inference
+
+Do not hard-code a specific model if the project can support a provider abstraction.
+
+Create provider interfaces so models can be replaced later.
+
+Example:
+
+LLMProvider
+STTProvider
+TTSProvider
+ImageProvider
+VideoProvider
+MusicProvider
+VisionProvider
+VideoAnalysisProvider
+VideoEditingProvider
+
+Each provider must report:
+
+provider
+model
+version
+local/external
+status
+execution time
+error
+
+---
+
+# 9. IMPORTANT: "OWN AI AGENTS"
+
+The application must contain its own orchestration/agent layer.
+
+Do NOT implement the feature as one giant API route.
+
+Create real agents/services such as:
+
+## Voice Intake Agent
+
+Responsible for:
+
+* receiving audio
+* validating audio
+* detecting duration
+* detecting sample rate
+* detecting channels
+* extracting metadata
+* preparing audio
+
+## Video Intake Agent
+
+Responsible for:
+
+* receiving uploaded video
+* validating video
+* extracting metadata
+* detecting codecs
+* detecting resolution
+* detecting FPS
+* detecting audio streams
+* detecting subtitle streams
+* preparing video for processing
+
+## Speech Understanding Agent
+
+Responsible for:
+
+* speech-to-text
+* language detection
+* segmentation
+* timestamps where available
+* speaker information where available
+* confidence information
+
+## Video Understanding Agent
+
+Responsible for:
+
+* scene detection
+* shot detection
+* keyframe extraction
+* motion analysis
+* speech segment detection
+* silence detection
+* visual quality analysis
+* duplicate or repetitive segment detection
+* important moment detection
+
+## Story Agent
+
+Responsible for:
+
+* understanding the user's intent
+* converting speech into a usable story/content concept
+* preserving important meaning
+* detecting audience
+* detecting emotional tone
+* identifying characters
+* identifying actions
+* identifying educational elements
+
+## Script Agent
+
+Responsible for creating:
+
+* hook
+* introduction
+* body
+* scenes
+* dialogue
+* narration
+* transitions
+* ending
+* CTA
+
+## Cinematic Director Agent
+
+Responsible for:
+
+* shot selection
+* camera movement
+* composition
+* lighting
+* mood
+* pacing
+* transitions
+* visual continuity
+* scene duration
+* cinematic style
+
+## Asset Agent
+
+Responsible for:
+
+* images
+* illustrations
+* generated visual assets
+* existing user assets
+* uploaded video segments
+* asset validation
+* asset reuse
+
+## Voice Agent
+
+Responsible for:
+
+* original voice preservation where technically supported
+* TTS
+* narration
+* timing
+* pronunciation
+* voice segmentation
+* audio normalization
+
+## Music/SFX Agent
+
+Responsible for:
+
+* background music
+* sound effects
+* volume balancing
+* ducking under speech
+* emotional timing
+
+## Subtitle Agent
+
+Responsible for:
+
+* transcription
+* subtitle timing
+* Bengali/English subtitles
+* readable positioning
+* subtitle rendering
+
+## Video Modification Agent
+
+Responsible for:
+
+* trimming
+* cropping
+* resizing
+* stabilization
+* color correction
+* audio cleanup
+* scene selection
+* transitions
+* overlays
+* subtitles
+* music
+* SFX
+* intro/outro
+* source-video preservation
+* modified-video rendering
+
+## Video Assembly Agent
+
+Responsible for:
+
+* scene timeline
+* audio timeline
+* asset timeline
+* transitions
+* effects
+* FFmpeg rendering
+
+## Video QA Agent
+
+Responsible for:
+
+* media validation
+* duration validation
+* codec validation
+* audio validation
+* resolution validation
+* FPS validation
+* synchronization
+* corruption detection
+* source-video usage validation
+
+## Learning Agent
+
+Responsible for:
+
+* recording what worked
+* recording user preferences
+* recording successful content structures
+* recording successful hooks
+* recording successful scene structures
+* feeding reusable learning into future generations
+
+---
+
+# 10. REAL VOICE-FIRST WORKFLOW
+
+When the user uploads a voice recording:
+
+VOICE FILE
+↓
+validate
+↓
+extract audio
+↓
+measure duration
+↓
+STT
+↓
+transcript
+↓
+understand intent
+↓
+generate script
+↓
+generate storyboard
+↓
+generate scenes
+↓
+generate/obtain visuals
+↓
+create narration/audio
+↓
+assemble
+↓
+render
+↓
+QA
+↓
+final video
+
+The original recording must never be silently discarded.
+
+Store:
+
+originalAudioPath
+originalDuration
+originalFormat
+sampleRate
+channels
+language
+transcript
+transcriptConfidence
+
+---
+
+# 11. ORIGINAL VOICE VS GENERATED VOICE
+
+Support multiple modes.
+
+## MODE A — ORIGINAL VOICE
+
+Use the uploaded recording directly where appropriate.
+
+## MODE B — CLEANED ORIGINAL VOICE
+
+Process the original voice using local audio processing:
+
+* noise reduction
+* normalization
+* silence trimming
+* loudness correction
+* EQ where appropriate
+* compression where appropriate
+
+Do not alter the speaker's identity unnecessarily.
+
+## MODE C — EXTENDED NARRATION
+
+If the original recording is too short for the requested video:
+
+Generate additional narration using an authorized compatible voice solution.
+
+Clearly record whether narration is:
+
+ORIGINAL_VOICE
+
+or
+
+SYNTHETIC_VOICE
+
+Never falsely claim synthetic audio is the original speaker.
+
+## MODE D — TEXT-ONLY
+
+If no audio exists:
+
+Use the local TTS provider.
+
+---
+
+# 12. VOICE CONSENT AND SAFETY
+
+Voice cloning or synthetic continuation of a real person's voice must require appropriate authorization.
+
+For a baby/child or another person:
+
+* do not assume consent
+* do not silently clone the voice
+* require appropriate authorization before synthetic voice cloning
+* preserve clear metadata indicating synthetic audio
+* never represent generated speech as an authentic recording
+
+The system should support safe alternatives:
+
+ORIGINAL_RECORDING
+
+or
+
+GENERIC_LOCAL_TTS
+
+when voice cloning is not authorized or unavailable.
+
+---
+
+# 13. BABY / CHILD CONTENT MODE
+
+Create a specialized child-friendly content mode.
+
+Possible use case:
+
+Baby or mother provides a voice or video recording.
+
+The system generates:
+
+* child-friendly story
+* educational content
+* age-appropriate language
+* colorful visuals
+* safe animation
+* gentle music
+* simple explanations
+* parent-friendly CTA
+
+Do NOT automatically infer sensitive personal information about a child from their voice or video.
+
+---
+
+# 14. SPEECH-TO-TEXT
+
+Implement real local STT.
+
+The system should support at minimum:
+
+* Bengali
+* English
+* Banglish where practical
+
+Store:
+
+rawTranscript
+normalizedTranscript
+language
+segments
+timestamps
+confidence
+
+Do not fabricate transcript text.
+
+If STT fails:
+
+STATUS = FAILED
+
+with a real error.
+
+---
+
+# 15. VIDEO-TO-TEXT AND VIDEO ANALYSIS
+
+For uploaded videos, the system should analyze:
+
+* spoken content
+* scene boundaries
+* shot boundaries
+* visual subjects
+* motion
+* silence
+* audio quality
+* lighting
+* framing
+* duplicate sections
+* important moments
+
+If a local vision model is available, use it.
+
+If unavailable, use real non-AI analysis such as:
+
+* FFmpeg scene detection
+* keyframe extraction
+* audio waveform analysis
+* silence detection
+* motion estimation
+* metadata inspection
+
+Do not claim semantic visual understanding if it was not performed.
+
+---
+
+# 16. SCRIPT GENERATION
+
+The LLM must receive:
+
+* transcript
+* language
+* target audience
+* requested duration
+* content goal
+* visual style
+* voice mode
+* uploaded-video information
+* source-video segments
+* brand rules
+* safety rules
+* user editing instructions
+
+The output must be structured JSON.
+
+Example:
+
+{
+"title": "...",
+"hook": "...",
+"language": "bn",
+"targetDuration": 50,
+"sourceVideoUsage": "ORIGINAL_USER_VIDEO",
+"scenes": [
+{
+"id": "scene-1",
+"duration": 5,
+"sourceStart": 0,
+"sourceEnd": 5,
+"narration": "...",
+"visualPrompt": "...",
+"camera": "...",
+"musicMood": "...",
+"sfx": []
+}
+]
+}
+
+Validate the JSON against a schema.
+
+Retry invalid LLM output.
+
+Never trust arbitrary unvalidated model output.
+
+---
+
+# 17. DURATION SUPPORT
+
+Supported range:
+
+MINIMUM = 50 seconds
+
+MAXIMUM = 60 minutes / 3600 seconds
+
+Support:
+
+50 seconds
+1 minute
+2 minutes
+5 minutes
+10 minutes
+15 minutes
+30 minutes
+45 minutes
+60 minutes
+
+Do not hard-code 50 seconds.
+
+The pipeline must dynamically scale.
+
+For uploaded videos, the system must support:
+
+* preserving the original duration
+* shortening the original video
+* extending the video with supporting visuals or narration
+* creating a target-duration version
+* rejecting impossible duration requests when no valid content extension is available
+
+---
+
+# 18. EXPLICIT DURATION TOLERANCE
+
+Define:
+
+R = requested duration in seconds
+
+A = actual duration
+
+D = A - R
+
+E = abs(D) / R
+
+Default tolerance:
+
+allowedTolerance =
+min(
+max(R × 0.02, 2),
+5
+)
+
+Therefore:
+
+50 sec → ±2 sec tolerance
+60 sec → ±2 sec
+120 sec → ±2.4 sec
+300 sec → ±5 sec
+600 sec → ±5 sec
+1800 sec → ±5 sec
+3600 sec → ±5 sec
+
+BUT the product minimum overrides undershoot tolerance for the minimum request.
+
+For requested 50 seconds:
+
+A MUST be >= 50 seconds.
+
+Therefore:
+
+Requested = 50
+Actual = 49.5
+
+MUST FAIL.
+
+Requested = 50
+Actual = 50
+
+PASS.
+
+Requested = 50
+Actual = 51.5
+
+PASS.
+
+Requested = 50
+Actual = 52.1
+
+FAIL if outside configured maximum overshoot tolerance.
+
+The actual media file is always the source of truth.
+
+---
+
+# 19. DURATION VALIDATION FIELDS
+
+Persist:
+
+requestedDurationSeconds
+actualDurationSeconds
+durationDifferenceSeconds
+durationDifferencePercent
+allowedToleranceSeconds
+durationValidationStatus
+durationValidationReason
+
+Example:
+
+{
+"requestedDurationSeconds": 50,
+"actualDurationSeconds": 50.7,
+"durationDifferenceSeconds": 0.7,
+"durationDifferencePercent": 1.4,
+"allowedToleranceSeconds": 2,
+"durationValidationStatus": "PASS"
+}
+
+---
+
+# 20. CURRENT 46.3-SECOND BUG
+
+There was a verified result:
+
+REQUESTED = 50 seconds
+
+ACTUAL = 46.3 seconds
+
+This is NOT successful.
+
+Do not modify database metadata.
+
+Do not round 46.3 to 50.
+
+Do not fake duration.
+
+Fix the actual generation pipeline.
+
+The final media must be regenerated until the actual media satisfies the requirement.
+
+This rule applies to both:
+
+* generated videos
+* modified uploaded videos
+
+---
+
+# 21. DURATION-AWARE SCRIPTING
+
+The LLM must receive requestedDuration.
+
+Generate enough meaningful narration for the target duration.
+
+Do not depend only on character count.
+
+Use the actual TTS duration as authoritative.
+
+Workflow:
+
+SCRIPT
+↓
+TTS
+↓
+measure actual WAV
+↓
+compare to target
+↓
+adjust script if necessary
+↓
+TTS again
+↓
+build scenes
+
+For uploaded videos, use:
+
+SOURCE VIDEO SEGMENTS
+↓
+measure selected duration
+↓
+compare to target
+↓
+add or remove valid segments
+↓
+add supporting visuals or narration if authorized
+↓
+render
+↓
+measure final output
+
+Do not use silent filler to satisfy duration.
+
+---
+
+# 22. SCENE-BASED CINEMATIC GENERATION
+
+Do not render one static image for the entire video.
+
+Every video must have a real scene timeline.
+
+For uploaded videos, scenes may contain:
+
+* original video segment
+* generated visual
+* photo
+* title card
+* transition
+* overlay
+* narration
+* music
+* SFX
+
+Example:
+
+00:00–00:05
+Cinematic hook
+
+00:05–00:12
+Introduction
+
+00:12–00:22
+Main concept
+
+00:22–00:32
+Visual example
+
+00:32–00:42
+Activity/demo
+
+00:42–00:50+
+Recap + CTA
+
+Long videos must contain multiple sections.
+
+Each scene must contain:
+
+sceneId
+start
+end
+duration
+narration
+visual
+camera
+transition
+music
+sfx
+asset
+sourceType
+sourceStart
+sourceEnd
+status
+
+---
+
+# 23. CINEMATIC DIRECTOR
+
+The cinematic agent must plan real filmmaking elements.
+
+For each scene determine:
+
+* shot type
+* camera angle
+* camera movement
+* framing
+* depth
+* lighting
+* color treatment
+* environment
+* subject position
+* transition
+* pacing
+* emotional tone
+
+For uploaded video, the agent may recommend:
+
+* crop
+* reframing
+* zoom
+* pan
+* stabilization
+* speed adjustment
+* color grade
+* transition
+* source segment selection
+
+Supported shot concepts:
+
+* wide shot
+* medium shot
+* close-up
+* extreme close-up
+* over-the-shoulder
+* tracking
+* pan
+* tilt
+* zoom
+* push-in
+* pull-out
+* establishing shot
+* reaction shot
+* detail shot
+
+Do not simply place random images or video segments sequentially.
+
+The sequence must tell a coherent story.
+
+---
+
+# 24. VISUAL CONTINUITY
+
+The Asset Agent and Cinematic Director must maintain:
+
+* character consistency
+* environment consistency
+* clothing consistency where relevant
+* object continuity
+* color/mood continuity
+* scene-to-scene logical continuity
+* continuity between uploaded footage and generated visuals
+
+For unavailable advanced ML features, report:
+
+BLOCKED_EXTERNAL_SETUP
+
+or
+
+MODEL_NOT_AVAILABLE
+
+Do not fake consistency.
+
+---
+
+# 25. LOCAL IMAGE GENERATION
+
+Use local/open-source image generation where infrastructure supports it.
+
+The architecture must allow:
+
+prompt
+negativePrompt
+width
+height
+seed
+model
+steps
+guidance
+
+Store generated assets.
+
+Do not claim an image was AI-generated if generation failed.
+
+If no local image model is installed:
+
+ASSET_GENERATION_UNAVAILABLE
+
+instead of fake success.
+
+---
+
+# 26. LOCAL VIDEO GENERATION
+
+Where practical, support local/open-source video models.
+
+If unavailable:
+
+fall back to legitimate cinematic motion using:
+
+* real generated images
+* uploaded video footage
+* pan
+* zoom
+* camera simulation
+* transitions
+* overlays
+* particles
+* motion effects
+* FFmpeg
+
+This is still a real video pipeline.
+
+Do not call it AI-generated video if only FFmpeg composition was used.
+
+---
+
+# 27. MUSIC
+
+Use:
+
+* locally available royalty-safe music
+* generated/local music where available
+* project-owned music
+* user-uploaded music where authorized
+
+Track:
+
+musicSource
+musicFile
+license
+duration
+
+Automatically duck music under narration or original speech.
+
+Speech must remain intelligible.
+
+---
+
+# 28. SOUND EFFECTS
+
+Allow scene-specific:
+
+* footsteps
+* ambience
+* transitions
+* educational effects
+* playful sounds
+* environmental sounds
+* cinematic impacts
+
+Keep SFX levels controlled.
+
+Do not overwhelm narration or original video audio.
+
+---
+
+# 29. SUBTITLES
+
+Generate real subtitles from actual narration, original speech, or uploaded-video transcription.
+
+Support:
+
+* Bengali
+* English
+* bilingual mode
+
+Create:
+
+SRT/VTT
+
+and optionally burn subtitles into the final video.
+
+Subtitle timing must come from real audio/transcript timing.
+
+---
+
+# 30. REAL AUDIO/VIDEO SYNCHRONIZATION
+
+The final video must synchronize:
+
+* narration
+* original video audio
+* scene timing
+* visuals
+* music
+* SFX
+* subtitles
+
+Do not stretch audio unnaturally simply to satisfy duration.
+
+Do not create silent filler.
+
+If original video audio is retained, preserve synchronization with the original footage.
+
+---
+
+# 31. ASYNC JOB SYSTEM
+
+Long videos and uploaded-video modifications MUST NOT depend on one HTTP request.
+
+Create persistent jobs:
+
+VIDEO_JOB
+
+Statuses:
+
+PENDING
+QUEUED
+RUNNING
+MEDIA_ANALYSIS
+SCRIPT_GENERATION
+STT
+VIDEO_ANALYSIS
+TTS_GENERATION
+ASSET_GENERATION
+VIDEO_MODIFICATION
+SCENE_BUILD
+VIDEO_RENDER
+ENCODING
+QA
+STORAGE
+COMPLETED
+FAILED
+CANCELLED
+
+Persist every transition.
+
+---
+
+# 32. REAL PROGRESS
+
+Progress must represent actual completed work.
+
+Example:
+
+5% Job created
+10% Media analyzed
+20% Transcript complete
+30% Script or modification plan complete
+40% TTS/audio processing complete
+50% Source segments and assets complete
+65% Scenes prepared
+80% Rendering
+90% Encoding
+95% QA
+100% Completed
+
+Never use a fake timer to simulate progress.
+
+---
+
+# 33. RETRIES
+
+Implement real retry behavior.
+
+Maximum duration-correction attempts:
+
+3
+
+If still invalid:
+
+FAILED
+
+errorCode:
+
+DURATION_CORRECTION_FAILED
+
+Other failures must have meaningful error codes.
+
+For uploaded-video modification failures, use meaningful codes such as:
+
+VIDEO_INPUT_INVALID
+VIDEO_CODEC_UNSUPPORTED
+VIDEO_AUDIO_MISSING
+VIDEO_MODIFICATION_FAILED
+SOURCE_SEGMENT_INVALID
+VIDEO_RENDER_FAILED
+VIDEO_QA_FAILED
+
+---
+
+# 34. FINAL FFMPEG PIPELINE
+
+Preserve the existing real FFmpeg implementation.
+
+The final pipeline should create:
+
+MP4
+H.264 video
+AAC audio
+
+Target example:
+
+1920x1080
+30fps
+
+unless the user selects another supported format.
+
+Do not move, fake, or replace working FFmpeg logic unnecessarily.
+
+For uploaded videos, use FFmpeg for real operations such as:
+
+* trim
+* concat
+* crop
+* scale
+* pad
+* overlay
+* drawtext
+* subtitles
+* fade
+* color adjustment
+* audio mixing
+* loudness normalization
+* speed adjustment
+* transitions
+* format conversion
+
+---
+
+# 35. FINAL FFMPEG/FFPROBE QA
+
+Every completed file must be inspected using ffprobe or equivalent.
+
+Verify:
+
+* file exists
+* file readable
+* MP4 container
+* H.264
+* AAC
+* actual duration
+* width
+* height
+* FPS
+* video stream
+* audio stream
+* audio duration
+* file size
+* bitrate where available
+* subtitle stream where applicable
+* source-video segments used where applicable
+* no unexpected black frames
+* no unexpected silent sections
+* no corrupted frames
+
+The final media file is the source of truth.
+
+---
+
+# 36. STRICT COMPLETION RULE
+
+If:
+
+actualDuration < requestedDuration
+
+and the requirement is not satisfied by the configured product tolerance:
+
+STATUS = FAILED
+
+Never:
+
+STATUS = COMPLETED
+
+Do not modify:
+
+actualDuration
+
+Do not use:
+
+requestedDuration
+
+as the actual duration.
+
+This applies to generated videos and modified uploaded videos.
+
+---
+
+# 37. MEDIA METADATA
+
+Persist:
+
+id
+jobId
+userId
+campaignId
+contentId
+requestedDuration
+actualDuration
+status
+provider
+llmProvider
+sttProvider
+ttsProvider
+imageProvider
+videoProvider
+videoAnalysisProvider
+videoEditingProvider
+musicProvider
+storagePath
+originalVideoPath
+modifiedVideoPath
+originalAudioPath
+fileSize
+width
+height
+fps
+videoCodec
+audioCodec
+mimeType
+originalVideoDuration
+modifiedVideoDuration
+modificationMode
+modificationInstructions
+sourceSegments
+transcriptPath
+subtitlePath
+errorCode
+errorMessage
+createdAt
+completedAt
+
+Every field must contain truthful data.
+
+---
+
+# 38. ACTUAL USER ACCESS
+
+After completion provide:
+
+* playable video
+* actual stored file
+* video URL/path
+* duration
+* resolution
+* FPS
+* file size
+* generation status
+* modification summary
+* original-video reference where applicable
+
+The playback URL must point to the actual generated or modified file.
+
+---
+
+# 39. RESOURCE MANAGEMENT
+
+Before long jobs, check:
+
+CPU
+RAM
+GPU if available
+disk
+temporary storage
+expected processing time
+
+If resources are insufficient:
+
+INSUFFICIENT_RESOURCES
+
+Do not start a guaranteed failure.
+
+For long videos use:
+
+* chunking
+* scene-level processing
+* temporary files
+* cleanup
+* resumable jobs where practical
+
+---
+
+# 40. SAFE TEMPORARY FILE CLEANUP
+
+Clean:
+
+* WAV intermediates
+* extracted audio
+* generated temporary images
+* extracted keyframes
+* scene files
+* FFmpeg intermediates
+* temporary subtitle files
+* temporary proxy videos
+
+Never delete:
+
+* original uploaded video
+* original uploaded audio
+* final stored media
+* required audit metadata
+
+On failure, clean temporary resources safely.
+
+---
+
+# 41. DATABASE INTEGRITY
+
+Use real migrations.
+
+Verify:
+
+* foreign keys
+* indexes
+* status enums
+* nullable fields
+* unique job IDs
+* transaction safety
+* retry safety
+* original/modified media relationships
+* source-segment relationships
+
+Do not create duplicate jobs when workers restart.
+
+---
+
+# 42. EXISTING REAL FEATURES MUST REMAIN WORKING
+
+Do not break:
+
+* Content Opportunity Score
+* Hook A/B Testing
+* Content Generation
+* Protective Mode
+* Image Generation
+* Bengali TTS
+* FFmpeg video generation
+* Growth Loop Dashboard
+* existing 24 sections
+* existing database models
+* real zai-llm integration
+
+Audit before changing anything.
+
+Fix existing code instead of replacing working systems unnecessarily.
+
+---
+
+# 43. GROWTH LOOP
+
+After successful video creation or modification:
+
+CONTENT RESEARCH
+→ OPPORTUNITY SCORE
+→ SCRIPT
+→ VIDEO GENERATION OR VIDEO MODIFICATION
+→ QA
+→ READY_TO_PUBLISH
+→ PUBLISH
+→ REAL METRICS
+→ LEARNING
+→ NEXT CONTENT
+
+The Learning Agent must feed useful historical data into future LLM generation.
+
+---
+
+# 44. PUBLISHING
+
+If OAuth/API credentials exist:
+
+perform real publishing.
+
+If not:
+
+EXTERNAL_SETUP_REQUIRED
+
+Never create fake publishing results.
+
+---
+
+# 45. SOCIAL METRICS
+
+If social APIs are connected:
+
+retrieve real metrics.
+
+If not:
+
+NOT_CONNECTED
+
+Never invent:
+
+views
+likes
+followers
+reach
+engagement
+conversion
+
+---
+
+# 46. FACE CONSISTENCY
+
+If a required face/character model is unavailable:
+
+BLOCKED_EXTERNAL_SETUP
+
+Do not claim successful face consistency.
+
+For uploaded videos, do not alter or replace a person's face unless the user is authorized and the operation is explicitly requested.
+
+---
+
+# 47. OBSERVABILITY
+
+Log:
+
+job ID
+agent
+step
+provider
+model
+duration
+input size
+output size
+source video path identifier
+source segments
+errors
+retry count
+resource usage where available
+
+Provide useful error messages.
+
+Never expose secrets in logs.
+
+---
+
+# 48. SECURITY
+
+Protect:
+
+* uploaded audio
+* uploaded video
+* generated media
+* user files
+* authentication
+* API keys
+* local model configuration
+
+Never log:
+
+API keys
+passwords
+tokens
+private credentials
+
+Validate all uploaded files.
+
+Limit:
+
+file size
+audio duration
+video duration
+malicious filenames
+unsupported codecs
+unsafe paths
+
+Prevent path traversal.
+
+Do not process files outside approved storage directories.
+
+---
+
+# 49. END-TO-END TEST 1 — BABY/MOTHER VOICE
+
+Use an authorized test voice recording.
+
+Example concept:
+
+"আজ আমরা বাচ্চাকে লাল, নীল আর হলুদ রং শেখাবো।"
+
+Requested duration:
+
+50 seconds
+
+Pipeline:
+
+REAL AUDIO
+→ STT
+→ SCRIPT
+→ CINEMATIC STORYBOARD
+→ VISUAL ASSETS
+→ VOICE
+→ MUSIC
+→ SFX
+→ SUBTITLES
+→ FFMPEG
+→ MP4
+→ FFPROBE
+
+Verify:
+
+actualDuration >= 50 sec
+
+and:
+
+H.264
+AAC
+1920x1080
+30fps
+real audio
+real file
+real storage
+real database record
+
+Only then:
+
+COMPLETED
+
+---
+
+# 50. END-TO-END TEST 2 — UPLOADED VIDEO MODIFICATION
+
+Use an authorized test video recording.
+
+Requested modification:
+
+* remove silent opening
+* improve audio
+* apply cinematic color treatment
+* add Bengali subtitles
+* add background music
+* preserve original speech
+* create a 50-second final video
+
+Pipeline:
+
+UPLOADED VIDEO
+→ VALIDATE
+→ FFPROBE
+→ EXTRACT AUDIO
+→ STT
+→ SCENE ANALYSIS
+→ MODIFICATION PLAN
+→ SOURCE SEGMENT SELECTION
+→ AUDIO CLEANUP
+→ COLOR/VIDEO EDITING
+→ SUBTITLES
+→ MUSIC
+→ FFMPEG
+→ MP4
+→ FFPROBE
+
+Verify:
+
+* original video remains stored
+* modified video is a separate file
+* source segments are recorded
+* actual duration satisfies the request
+* original speech is preserved
+* subtitles are based on real transcription
+* music is below speech
+* final file is playable
+* final file is stored
+* database metadata is truthful
+
+Only then:
+
+COMPLETED
+
+---
+
+# 51. END-TO-END TEST 3
+
+Requested:
+
+5 minutes
+
+Generate or modify an actual 5-minute video.
+
+Verify using ffprobe.
+
+Do not use database metadata as proof.
+
+---
+
+# 52. LONG-DURATION TESTS
+
+Where infrastructure permits, test:
+
+10 minutes
+30 minutes
+60 minutes
+
+If the environment cannot complete them within practical limits:
+
+report:
+
+ARCHITECTURE_SUPPORTED
+TEST_NOT_COMPLETED
+
+and provide the exact limitation.
+
+Never claim a test passed when it was not executed.
+
+---
+
+# 53. FAILURE TEST
+
+Intentionally test:
+
+Requested = 50 seconds
+
+Generated or modified = 46.3 seconds
+
+Expected:
+
+FAILED
+
+errorCode:
+
+DURATION_REQUIREMENT_NOT_MET
+
+Then verify automatic correction/regeneration.
+
+---
+
+# 54. DURATION TEST MATRIX
+
+Test:
+
+50 → 46.3 = FAIL
+
+50 → 49.5 = FAIL
+
+50 → 50 = PASS
+
+50 → 51.5 = PASS
+
+50 → 52.1 = according to configured tolerance
+
+120 → 118 = PASS if within configured tolerance
+
+300 → 295 = PASS
+
+300 → 294.9 = FAIL if outside configured tolerance
+
+600 → 605 = PASS
+
+600 → 605.1 = FAIL if outside configured tolerance
+
+3600 → 3595 = PASS
+
+3600 → 3594.9 = FAIL if outside configured tolerance
+
+<50 = REJECT
+
+> 3600 = REJECT
+
+Do not round failing values into passing values.
+
+---
+
+# 55. TEST VOICE MODES
+
+Test:
+
+A. original uploaded voice
+
+B. cleaned original voice
+
+C. local synthetic voice
+
+D. no voice → local TTS
+
+Every result must identify the actual voice mode.
+
+---
+
+# 56. TEST VIDEO MODIFICATION MODES
+
+Test:
+
+A. trim and crop
+
+B. audio cleanup
+
+C. subtitle generation
+
+D. cinematic color treatment
+
+E. music and SFX mixing
+
+F. source-video segment selection
+
+G. uploaded video plus generated supporting visuals
+
+H. uploaded video converted to vertical format
+
+I. uploaded video converted to a target duration
+
+Every result must identify the actual modification operations performed.
+
+---
+
+# 57. TEST CINEMATIC QUALITY
+
+Verify:
+
+* no frozen frame unexpectedly
+* no black filler
+* no broken scene
+* no missing asset
+* no abrupt audio cut
+* no corrupted MP4
+* no subtitle overflow
+* narration understandable
+* original speech understandable where retained
+* music below narration
+* scene transitions logical
+* visual story matches narration
+* uploaded source footage is used correctly
+* generated visuals are clearly tracked
+* no unexpected source-video replacement
+
+---
+
+# 58. NO FAKE FEATURES
+
+Never implement:
+
+fake progress
+fake generation
+fake video URL
+fake database records
+fake metrics
+fake publishing
+fake AI response
+fake duration
+fake voice
+fake model status
+fake completion
+fake video modification
+fake source-video usage
+fake cinematic processing
+
+If a capability is unavailable:
+
+report it honestly.
+
+---
+
+# 59. FINAL STATUS CATEGORIES
+
+Every feature must be categorized as exactly one of:
+
+## VERIFIED REAL
+
+Actually executed successfully.
+
+## FIXED
+
+Previously broken but now actually repaired and tested.
+
+## PARTIAL
+
+Some parts work but complete production functionality is not verified.
+
+## BLOCKED_EXTERNAL_SETUP
+
+Requires external credential/model/integration.
+
+## NOT_CONNECTED
+
+Integration exists but is not connected.
+
+## NOT_VERIFIED
+
+Architecture exists but complete execution has not been tested.
+
+## FAILED
+
+Execution was attempted and failed.
+
+## INFRASTRUCTURE_LIMITATION
+
+Cannot currently run because of CPU/RAM/GPU/storage/time limitations.
+
+---
+
+# 60. FINAL REPORT
+
+At the end of implementation produce a factual report containing:
+
+### VERIFIED REAL
+
+List only features actually executed.
+
+### FIXED
+
+List actual corrections.
+
+### PARTIAL
+
+Explain exactly what works and what does not.
+
+### BLOCKED_EXTERNAL_SETUP
+
+List required credentials/models.
+
+### NOT_CONNECTED
+
+List integrations not configured.
+
+### NOT_VERIFIED
+
+List tests not executed.
+
+### INFRASTRUCTURE LIMITATIONS
+
+Give actual limitations.
+
+### TEST RESULTS
+
+Show:
+
+requested duration
+actual duration
+duration validation
+codec
+resolution
+FPS
+audio
+storage
+database
+status
+
+### VIDEO MODIFICATION RESULTS
+
+Show:
+
+original video path
+modified video path
+original duration
+modified duration
+modification mode
+source segments used
+audio mode
+subtitle mode
+music source
+visual source
+codec
+resolution
+FPS
+QA result
+
+### VIDEO PIPELINE
+
+Show:
+
+Voice/Video Input
+→ Validation
+→ Media Analysis
+→ STT
+→ Script or Modification Plan
+→ Storyboard
+→ Source Segments
+→ Assets
+→ TTS/Original Voice
+→ Music
+→ SFX
+→ Subtitles
+→ Video Modification
+→ FFmpeg
+→ ffprobe
+→ Storage
+
+---
+
+# 61. ABSOLUTE RULES
+
+RULE 1:
+
+REAL IMPLEMENTATION > UI APPEARANCE
+
+RULE 2:
+
+REAL FILE > DATABASE METADATA
+
+RULE 3:
+
+REAL TEST > CODE EXISTENCE
+
+RULE 4:
+
+FAILED > FAKE SUCCESS
+
+RULE 5:
+
+NOT_CONNECTED > FAKE DATA
+
+RULE 6:
+
+NOT_VERIFIED > FALSE CLAIM
+
+RULE 7:
+
+LOCAL/OPEN-SOURCE > MANDATORY PAID API
+
+RULE 8:
+
+ORIGINAL VOICE MUST BE DISTINGUISHED FROM SYNTHETIC VOICE
+
+RULE 9:
+
+UPLOADED VIDEO MUST BE PRESERVED AND MUST NOT BE SILENTLY OVERWRITTEN
+
+RULE 10:
+
+MODIFIED VIDEO MUST BE STORED AS A SEPARATE OUTPUT
+
+RULE 11:
+
+SOURCE VIDEO USAGE MUST BE RECORDED TRUTHFULLY
+
+RULE 12:
+
+Do not claim a model is local unless it actually runs locally.
+
+RULE 13:
+
+Do not claim 60-minute generation or modification is verified unless an actual 60-minute file has been generated or modified and inspected.
+
+RULE 14:
+
+Do not claim cinematic AI video if the implementation only creates a slideshow or applies basic FFmpeg effects. Describe the actual technology used.
+
+RULE 15:
+
+Do not use black frames, silent filler, fake metadata, or duration manipulation to pass QA.
+
+RULE 16:
+
+Do not claim uploaded-video modification succeeded unless the modified file was actually rendered, stored, and inspected.
+
+---
+
+# FINAL DEFINITION OF DONE
+
+A user can provide an authorized real voice recording, audio file, or video recording.
+
+The system can validate and understand it.
+
+The system can create a real script or a real video modification plan.
+
+The system can create a cinematic storyboard.
+
+The system can use uploaded video footage as source material.
+
+The system can trim, crop, enhance, restructure, subtitle, color-correct, add music, add SFX, and otherwise modify uploaded video using real processing.
+
+The system can create or obtain real visual assets using available local/open-source capabilities.
+
+The system can use the original voice or an authorized synthetic/local voice.
+
+The system can add real music, SFX and subtitles.
+
+The system can render a real cinematic MP4.
+
+The system can support:
+
+50 seconds → 60 minutes.
+
+The backend uses an asynchronous job.
+
+The actual media is validated with ffprobe.
+
+The actual duration satisfies the requested duration rules.
+
+The original uploaded video remains preserved.
+
+The modified video is stored separately.
+
+The database contains truthful metadata.
+
+The user can play/access the actual video.
+
+No mandatory paid API is required for the core pipeline.
+
+Unavailable external capabilities are reported honestly.
+
+Existing real features remain functional.
+
+Only then is the system considered COMPLETE.

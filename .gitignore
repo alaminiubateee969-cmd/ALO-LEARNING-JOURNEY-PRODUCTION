@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Production
+build/
+
+# Environment
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Database
+db/
+*.db
+*.db-journal
+
+# Logs
+*.log
+dev.log
+server.log
+
+# Storage (generated media — don't commit large binaries)
+storage/videos/
+storage/backups/
+storage/scene-assets/
+storage/uploads/
+public/generated/
+
+# Misc
+.DS_Store
+*.pem
+*.key
+.vscode/
+.idea/
+
+# Keep .env.example
+!.env.example
+skills/

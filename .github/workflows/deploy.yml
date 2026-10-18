@@ -1,0 +1,54 @@
+name: Deploy to Production VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            set -e
+            cd /home/aloedu/learn-app
+
+            # Backup current release
+            cp .env /tmp/alo-env-backup-$(date +%s)
+            cp -r .next /tmp/alo-next-backup-$(date +%s) 2>/dev/null || true
+
+            # Pull latest
+            git fetch origin main
+            git checkout main
+            git pull origin main
+
+            # Install dependencies
+            bun install --frozen-lockfile
+
+            # Generate Prisma client
+            bunx prisma generate
+
+            # Run safe migrations
+            bunx prisma migrate deploy
+
+            # Build
+            bun run build:prod
+
+            # Restart application
+            pm2 restart alo-learning-journey || pm2 start "bun run start:prod" --name alo-learning-journey
+
+            # Health check
+            sleep 5
+            curl -sf http://localhost:3017/api/health || (echo "HEALTH CHECK FAILED" && exit 1)
