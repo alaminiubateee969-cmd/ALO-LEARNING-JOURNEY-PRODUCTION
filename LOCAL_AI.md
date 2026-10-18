@@ -28,6 +28,81 @@ current runtime or production availability.
 
 `GET /api/ai/local-status` reports local model/binary availability from configuration and includes a static `noPaidApis` note; it does not measure provider billing or independently prove that a configured service is local. The inspected media adapter calls are to private Ollama/ComfyUI URLs guarded by `getPrivateLocalBaseUrl`. This statement is source-level only. SMS OTP is a separate external service and may require `HTTPSMS_API_KEY`; the optional Inkbox adapter is also separate. Neither integration is AI-provider verification.
 
+## Optional direct external free providers — off by default
+
+A minimal direct adapter (`src/lib/external-ai.ts`) calls a small hardcoded
+registry of OpenAI-compatible free-tier providers directly — Groq, LLM7,
+OpenCode Zen, and OpenRouter — as a fallback when the local Ollama model is
+unavailable. This is deliberately **not** a gateway/router service (no
+OmniRoute, no running catalog, no cookie/OAuth-session reuse, no credential
+store beyond env keys):
+
+| Provider | Endpoint (hardcoded) | Free key | Default model | Free-only guard |
+|---|---|---|---|---|
+| Groq | `api.groq.com/openai/v1/chat/completions` | console.groq.com | `llama-3.3-70b-versatile` | no-billing key spends free quota only |
+| LLM7 | `api.llm7.io/v1/chat/completions` | token.llm7.io | `default` | `pro` selector blocked (paid) |
+| OpenCode Zen | `opencode.ai/zen/v1/chat/completions` | opencode.ai/auth | `big-pickle` | only `big-pickle` / `*-free` models |
+| OpenRouter | `openrouter.ai/api/v1/chat/completions` | openrouter.ai/settings/keys | `openrouter/free` | only `openrouter/free` / `*:free` models |
+| OmniRoute (yours) | `127.0.0.1:20128/v1` (env: `OMNIROUTE_BASE_URL`) | your OmniRoute dashboard | `auto` | owner-gateway — routes per your OmniRoute config |
+| Custom gateway | your `baseUrl` + `/chat/completions` | your gateway | your model | owner-gateway — you vouch for it |
+
+- **Fail-closed:** runs only when `ALO_PAID_AI_API_ALLOWED=true` **and**
+  `ALO_OWNER_APPROVED_PAID_AI_API=true` **and** at least one provider key is
+  set. Defaults are all off, so a fresh deploy makes zero external AI calls.
+- **Chain:** configured providers are tried in `ALO_EXTERNAL_AI_PROVIDERS`
+  order (default: direct free providers first, scarcest quota last, then
+  owner gateways — OmniRoute, then custom providers in JSON order);
+  the first success wins and is labelled `<provider>:<model>` in results.
+- **Allowlist (code-enforced in `src/lib/ai.ts`):** only non-personal,
+  topic-driven content drafts — `generateIdeas`, `generateContentPackage`,
+  `scoreContentOpportunity`, `generateHookVariants`, `generateContentBrief`.
+  Comments, protective review, command parsing, narration/song/email drafts
+  (writer→critic→finalist pipeline), images, voice, and video stay local-only.
+- **Guards:** built-in endpoints are not env-configurable, model names must
+  match a strict pattern plus the per-provider free-only guard above,
+  prompts are capped at 24,000 chars, and provider error bodies / API keys
+  are never returned or logged. Gateway endpoints are the exception — see
+  the owner-gateway rules below.
+- **Data rule:** never enable this for student, family, comment, OTP, or
+  admissions data. Drafts still require human review. Free model catalogs
+  rotate often (especially OpenRouter `:free` and Zen `*-free`) — if a model
+  disappears, set the provider's `*_MODEL` env to a current free ID from the
+  provider's live model list; each provider's pricing, limits, retention,
+  and terms are the operator's responsibility to re-check.
+- **Setup (owner only):** set any subset of `GROQ_API_KEY`, `LLM7_API_KEY`,
+  `OPENCODE_API_KEY`, `OPENROUTER_API_KEY` (each optionally with its
+  `*_MODEL`), set both switches to `true`, and optionally order providers
+  with `ALO_EXTERNAL_AI_PROVIDERS`. `GET /api/ai/local-status` reports
+  `external: { enabled, configured, order, providers[] }` (never any key).
+  Remove a key, or set either switch to `false`, to disable instantly.
+
+### Adding a provider like OmniRoute (owner gateways)
+
+Two ways, both **server-env only** — the dashboard/API can never add one:
+
+1. **OmniRoute (first-class):** run OmniRoute yourself (e.g.
+   `docker run … diegosouzapw/omniroute`, dashboard at
+   `http://127.0.0.1:20128`), create an API key in its dashboard, then set
+   `OMNIROUTE_API_KEY=…` (optionally `OMNIROUTE_MODEL=auto` or a specific
+   model, and `OMNIROUTE_BASE_URL` if it is not local). It joins the chain
+   after the direct providers; put it first with
+   `ALO_EXTERNAL_AI_PROVIDERS=omniroute,groq,…` if you prefer it.
+2. **Any OpenAI-compatible gateway:** declare up to 5 in one env var —
+   `ALO_CUSTOM_AI_PROVIDERS_JSON=[{"id":"my-gateway","baseUrl":"https://llm.example.com/v1","apiKeyEnv":"MY_GATEWAY_API_KEY","model":"best-free"}]`
+   — then set `MY_GATEWAY_API_KEY=…`. The `id` is yours to choose
+   (lowercase letters/digits/dashes), and the custom provider joins the
+   chain under that id.
+
+Gateway guards: plain `http` is accepted **only** for loopback/private
+hosts (public gateways must be `https`); URLs with embedded credentials,
+queries, or fragments are rejected; literal keys inside the JSON are
+rejected (env-name references only); malformed entries are skipped, never
+fatal. ⚠️ **Trust warning:** a gateway routes onward to whatever *its*
+operator configured — ALO cannot verify a gateway stays free, keeps data
+in any jurisdiction, or honours any retention promise. Only add gateways
+you operate or fully trust, keep them on the same non-personal allowlist,
+and remember the draft outputs still require human review.
+
 ## Text and Bengali copy
 
 1. Install Ollama on the application machine or an isolated private-network host.
