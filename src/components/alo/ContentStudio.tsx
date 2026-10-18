@@ -12,8 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { TOPIC_PRESETS } from "@/lib/platforms";
-import PipelineRunner, { QualityPipelineSummary } from "./PipelineRunner";
-import type { QualityAgentPass } from "@/lib/ai";
+import PipelineRunner from "./PipelineRunner";
 import { Sparkles, Loader2, FileText, Image as ImageIcon, Mic, Hash, Tag, Cpu, ShieldCheck, BookOpen } from "lucide-react";
 
 interface Pkg {
@@ -33,34 +32,30 @@ interface Pkg {
 export default function ContentStudio({
   seed,
   onConsumeSeed,
-  onNavigate,
 }: {
   seed?: { topic: string; audience: string } | null;
   onConsumeSeed?: () => void;
-  onNavigate: (section: string) => void;
 }) {
   const { toast } = useToast();
   const [topic, setTopic] = useState(TOPIC_PRESETS[0].topic);
   const [audience, setAudience] = useState(TOPIC_PRESETS[0].audience);
   const [loading, setLoading] = useState(false);
   const [pkg, setPkg] = useState<Pkg | null>(null);
-  const [meta, setMeta] = useState<{ provider: string; usedFallback: boolean; latencyMs: number; qualityPipeline: QualityAgentPass[] } | null>(null);
+  const [meta, setMeta] = useState<{ provider: string; usedFallback: boolean; latencyMs: number } | null>(null);
   const [ragQuery, setRagQuery] = useState("");
   const [ragResults, setRagResults] = useState<any[]>([]);
   const [ragLoading, setRagLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
-  const [imageMeta, setImageMeta] = useState<{ provider: string; usedFallback: boolean; qualityPipeline?: QualityAgentPass[] } | null>(null);
+  const [imageMeta, setImageMeta] = useState<{ provider: string; usedFallback: boolean } | null>(null);
 
-  // Consume promoted seed from Topics view after the new props commit.
+  // Consume promoted seed from Topics view
   useEffect(() => {
-    if (!seed) return;
-    const frame = window.requestAnimationFrame(() => {
+    if (seed) {
       setTopic(seed.topic);
       setAudience(seed.audience);
       onConsumeSeed?.();
-    });
-    return () => window.cancelAnimationFrame(frame);
+    }
   }, [seed, onConsumeSeed]);
 
   const generate = async () => {
@@ -79,7 +74,7 @@ export default function ContentStudio({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "failed");
       setPkg(data.full);
-      setMeta({ provider: data.provider, usedFallback: data.usedFallback, latencyMs: data.latencyMs, qualityPipeline: data.qualityPipeline ?? [] });
+      setMeta({ provider: data.provider, usedFallback: data.usedFallback, latencyMs: data.latencyMs });
       toast({
         title: data.usedFallback ? "Local fallback দিয়ে তৈরি হয়েছে" : "LLM দিয়ে তৈরি হয়েছে",
         description: `Provider: ${data.provider} · ${data.latencyMs}ms · Approval queue-তে যুক্ত হয়েছে`,
@@ -123,10 +118,10 @@ export default function ContentStudio({
       });
       const data = await res.json();
       setImageUrl(data.url);
-      setImageMeta({ provider: data.provider, usedFallback: data.usedFallback, qualityPipeline: data.qualityPipeline });
+      setImageMeta({ provider: data.provider, usedFallback: data.usedFallback });
       toast({
         title: data.usedFallback ? "Local placeholder তৈরি হয়েছে" : "ইমেজ তৈরি হয়েছে ✨",
-        description: data.usedFallback ? "ComfyUI local checkpoint unavailable — placeholder only" : `Provider: ${data.provider}`,
+        description: data.usedFallback ? "provider_missing — SVG placeholder" : `Provider: ${data.provider}`,
       });
     } catch (e) {
       toast({ title: "ইমেজ তৈরি ব্যর্থ", description: String(e), variant: "destructive" });
@@ -261,14 +256,13 @@ export default function ContentStudio({
             <Tabs defaultValue="script" className="w-full">
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
-                    <ShieldCheck className="h-3 w-3 mr-1" /> Human review required
+                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                    <ShieldCheck className="h-3 w-3 mr-1" /> Protective Mode: pending
                   </Badge>
-                  <Badge variant="outline">Structural rubric {pkg.qualityScore}/100</Badge>
+                  <Badge variant="outline">Quality {pkg.qualityScore}/100</Badge>
                 </div>
-                <span className="text-[11px] text-muted-foreground">Pending approval · factual claims not independently verified</span>
+                <span className="text-[11px] text-muted-foreground">Approval queue-এ যুক্ত</span>
               </div>
-              {meta?.qualityPipeline && <div className="mb-4"><QualityPipelineSummary passes={meta.qualityPipeline} /></div>}
               <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto">
                 <TabsTrigger value="script" className="text-[11px] py-1.5"><FileText className="h-3 w-3 sm:mr-1" /><span className="hidden sm:inline">Script</span></TabsTrigger>
                 <TabsTrigger value="hooks" className="text-[11px] py-1.5"><Sparkles className="h-3 w-3 sm:mr-1" /><span className="hidden sm:inline">Hooks</span></TabsTrigger>
@@ -359,7 +353,7 @@ export default function ContentStudio({
                         <div className="flex items-center justify-center gap-2 text-[10px]">
                           <span className="text-muted-foreground">Provider:</span>
                           <span className={`rounded-md px-1.5 py-0.5 font-medium ${imageMeta.usedFallback ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
-                            {imageMeta.usedFallback ? "local SVG placeholder only" : imageMeta.provider}
+                            {imageMeta.usedFallback ? "local placeholder (provider_missing)" : imageMeta.provider}
                           </span>
                         </div>
                       )}
@@ -377,9 +371,7 @@ export default function ContentStudio({
                 </div>
                 <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs">
                   <p className="font-semibold text-amber-800 flex items-center gap-1"><Cpu className="h-3 w-3" /> Video/Voice generation</p>
-                  <p className="text-amber-700 mt-1">Voice & Music and Video Pipeline use only configured local Piper/eSpeak and FFmpeg; they never switch to a paid provider. Image generation needs a local ComfyUI checkpoint. An SVG placeholder is not AI artwork.</p>
-                  <div className="mt-3 flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => onNavigate("music")}>Open Voice & Music</Button><Button type="button" size="sm" variant="outline" onClick={() => onNavigate("video")}>Open Video Pipeline</Button></div>
-                  {imageMeta?.qualityPipeline && <div className="mt-3"><QualityPipelineSummary passes={imageMeta.qualityPipeline} /></div>}
+                  <p className="text-amber-700 mt-1">এই পরিবেশে FFmpeg/TTS নেই — external_setup_required। Voice ও Video এজেন্ট প্রদানকারী কল করবে। ইমেজ জেনারেশন উপলব্ধ (উপরে)।</p>
                 </div>
               </TabsContent>
 

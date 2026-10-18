@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   LayoutDashboard, Brain, Sparkles, ClipboardCheck, BookOpen,
-  Send, BarChart3, Terminal, Users, Settings, Menu, Heart, ShieldCheck, Bell, MessageSquare, Lightbulb, GraduationCap, History, Database, Search, Command, Video, DollarSign, Calendar, Workflow, RefreshCw, Phone, TrendingUp, Mail, Megaphone, Code2, LogOut, Music2, Layers,
+  Send, BarChart3, Terminal, Users, Settings, Menu, Heart, ShieldCheck, Bell, MessageSquare, Lightbulb, GraduationCap, History, Database, Search, Command, Video, DollarSign, Calendar, Workflow, RefreshCw, Phone, TrendingUp, Mail, KeyRound, Mic, FileAudio, Image as ImageIcon, UserCircle,
 } from "lucide-react";
 import Dashboard from "@/components/alo/Dashboard";
 import AgentsView from "@/components/alo/AgentsView";
@@ -43,21 +43,21 @@ import GrowthLoopView from "@/components/alo/GrowthLoopView";
 import CommandCenterView from "@/components/alo/CommandCenterView";
 import SeoView from "@/components/alo/SeoView";
 import InkboxView from "@/components/alo/InkboxView";
-import AdmissionsCRMView from "@/components/alo/AdmissionsCRMView";
-import MarketingKitsView from "@/components/alo/MarketingKitsView";
-import ApiReferenceView from "@/components/alo/ApiReferenceView";
-import AudioStudioView from "@/components/alo/AudioStudioView";
-import DiagramStudioView from "@/components/alo/DiagramStudioView";
-import { signOut } from "next-auth/react";
+import CrmView from "@/components/alo/CrmView";
+import OtpView from "@/components/alo/OtpView";
+import VoiceStudioView from "@/components/alo/VoiceStudioView";
+import AsrView from "@/components/alo/AsrView";
+import ImageStudioView from "@/components/alo/ImageStudioView";
+import HumanAvatarView from "@/components/alo/HumanAvatarView";
 
 type Section =
-  | "dashboard" | "agents" | "loop" | "growth" | "command" | "seo" | "inkbox" | "topics" | "studio" | "approval" | "rag" | "crm"
-  | "social" | "analytics" | "comments" | "telegram" | "family" | "family-studio" | "marketing-kits"
-  | "history" | "video" | "music" | "diagrams" | "calendar" | "workflow" | "communications" | "learning" | "backups" | "publishing" | "costs" | "api-reference" | "settings";
+  | "dashboard" | "agents" | "loop" | "growth" | "command" | "seo" | "inkbox" | "topics" | "studio" | "approval" | "rag"
+  | "social" | "analytics" | "comments" | "telegram" | "family" | "family-studio"
+  | "history" | "video" | "calendar" | "workflow" | "communications" | "learning" | "backups" | "publishing" | "costs" | "crm"
+  | "otp" | "voice-studio" | "asr-studio" | "image-studio" | "human-avatars" | "settings";
 
 const NAV: { id: Section; label: string; bn: string; icon: React.ReactNode; group: string }[] = [
   { id: "dashboard", label: "Dashboard", bn: "ড্যাশবোর্ড", icon: <LayoutDashboard className="h-4 w-4" />, group: "Overview" },
-  { id: "crm", label: "Admissions CRM", bn: "এনকোয়ারি CRM", icon: <Users className="h-4 w-4" />, group: "Admissions" },
   { id: "agents", label: "AI Agents", bn: "এজেন্ট", icon: <Brain className="h-4 w-4" />, group: "Overview" },
   { id: "workflow", label: "Workflow", bn: "ওয়ার্কফ্লো", icon: <Workflow className="h-4 w-4" />, group: "Overview" },
   { id: "loop", label: "Loop AI", bn: "লুপ এআই", icon: <RefreshCw className="h-4 w-4" />, group: "Overview" },
@@ -72,7 +72,6 @@ const NAV: { id: Section; label: string; bn: string; icon: React.ReactNode; grou
   { id: "history", label: "Content History", bn: "ইতিহাস", icon: <History className="h-4 w-4" />, group: "Pipeline" },
   { id: "social", label: "Social", bn: "সংযোগ", icon: <Send className="h-4 w-4" />, group: "Distribution" },
   { id: "analytics", label: "Analytics", bn: "অ্যানালিটিক্স", icon: <BarChart3 className="h-4 w-4" />, group: "Distribution" },
-  { id: "marketing-kits", label: "Marketing Kits", bn: "মার্কেটিং কিট", icon: <Megaphone className="h-4 w-4" />, group: "Distribution" },
   { id: "comments", label: "Comments", bn: "মন্তব্য", icon: <MessageSquare className="h-4 w-4" />, group: "Distribution" },
   { id: "telegram", label: "Telegram", bn: "টেলিগ্রাম", icon: <Terminal className="h-4 w-4" />, group: "Distribution" },
   { id: "publishing", label: "Publishing Queue", bn: "প্রকাশনা", icon: <Send className="h-4 w-4" />, group: "Distribution" },
@@ -80,17 +79,19 @@ const NAV: { id: Section; label: string; bn: string; icon: React.ReactNode; grou
   { id: "communications", label: "Communications", bn: "যোগাযোগ", icon: <Phone className="h-4 w-4" />, group: "Distribution" },
   { id: "family", label: "Family Models", bn: "ক্যারেক্টার", icon: <Users className="h-4 w-4" />, group: "Media" },
   { id: "video", label: "Video Pipeline", bn: "ভিডিও", icon: <Video className="h-4 w-4" />, group: "Media" },
-  { id: "music", label: "Voice & Music", bn: "ভয়েস ও গান", icon: <Music2 className="h-4 w-4" />, group: "Media" },
-  { id: "diagrams", label: "Diagram & UI Studio", bn: "ডায়াগ্রাম ও বাটন", icon: <Layers className="h-4 w-4" />, group: "Media" },
   { id: "family-studio", label: "Family Studio", bn: "ফ্যামিলি", icon: <Heart className="h-4 w-4" />, group: "Media" },
-  { id: "learning", label: "Self-Learning", bn: "শেখা", icon: <GraduationCap className="h-4 w-4" />, group: "System" },
+  { id: "voice-studio", label: "Voice Studio", bn: "ভয়েস", icon: <Mic className="h-4 w-4" />, group: "Media" },
+  { id: "asr-studio", label: "ASR Studio", bn: "স্পিচ→টেক্সট", icon: <FileAudio className="h-4 w-4" />, group: "Media" },
+  { id: "image-studio", label: "Image Studio Pro", bn: "ইমেজ প্রো", icon: <ImageIcon className="h-4 w-4" />, group: "Media" },
+  { id: "human-avatars", label: "Human Avatars", bn: "হিউম্যান এজেন্ট", icon: <UserCircle className="h-4 w-4" />, group: "Media" },
+  { id: "otp", label: "OTP Service", bn: "ওটিপি", icon: <KeyRound className="h-4 w-4" />, group: "System" },
   { id: "costs", label: "Cost & Usage", bn: "খরচ", icon: <DollarSign className="h-4 w-4" />, group: "System" },
+  { id: "learning", label: "Self-Learning", bn: "শেখা", icon: <GraduationCap className="h-4 w-4" />, group: "System" },
   { id: "backups", label: "Backups", bn: "ব্যাকআপ", icon: <Database className="h-4 w-4" />, group: "System" },
-  { id: "api-reference", label: "API Reference", bn: "API নথি", icon: <Code2 className="h-4 w-4" />, group: "System" },
   { id: "settings", label: "Settings & Ops", bn: "সেটিংস", icon: <Settings className="h-4 w-4" />, group: "System" },
 ];
 
-const GROUPS = ["Overview", "Admissions", "Pipeline", "Distribution", "Media", "System"];
+const GROUPS = ["Overview", "Pipeline", "Distribution", "Media", "System"];
 
 function NavList({ active, onPick }: { active: Section; onPick: (s: Section) => void }) {
   return (
@@ -217,10 +218,7 @@ export default function Home() {
             </Button>
             <NotificationPanel />
             <ThemeToggle />
-            <Button variant="ghost" size="icon" className="h-8 w-8" title="Sign out" aria-label="Sign out" onClick={() => void signOut({ callbackUrl: "/login" })}>
-              <LogOut className="h-4 w-4" />
-            </Button>
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-amber-400 to-rose-400 flex items-center justify-center text-white text-xs font-bold" aria-label="ALO administrator">
+            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-amber-400 to-rose-400 flex items-center justify-center text-white text-xs font-bold">
               A
             </div>
           </div>
@@ -249,18 +247,16 @@ export default function Home() {
           </div>
           <div key={section} className="p-4 sm:p-6 max-w-7xl mx-auto alo-fade-up">
             {section === "dashboard" && <Dashboard onNavigate={(s) => setSection(s as Section)} />}
-            {section === "crm" && <AdmissionsCRMView />}
-            {section === "marketing-kits" && <MarketingKitsView onNavigate={(s) => setSection(s as Section)} />}
-            {section === "api-reference" && <ApiReferenceView />}
             {section === "agents" && <AgentsView />}
             {section === "workflow" && <WorkflowView />}
             {section === "loop" && <LoopAIView />}
             {section === "growth" && <GrowthLoopView />}
             {section === "command" && <CommandCenterView />}
             {section === "inkbox" && <InkboxView />}
+            {section === "crm" && <CrmView />}
             {section === "seo" && <SeoView />}
             {section === "topics" && <TopicsView onPromote={promoteToStudio} />}
-            {section === "studio" && <ContentStudio seed={studioSeed} onConsumeSeed={() => setStudioSeed(null)} onNavigate={(next) => setSection(next as Section)} />}
+            {section === "studio" && <ContentStudio seed={studioSeed} onConsumeSeed={() => setStudioSeed(null)} />}
             {section === "approval" && <ApprovalQueue />}
             {section === "rag" && <RagView />}
             {section === "history" && <PackageHistoryView onDuplicate={(topic) => promoteToStudio(topic, "পিতামাতা")} />}
@@ -273,12 +269,15 @@ export default function Home() {
             {section === "communications" && <CommunicationsView />}
             {section === "family" && <FamilyView />}
             {section === "video" && <VideoPipelineView />}
-            {section === "music" && <AudioStudioView />}
-            {section === "diagrams" && <DiagramStudioView />}
             {section === "family-studio" && <FamilyStudioView />}
+            {section === "voice-studio" && <VoiceStudioView />}
+            {section === "asr-studio" && <AsrView />}
+            {section === "image-studio" && <ImageStudioView />}
+            {section === "human-avatars" && <HumanAvatarView />}
             {section === "learning" && <LearningView />}
             {section === "backups" && <BackupsView />}
             {section === "costs" && <CostUsageView />}
+            {section === "otp" && <OtpView />}
             {section === "settings" && <SettingsView />}
           </div>
         </main>

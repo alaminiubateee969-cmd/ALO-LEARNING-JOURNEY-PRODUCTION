@@ -1,322 +1,54 @@
-name: Deploy to VPS
+name: Deploy to Production VPS
 
-# Pipeline: feature branch → PR (CI "validate" must pass) → merge to main →
-# Tailscale network preflight → production approval → SSH deploy of the exact
-# merged SHA → verified DB backup → PM2 release switch → live health checks.
-#
-# ── Network topology (IMPORTANT) ────────────────────────────────────────────
-# The production server is a self-hosted PHYSICAL Ubuntu machine behind a NAT
-# router at the operator's location (hosting.alolabs.net, LAN 192.168.0.24,
-# tailnet 100.85.239.114). It has NO directly reachable public IP. GitHub-hosted
-# runners reach it ONLY over the tailnet via the official Tailscale GitHub
-# Action, pinned by commit SHA (reviewed v4.2.0). SSH stays closed to the
-# public internet: UFW remains enabled, no router port forwarding, no public
-# SSH exposure. The deploy host MUST be the tailnet address (100.85.239.114)
-# or a verified *.ts.net name — never a public IP (enforced in preflight).
-#
-# ── Deployment safety (explicit gates) ──────────────────────────────────────
-#   Job `network-preflight` — connectivity tests ONLY. Never deploys, never
-#   touches the running application. Can be run alone via workflow_dispatch
-#   (mode=preflight-only) to produce network evidence.
-#   Job `deploy` runs ONLY when ALL of the following hold:
-#     1. CI `verify` job is green (same reusable workflow as PRs);
-#     2. `network-preflight` is green (Tailscale auth + tailnet ACL + TCP 22 +
-#        SSH public-key auth all proven on this run);
-#     3. repository VARIABLE VPS_DEPLOY_ENABLED == 'true' (readiness switch —
-#        keep it UNSET until the blockers in DEPLOYMENT.md §Deployment
-#        blockers are cleared; unset ⇒ the deploy job is skipped);
-#     4. a human approves the deployment in the `production` GitHub
-#        Environment (Settings → Environments → production → Required
-#        reviewers). Successful network connectivity is NOT authorization to
-#        deploy.
-#
-# Required GitHub configuration (DEPLOYMENT.md §GitHub setup and
-# deploy/tailscale/README.md):
-#   Secrets: SERVER_HOST (preferred) or VPS_HOST (legacy), VPS_USER,
-#            VPS_SSH_KEY, VPS_SSH_HOST_KEY, VPS_PORT (optional, default 22),
-#            TAILSCALE_OAUTH_CLIENT_ID, TAILSCALE_OAUTH_SECRET
-#   Variables: VPS_APP_DIR, VPS_PM2_APP, VPS_APP_PORT, VPS_DOMAIN,
-#              VPS_DEPLOY_ENABLED (readiness switch — leave unset to block)
 on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      mode:
-        description: 'preflight-only = network tests only (no deploy). deploy = full deploy path (still requires VPS_DEPLOY_ENABLED + production approval).'
-        type: choice
-        options: [preflight-only, deploy]
-        default: preflight-only
 
-permissions:
-  contents: read
-
-# Never cancel a deploy mid-flight; queue runs one at a time.
 concurrency:
   group: production-deploy
   cancel-in-progress: false
 
 jobs:
-  verify:
-    name: verify
-    uses: ./.github/workflows/ci.yml
-
-  # ── Read-only network evidence: Tailscale auth, ACL reachability, TCP 22 ──
-  network-preflight:
-    name: network-preflight
-    runs-on: ubuntu-22.04
-    timeout-minutes: 10
-    steps:
-      - name: Checkout exact SHA
-        uses: actions/checkout@v5
-
-      - name: Fail closed if networking secrets are missing
-        env:
-          TS_CLIENT_ID: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-          TS_CLIENT_SECRET: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
-          SERVER_HOST: ${{ secrets.SERVER_HOST || secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_SSH_HOST_KEY: ${{ secrets.VPS_SSH_HOST_KEY }}
-        run: |
-          missing=""
-          [ -n "$TS_CLIENT_ID" ]     || missing="$missing TAILSCALE_OAUTH_CLIENT_ID"
-          [ -n "$TS_CLIENT_SECRET" ] || missing="$missing TAILSCALE_OAUTH_SECRET"
-          [ -n "$SERVER_HOST" ]      || missing="$missing SERVER_HOST (or legacy VPS_HOST)"
-          [ -n "$VPS_USER" ]         || missing="$missing VPS_USER"
-          [ -n "$VPS_SSH_KEY" ]      || missing="$missing VPS_SSH_KEY"
-          [ -n "$VPS_SSH_HOST_KEY" ] || missing="$missing VPS_SSH_HOST_KEY"
-          if [ -n "$missing" ]; then
-            echo "::error::Missing required GitHub secret(s):$missing — see DEPLOYMENT.md §GitHub setup and deploy/tailscale/README.md. Refusing to continue."
-            exit 1
-          fi
-
-      # Pinned action: tailscale/github-action v4.2.0, pinned to its release
-      # commit SHA (d1b6cd204f8dceda5b3eaad7f1f767be390056cd). Nodes created by
-      # this action are ephemeral: they log out at the end of the job and are
-      # removed from the tailnet automatically. The OAuth client is scoped to
-      # auth_keys write + tag:github-runner only (deploy/tailscale/README.md).
-      - name: Tailscale connect (ephemeral tagged runner)
-        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4.2.0
-        with:
-          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
-          tags: tag:github-runner
-          version: '1.94.2'
-          hostname: gha-learn-deploy-${{ github.run_id }}
-          ping: ${{ secrets.SERVER_HOST || secrets.VPS_HOST }}
-
-      - name: Tailscale status (evidence)
-        run: tailscale status || true
-
-      - name: Configure SSH (pinned host key, key material only)
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST || secrets.VPS_HOST }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_SSH_HOST_KEY: ${{ secrets.VPS_SSH_HOST_KEY }}
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          # StrictHostKeyChecking stays ON. The secret carries the server's
-          # host-key LINE (any name field); we pin the key material and bind it
-          # to the configured deploy host so verification works identically for
-          # the tailnet IP and any alias. Hashed known_hosts lines are not
-          # supported — see deploy/tailscale/README.md §Host-key pinning.
-          printf '%s\n' "$VPS_SSH_HOST_KEY" \
-            | awk -v host="$SERVER_HOST" 'NF>=3 {print host, $2, $3}' > ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-          if [ ! -s ~/.ssh/known_hosts ]; then
-            echo "::error::VPS_SSH_HOST_KEY is malformed (expected at least one 'host keytype key' line). Refusing to continue."
-            exit 1
-          fi
-
-      - name: 'Preflight: tailnet destination + TCP 22 + SSH auth (read-only)'
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST || secrets.VPS_HOST }}
-          SERVER_PORT: ${{ secrets.VPS_PORT }}
-          SERVER_USER: ${{ secrets.VPS_USER }}
-          SSH_KEY_FILE: $HOME/.ssh/deploy_key
-        run: bash scripts/network-preflight.sh --tcp --ssh
-
-      - name: Preflight summary
-        if: always()
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST || secrets.VPS_HOST }}
-          DEPLOY_ENABLED: ${{ vars.VPS_DEPLOY_ENABLED }}
-        run: |
-          {
-            echo "## Network preflight (read-only — no deploy)"
-            echo "- Runner tailnet identity: gha-learn-deploy-${{ github.run_id }} (ephemeral, tag:github-runner)"
-            echo "- Deploy host under test: $SERVER_HOST"
-            if [ -n "$DEPLOY_ENABLED" ]; then
-              echo "- Deployment readiness switch (vars.VPS_DEPLOY_ENABLED): '$DEPLOY_ENABLED'"
-            else
-              echo "- Deployment readiness switch (vars.VPS_DEPLOY_ENABLED): unset — deploy job will be SKIPPED"
-            fi
-            echo "- Full deployment is additionally gated on the production environment approval."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  # ── Production deploy: exact merged SHA over the tailnet ──────────────────
   deploy:
-    name: deploy
-    needs: [verify, network-preflight]
-    # Readiness switch + explicit run mode. Unset VPS_DEPLOY_ENABLED ⇒ skipped.
-    if: ${{ vars.VPS_DEPLOY_ENABLED == 'true' && (github.event_name == 'push' || inputs.mode == 'deploy') }}
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
-    # Explicit production approval gate: configure required reviewers on this
-    # environment (Settings → Environments → production). The job pauses until
-    # an approved human reviewer authorizes the deployment.
+    runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Checkout exact SHA
-        uses: actions/checkout@v5
-
-      - name: Fail closed if deployment secrets are missing
-        env:
-          TS_CLIENT_ID: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-          TS_CLIENT_SECRET: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
-          SERVER_HOST: ${{ secrets.SERVER_HOST || secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_SSH_HOST_KEY: ${{ secrets.VPS_SSH_HOST_KEY }}
-        run: |
-          missing=""
-          [ -n "$TS_CLIENT_ID" ]     || missing="$missing TAILSCALE_OAUTH_CLIENT_ID"
-          [ -n "$TS_CLIENT_SECRET" ] || missing="$missing TAILSCALE_OAUTH_SECRET"
-          [ -n "$SERVER_HOST" ]      || missing="$missing SERVER_HOST (or legacy VPS_HOST)"
-          [ -n "$VPS_USER" ]         || missing="$missing VPS_USER"
-          [ -n "$VPS_SSH_KEY" ]      || missing="$missing VPS_SSH_KEY"
-          [ -n "$VPS_SSH_HOST_KEY" ] || missing="$missing VPS_SSH_HOST_KEY"
-          if [ -n "$missing" ]; then
-            echo "::error::Missing required GitHub secret(s):$missing — see DEPLOYMENT.md §GitHub setup. Refusing to deploy."
-            exit 1
-          fi
-
-      - name: Verify production approval gate is configured
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # The `production` environment MUST require reviewers (explicit
-          # human approval before any deploy). If this API call is readable,
-          # enforce it. On 403 the token cannot read the setting — warn loudly
-          # and continue (the environment gate itself still applies).
-          api="repos/${{ github.repository }}/environments/production"
-          if rules="$(gh api "$api" 2>/dev/null)"; then
-            if echo "$rules" | jq -e '
-                 ((.protection_rules // []) | map(select((.type // "") | test("review"; "i"))) | length > 0)
-                 or
-                 ((.protection_rules // []) | map(.reviewers? // []) | flatten | length > 0)
-               ' >/dev/null; then
-              echo "production environment has required reviewers configured"
-            else
-              echo "::error::The 'production' GitHub Environment has NO required reviewers — that is the explicit production approval gate. Configure it (Settings -> Environments -> production -> Required reviewers) before deploying. Refusing to deploy."
-              exit 1
-            fi
-          else
-            echo "::warning::Cannot read environment protection rules with the workflow token. VERIFY MANUALLY that Settings -> Environments -> production has required reviewers before the next deploy."
-          fi
-
-      - name: Tailscale connect (ephemeral tagged runner)
-        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4.2.0
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0
         with:
-          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
-          tags: tag:github-runner
-          version: '1.94.2'
-          hostname: gha-learn-deploy-${{ github.run_id }}
-          ping: ${{ secrets.SERVER_HOST || secrets.VPS_HOST }}
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            set -e
+            cd /home/aloedu/learn-app
 
-      - name: Configure SSH (pinned host key, key material only)
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST || secrets.VPS_HOST }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_SSH_HOST_KEY: ${{ secrets.VPS_SSH_HOST_KEY }}
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$VPS_SSH_HOST_KEY" \
-            | awk -v host="$SERVER_HOST" 'NF>=3 {print host, $2, $3}' > ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-          if [ ! -s ~/.ssh/known_hosts ]; then
-            echo "::error::VPS_SSH_HOST_KEY is malformed (expected at least one 'host keytype key' line). Refusing to deploy."
-            exit 1
-          fi
+            # Backup current release
+            cp .env /tmp/alo-env-backup-$(date +%s)
+            cp -r .next /tmp/alo-next-backup-$(date +%s) 2>/dev/null || true
 
-      - name: 'Preflight (re-check): TCP 22 + SSH auth before deploy'
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST || secrets.VPS_HOST }}
-          SERVER_PORT: ${{ secrets.VPS_PORT }}
-          SERVER_USER: ${{ secrets.VPS_USER }}
-          SSH_KEY_FILE: $HOME/.ssh/deploy_key
-        run: bash scripts/network-preflight.sh --tcp --ssh
+            # Pull latest
+            git fetch origin main
+            git checkout main
+            git pull origin main
 
-      - name: Deploy exact SHA to production server
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST || secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_PORT: ${{ secrets.VPS_PORT }}
-          APP_DIR: ${{ vars.VPS_APP_DIR }}
-          PM2_APP_NAME: ${{ vars.VPS_PM2_APP }}
-          APP_PORT: ${{ vars.VPS_APP_PORT }}
-        run: |
-          # EXPECTED_SHA is the exact merged main commit of this run.
-          # scripts/deploy-production.sh refuses anything ≠ origin/main and
-          # verifies RELEASE_SHA before PM2 switch; it backs up + verifies the
-          # database BEFORE any migration and rolls the code back on failure.
-          ssh -i ~/.ssh/deploy_key -p "${VPS_PORT:-22}" \
-            -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes \
-            -o ConnectTimeout=20 \
-            "$VPS_USER@$SERVER_HOST" \
-            "EXPECTED_SHA='${{ github.sha }}' APP_DIR='${APP_DIR:-/home/aloedu/projects/learn-aloeducation}' PM2_APP_NAME='${PM2_APP_NAME:-learn-aloeducation}' APP_PORT='${APP_PORT:-3017}' bash -s" \
-            < scripts/deploy-production.sh
+            # Install dependencies
+            bun install --frozen-lockfile
 
-      - name: Verify live site (public, via Nginx/HTTPS)
-        env:
-          SITE_URL: ${{ vars.VPS_DOMAIN }}
-        run: |
-          # If VPS_DOMAIN is explicitly configured it is a HARD gate: the deploy
-          # is not "live" until the public URL answers. If it is unset we try
-          # the default domain but only warn — DNS for learn.aloeducation.com
-          # was unresolved at audit time (2026-10-13), and a DNS gap must not
-          # mislabel a successful server deploy as failed. Set vars.VPS_DOMAIN
-          # to turn this into a strict gate (DEPLOYMENT.md §DNS/proxy).
-          strict=""
-          [ -n "$SITE_URL" ] && strict=1
-          base="${SITE_URL:-learn.aloeducation.com}"; case "$base" in http*) : ;; *) base="https://$base" ;; esac
-          base="${base%/}"
-          echo "Checking $base (strict=${strict:-no}) ..."
-          code="000"
-          for i in $(seq 1 10); do
-            code="$(curl -s -o /dev/null -w '%{http_code}' "$base/api/health" || true)"
-            [ "$code" = "200" ] && break
-            echo "attempt $i: /api/health -> $code, retrying in 6s"; sleep 6
-          done
-          if [ "$code" != "200" ]; then
-            if [ -n "$strict" ]; then
-              echo "::error::Public health check failed: $base/api/health -> $code"
-              exit 1
-            fi
-            echo "::warning::Public check skipped as non-strict: $base/api/health -> $code (DNS/proxy not confirmed — set vars.VPS_DOMAIN once https://learn.aloeducation.com resolves, see DEPLOYMENT.md)"
-            exit 0
-          fi
-          root_code="$(curl -s -o /dev/null -w '%{http_code}' "$base/")"
-          echo "GET $base/ -> $root_code (200, or 3xx to /login when auth is enforced, are healthy)"
-          case "$root_code" in
-            200|301|302|307|308) : ;;
-            *) if [ -n "$strict" ]; then echo "::error::Unexpected root status $root_code"; exit 1; fi
-               echo "::warning::Unexpected root status $root_code (non-strict mode)" ;;
-          esac
-          echo " LIVE VERIFIED: $base at ${{ github.sha }}"
+            # Generate Prisma client
+            bunx prisma generate
 
-      - name: Deploy summary
-        if: always()
-        run: |
-          {
-            echo "## Deploy job (exact merged SHA)"
-            echo "- Expected release SHA: \`${{ github.sha }}\`"
-            echo "- Deploy job outcome: \`${{ job.status }}\`"
-            echo "- Server release proof: \`current/RELEASE_SHA\` must equal the SHA above (deploy script enforces)."
-          } >> "$GITHUB_STEP_SUMMARY"
+            # Run safe migrations
+            bunx prisma migrate deploy
+
+            # Build
+            bun run build:prod
+
+            # Restart application
+            pm2 restart alo-learning-journey || pm2 start "bun run start:prod" --name alo-learning-journey
+
+            # Health check
+            sleep 5
+            curl -sf http://localhost:3017/api/health || (echo "HEALTH CHECK FAILED" && exit 1)

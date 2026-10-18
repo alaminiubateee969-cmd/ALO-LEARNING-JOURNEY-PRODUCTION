@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SectionHeader } from "./primitives";
+import { SectionHeader, StatusPill } from "./primitives";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,10 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { QualityPipelineSummary } from "./PipelineRunner";
-import type { QualityAgentPass } from "@/lib/ai";
 import { useToast } from "@/hooks/use-toast";
-import { Video, Film, Plus, Trash2, Clock, Users, ImageIcon, Mic, Play, Loader2, Clapperboard, Download, Sparkles, ShieldCheck } from "lucide-react";
+import { Video, Film, Plus, Trash2, Clock, Users, ImageIcon, Mic, Play, Loader2, Clapperboard } from "lucide-react";
 
 interface Scene {
   id: string;
@@ -89,20 +87,6 @@ export default function VideoPipelineView() {
   const [scenes, setScenes] = useState<Scene[]>(DEFAULT_SCENES);
   const [title, setTitle] = useState("শিশুর ভাষা বিকাশে মায়ের ভূমিকা");
   const [selected, setSelected] = useState<Scene | null>(null);
-  const [rendering, setRendering] = useState(false);
-  const [directing, setDirecting] = useState(false);
-  const [storyboardPasses, setStoryboardPasses] = useState<QualityAgentPass[]>([]);
-  const [renderMode, setRenderMode] = useState<"cinematic" | "social">("cinematic");
-  const [renderError, setRenderError] = useState("");
-  const [renderedVideo, setRenderedVideo] = useState<{
-    jobId: string;
-    video: { fileUrl: string; duration: number; fileSizeMb?: number; fileSize?: number };
-    srtUrl?: string;
-    scenes?: Array<{ index: number; caption: string; assetPath: string; source: string }>;
-    visualAssetStatus?: string;
-    note?: string;
-    qualityPipeline: QualityAgentPass[];
-  } | null>(null);
 
   const totalDuration = scenes.reduce((s, sc) => s + sc.duration, 0);
 
@@ -135,88 +119,6 @@ export default function VideoPipelineView() {
 
   const charEmoji = (id: string) => CHARACTERS.find((c) => c.id === id)?.emoji ?? "🎬";
 
-  const directStoryboard = async (customTopic?: string): Promise<Scene[] | null> => {
-    const targetTopic = (customTopic ?? title).trim();
-    if (!targetTopic) {
-      toast({ title: "শিরোনাম দিন", description: "স্টোরিবোর্ড তৈরির জন্য একটি টপিক লিখুন।", variant: "destructive" });
-      return null;
-    }
-    setDirecting(true);
-    setRenderError("");
-    try {
-      const response = await fetch("/api/video/storyboard", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: targetTopic, audience: "বাংলাদেশি পিতামাতা ও শিক্ষার্থী" }),
-      });
-      const data = await response.json();
-      if (!response.ok || !Array.isArray(data.scenes)) {
-        throw new Error(data.error ?? "Own AI Agent storyboard generation failed");
-      }
-      setScenes(data.scenes);
-      setSelected(data.scenes[0] ?? null);
-      setStoryboardPasses(data.qualityPipeline ?? []);
-      toast({
-        title: "Own AI Agent Storyboard Ready ($0 Paid API)",
-        description: `${data.scenes.length}টি দৃশ্য · ${data.totalDuration}s · VideoDirectorAgent + ImagePromptAgent + QualityCriticAgent`,
-      });
-      return data.scenes;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Storyboard generation failed";
-      setRenderError(message);
-      toast({ title: "স্টোরিবোর্ড তৈরি হয়নি", description: message, variant: "destructive" });
-      return null;
-    } finally {
-      setDirecting(false);
-    }
-  };
-
-  const renderVideo = async (mode: "cinematic" | "social" = renderMode, customScenes?: Scene[]) => {
-    const activeScenes = customScenes ?? scenes;
-    const activeDuration = activeScenes.reduce((s, sc) => s + sc.duration, 0);
-    if (activeDuration < 10 || activeDuration > 600) {
-      toast({ title: "সময়সীমা ঠিক করুন", description: "ভিডিওর দৈর্ঘ্য ১০–৬০০ সেকেন্ডের মধ্যে হতে হবে।", variant: "destructive" });
-      return;
-    }
-    setRenderMode(mode);
-    setRendering(true);
-    setRenderError("");
-    setRenderedVideo(null);
-    try {
-      const endpoint = mode === "cinematic" ? "/api/video/cinematic" : "/api/video/generate";
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic: title,
-          text: activeScenes.map((scene) => scene.voiceover.trim()).filter(Boolean).join("\n"),
-          visualPrompts: activeScenes.map((scene) => scene.visualPrompt),
-          visualStyle: "warm Bengali editorial illustration",
-          mood: "hopeful",
-          duration: activeDuration,
-          voice: "bn",
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok || data.status === "FAILED") throw new Error(data.error ?? data.message ?? "Local video render failed");
-      setRenderedVideo({ ...data, qualityPipeline: data.qualityPipeline ?? [] });
-      toast({ title: "Local video rendered ($0 Paid API)", description: `${data.video?.duration ?? activeDuration}s · ${data.visualAssetStatus ?? mode}` });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Local video render failed";
-      setRenderError(message);
-      toast({ title: "ভিডিও তৈরি হয়নি", description: message, variant: "destructive" });
-    } finally {
-      setRendering(false);
-    }
-  };
-
-  const directAndRenderOneClick = async () => {
-    const generated = await directStoryboard(title);
-    if (generated && generated.length > 0) {
-      await renderVideo("cinematic", generated);
-    }
-  };
-
   return (
     <div className="alo-fade-up space-y-5">
       <SectionHeader
@@ -236,111 +138,22 @@ export default function VideoPipelineView() {
         }
       />
 
-      {/* Own AI Agent Zero-Paid-API Banner + Title + Export Bar */}
-      <Card className="p-4 alo-card-grad border-0 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 pb-2.5">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-              <ShieldCheck className="h-3 w-3 mr-1" /> 100% Own Local AI Agents · $0.00 Paid API
-            </Badge>
-            <span className="text-muted-foreground">
-              VideoDirectorAgent → ImagePromptAgent → Sharp/ComfyUI Scene Renderer → Local eSpeak/Piper Voice → Procedural Synth → FFmpeg H.264 + SRT
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-end gap-3">
+      {/* Title + export bar */}
+      <Card className="p-4 alo-card-grad border-0">
+        <div className="flex flex-col sm:flex-row items-center gap-3">
           <div className="flex-1 w-full">
-            <Label className="text-xs">ভিডিও শিরোনাম / টপিক (যেকোনো টপিক লিখুন বা নিচের প্রিসেট বেছে নিন)</Label>
+            <Label className="text-xs">ভিডিও শিরোনাম</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1" />
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void directStoryboard()}
-              disabled={directing || rendering}
-              className="h-9 border-amber-300 text-amber-800 hover:bg-amber-50"
-            >
-              {directing ? (
-                <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> AI Directing…</>
-              ) : (
-                <><Sparkles className="h-3.5 w-3.5 mr-1.5" /> AI Auto-Storyboard</>
-              )}
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="h-9">
+              <ImageIcon className="h-3.5 w-3.5 mr-1.5" /> Storyboard Images
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void renderVideo("social")}
-              disabled={rendering || directing}
-              className="h-9"
-            >
-              {rendering && renderMode === "social" ? (
-                <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Rendering Reel…</>
-              ) : (
-                <><Film className="h-3.5 w-3.5 mr-1.5" /> Render Social Reel</>
-              )}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => void renderVideo("cinematic")}
-              disabled={rendering || directing}
-              className="bg-amber-500 hover:bg-amber-600 h-9 text-white"
-            >
-              {rendering && renderMode === "cinematic" ? (
-                <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Rendering Cinematic…</>
-              ) : (
-                <><Play className="h-3.5 w-3.5 mr-1.5" /> Render Cinematic + SRT</>
-              )}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => void directAndRenderOneClick()}
-              disabled={rendering || directing}
-              className="bg-emerald-600 hover:bg-emerald-700 h-9 text-white"
-            >
-              {directing || rendering ? (
-                <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Working…</>
-              ) : (
-                <><Sparkles className="h-3.5 w-3.5 mr-1.5" /> 1-Click AI Direct & Render MP4</>
-              )}
+            <Button size="sm" className="bg-amber-500 hover:bg-amber-600 h-9">
+              <Play className="h-3.5 w-3.5 mr-1.5" /> Render Preview
             </Button>
           </div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-          <span className="text-[10px] font-medium text-muted-foreground mr-1">Quick Topics:</span>
-          {[
-            "শিশুর ভাষা বিকাশে মায়ের ভূমিকা",
-            "UK Study Visa CAS ও ব্যাংক স্পন্সর গাইড",
-            "Canada SDS ও PAL ভিসা চেকলিস্ট",
-            "IELTS 7.0 প্রস্তুতির প্রতিদিন ১৫ মিনিট রুটিন",
-            "শিশুর স্ক্রিন টাইম কমিয়ে বই পড়ার অভ্যাস",
-          ].map((presetTopic) => (
-            <button
-              key={presetTopic}
-              type="button"
-              onClick={() => {
-                setTitle(presetTopic);
-                void directStoryboard(presetTopic);
-              }}
-              disabled={directing || rendering}
-              className="rounded-full border border-border/70 bg-background/80 px-2.5 py-0.5 text-[11px] hover:border-amber-400 hover:text-amber-700 transition-colors"
-            >
-              {presetTopic}
-            </button>
-          ))}
-        </div>
-
-        {storyboardPasses.length > 0 && (
-          <div className="pt-2">
-            <QualityPipelineSummary passes={storyboardPasses} />
-          </div>
-        )}
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -513,73 +326,14 @@ export default function VideoPipelineView() {
               </div>
               <div className="pt-2 border-t border-border/40">
                 <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                  <Video className="h-2.5 w-2.5" /> Local FFmpeg + speech engine required; ComfyUI images are optional.
+                  <Video className="h-2.5 w-2.5" /> এই দৃশ্যের জন্য FFmpeg দরকার —
+                  <StatusPill status="blocked_external_setup" />
                 </p>
               </div>
             </div>
           )}
         </Card>
       </div>
-
-      {renderError && <Card role="alert" className="border-rose-300 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-100">{renderError}</Card>}
-      {renderedVideo && (
-        <Card className="space-y-3 p-4 sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h3 className="font-semibold">Rendered local 9:16 video</h3>
-              <p className="text-xs text-muted-foreground">
-                {renderedVideo.video.duration}s · {renderedVideo.visualAssetStatus ?? renderMode} · job {renderedVideo.jobId}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {renderedVideo.srtUrl && (
-                <a
-                  href={renderedVideo.srtUrl}
-                  download
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Download .SRT Subtitles
-                </a>
-              )}
-              <a
-                href={renderedVideo.video.fileUrl}
-                download
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Download MP4
-              </a>
-            </div>
-          </div>
-          <video controls preload="metadata" className="max-h-[70vh] w-full rounded-xl bg-black" src={renderedVideo.video.fileUrl}>
-            Your browser does not support video playback.
-          </video>
-          {renderedVideo.scenes && renderedVideo.scenes.length > 0 && (
-            <div className="space-y-2 pt-2">
-              <p className="text-xs font-semibold">Generated Scene Keyframe Stills ({renderedVideo.scenes.length})</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {renderedVideo.scenes.map((sc) => (
-                  <a
-                    key={sc.index}
-                    href={sc.assetPath}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group overflow-hidden rounded-lg border border-border/60 bg-muted/20 p-1.5 text-left"
-                  >
-                    <img src={sc.assetPath} alt={sc.caption} className="aspect-[9/16] w-full rounded object-cover" />
-                    <p className="mt-1 truncate text-[10px] text-muted-foreground">
-                      Scene {sc.index + 1}: {sc.caption}
-                    </p>
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-          {renderedVideo.note && <p className="text-[11px] leading-relaxed text-muted-foreground">{renderedVideo.note}</p>}
-          {renderedVideo.qualityPipeline.length > 0 && <QualityPipelineSummary passes={renderedVideo.qualityPipeline} />}
-        </Card>
-      )}
 
       {/* Export specs */}
       <Card className="p-4">

@@ -1,0 +1,1 @@
+<?php require dirname(__DIR__).'/app/agents.php'; (new MasterOrchestratorAgent())->generateIdeas(''); echo "ok\n";

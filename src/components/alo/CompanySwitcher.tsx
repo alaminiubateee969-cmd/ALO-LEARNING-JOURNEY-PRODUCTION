@@ -51,10 +51,7 @@ export default function CompanySwitcher() {
 
   const switchTo = (id: string) => {
     setActiveId(id);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("alo-active-company", id);
-      window.dispatchEvent(new Event("alo-company-changed"));
-    }
+    if (typeof window !== "undefined") localStorage.setItem("alo-active-company", id);
     setOpen(false);
   };
 

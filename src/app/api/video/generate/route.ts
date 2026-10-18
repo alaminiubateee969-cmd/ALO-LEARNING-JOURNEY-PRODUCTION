@@ -1,231 +1,295 @@
 import { NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
-import { execFileSync } from "node:child_process";
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { executeAsAgent, recordAgentPipelineStages } from "@/lib/agent-runtime";
-import { generateNarrationScript, type QualityAgentPass } from "@/lib/ai";
-import { generateProceduralInstrumental, resolveFfmpegBinary, resolveFfprobeBinary, synthesizeLocalSpeech, type MusicMood } from "@/lib/local-audio";
-import { getVideoStorageDir } from "@/lib/storage-paths";
+import { db } from "@/lib/db";
 import { ensureSeeded } from "@/lib/seed";
+import { executeAsAgent } from "@/lib/agent-runtime";
+import { execSync } from "child_process";
+import { promises as fs } from "fs";
+import fsSync from "fs";
+import path from "path";
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+const VIDEO_DIR = path.join(process.cwd(), "storage", "videos");
+const FONT_FILE = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
 
-const VIDEO_DIR = getVideoStorageDir();
-const MOODS = new Set<MusicMood>(["calm", "hopeful", "playful", "reflective"]);
-
-function runTool(binary: string, args: string[], timeoutMs = 300_000): string {
-  const resolved = binary === "ffmpeg" ? resolveFfmpegBinary() : binary === "ffprobe" ? resolveFfprobeBinary() : binary;
+function exec(cmd: string, timeoutMs = 300000): string {
   try {
-    return execFileSync(resolved, args, {
-      timeout: timeoutMs,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      maxBuffer: 8 * 1024 * 1024,
-    }).trim();
-  } catch (error) {
-    const issue = error as NodeJS.ErrnoException & { stderr?: Buffer | string };
-    const details = issue.stderr ? String(issue.stderr) : issue.message || "unknown error";
-    throw new Error(`${binary} failed: ${details.slice(0, 300)}`);
+    return execSync(cmd, { timeout: timeoutMs, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+  } catch (e: any) {
+    throw new Error(`Command failed: ${cmd.slice(0, 100)}\n${(e.stderr || e.message || "").slice(0, 300)}`);
   }
 }
 
 function probeDuration(filePath: string): number {
-  const value = runTool("ffprobe", ["-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", filePath], 20_000);
-  const duration = Number.parseFloat(value);
-  if (!Number.isFinite(duration) || duration <= 0) throw new Error("ffprobe could not read the generated audio duration");
-  return duration;
+  const out = exec(`ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${filePath}"`);
+  return parseFloat(out);
 }
 
 function probeVideo(filePath: string) {
-  const data = JSON.parse(runTool("ffprobe", ["-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filePath], 20_000));
-  const video = data.streams.find((stream: { codec_type: string }) => stream.codec_type === "video");
-  const audio = data.streams.find((stream: { codec_type: string }) => stream.codec_type === "audio");
-  if (!video) throw new Error("ffprobe found no video stream in the rendered file");
+  const json = exec(`ffprobe -v quiet -print_format json -show_format -show_streams "${filePath}"`);
+  const data = JSON.parse(json);
+  const v = data.streams.find((s: any) => s.codec_type === "video");
+  const a = data.streams.find((s: any) => s.codec_type === "audio");
   return {
-    duration: Number.parseFloat(data.format.duration),
-    width: Number(video.width ?? 0),
-    height: Number(video.height ?? 0),
-    fps: String(video.r_frame_rate ?? "0/1"),
-    videoCodec: String(video.codec_name ?? "unknown"),
-    audioCodec: String(audio?.codec_name ?? "none"),
-    audioSampleRate: Number(audio?.sample_rate ?? 0),
-    audioChannels: Number(audio?.channels ?? 0),
-    fileSize: Number(data.format.size ?? 0),
+    duration: parseFloat(data.format.duration),
+    width: parseInt(v?.width ?? "0"),
+    height: parseInt(v?.height ?? "0"),
+    fps: v?.r_frame_rate ?? "0/1",
+    videoCodec: v?.codec_name ?? "unknown",
+    audioCodec: a?.codec_name ?? "none",
+    audioSampleRate: a?.sample_rate ?? "0",
+    audioChannels: a?.channels ?? 0,
+    fileSize: parseInt(data.format.size ?? "0"),
     mimeType: "video/mp4",
-    formatName: String(data.format.format_name ?? "unknown"),
+    formatName: data.format.format_name ?? "unknown",
   };
 }
 
-function escapeFilterPath(filePath: string): string {
-  return filePath.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'");
-}
-
-function escapeConcatPath(filePath: string): string {
-  return filePath.replace(/\\/g, "\\\\").replace(/'/g, "'\\''");
-}
-
-async function generateSpeechToDuration(
+// Generate TTS audio and measure actual duration. If short, generate
+// additional meaningful content until audio >= targetDuration.
+function generateTTSToTarget(
   scriptLines: string[],
   voice: string,
   targetDuration: number,
   audioPath: string,
-  jobDir: string,
   jobId: string
-): Promise<{ duration: number; segments: Array<{ text: string; start: number; end: number }>; voiceEngine: string }> {
-  const padding = [
-    "প্রতিটি শিশুর শেখার গতি আলাদা—তাই তুলনা নয়, পাশে থাকুন।",
-    "প্রতিদিন অল্প সময় গল্প, খেলা আর কথোপকথনে দিন।",
-    "শিশুর ছোট ছোট চেষ্টাকে স্বীকৃতি দিন এবং উৎসাহ দিন।",
-    "কঠিন লাগলে ধৈর্য ধরুন; ভালোবাসা দিয়ে শেখার সুযোগ তৈরি হয়।",
-    "আজকের একটি সহজ অভ্যাস বেছে নিয়ে একসাথে চেষ্টা করুন।",
-    "আপনার অভিজ্ঞতা আলো লার্নিং জার্নির সাথে শেয়ার করুন।",
-    "আলো লার্নিং জার্নি—ভালোবাসা দিয়ে শেখার পথ।",
-  ];
-  const segments: Array<{ text: string; start: number; end: number }> = [];
+): { duration: number; segments: { text: string; start: number; end: number }[] } {
   const audioParts: string[] = [];
-  let duration = 0;
-  let index = 0;
-  let paddingIndex = 0;
-  let voiceEngine = "espeak-local";
+  const segments: { text: string; start: number; end: number }[] = [];
+  let totalDuration = 0;
+  let lineIdx = 0;
 
-  while (duration < targetDuration && index < 500) {
-    const text = (index < scriptLines.length ? scriptLines[index] : padding[paddingIndex++ % padding.length]).trim();
-    const partPath = path.join(jobDir, `speech-${index}.wav`);
-    const synthesis = await synthesizeLocalSpeech(text, partPath, voice);
-    voiceEngine = synthesis.engine;
-    const partDuration = probeDuration(partPath);
-    segments.push({ text, start: duration, end: duration + partDuration });
+  // Pad lines: if we run through all script lines and still haven't reached
+  // target, add meaningful closing/recap content. 30 varied lines cycling.
+  const paddingLines = [
+    "আজকের ভিডিওটি ভালো লাগলে শেয়ার করুন।",
+    "আলো লার্নিং জার্নিতে যুক্ত হোন।",
+    "পরবর্তী ভিডিওতে আরও শিখবেন।",
+    "আপনার শিশুর জন্য সেরা চেষ্টা করুন।",
+    "ধৈর্য ধরুন, শিশু ধীরে ধীরে শিখবে।",
+    "প্রতিদিন একটু একটু করে অনুশীলন করুন।",
+    "ভালোবাসা দিয়ে শেখান, জোর করে নয়।",
+    "শিশুকে সময় দিন, তারা শিখবে।",
+    "আলো — ভালোবাসা দিয়ে শেখার পথ।",
+    "ধন্যবাদ, আবার দেখা হবে।",
+    "প্রতিটি শিশু আলাদা, তুলনা করবেন না।",
+    "ছোট ছোট অর্জন উদযাপন করুন।",
+    "শিশুর আগ্রহ অনুসরণ করুন।",
+    "খেলার মাধ্যমে শেখা সবচেয়ে কার্যকর।",
+    "প্রশংসা করুন, উৎসাহ দিন।",
+    "ভুল করলে ধৈর্য ধরুন।",
+    "প্রতিদিন নতুন কিছু শেখান।",
+    "শিশুর কৌতূহল মূল্যবান।",
+    "প্রশ্ন করতে উৎসাহিত করুন।",
+    "আবিষ্কার করতে দিন।",
+    "সৃজনশীলতা বাড়ান।",
+    "কল্পনা শক্তি বিকাশ করুন।",
+    "গল্প বলুন, গান গাইন।",
+    "আলিঙ্গন করুন, ভালোবাসা দিন।",
+    "নিরাপদ পরিবেশে খেলতে দিন।",
+    "শিশুর সাথে বন্ধু হোন।",
+    "শোনা শেখার প্রথম ধাপ।",
+    "বোঝার চেষ্টা করুন শিশুকে।",
+    "সংবেদনশীল প্যারেন্টিং করুন।",
+    "আলো লার্নিং জার্নি — ভালোবাসা দিয়ে শেখার পথ।",
+  ];
+
+  let paddingIdx = 0;
+  // No hard limit on line count — keep generating until target duration is met.
+  // Safety cap at 500 lines (~2000s/~33min) to prevent pathological loops.
+  while (totalDuration < targetDuration && lineIdx < 500) {
+    // Get the next line (script first, then padding, cycling through padding)
+    let text: string;
+    if (lineIdx < scriptLines.length) {
+      text = scriptLines[lineIdx];
+    } else {
+      text = paddingLines[paddingIdx % paddingLines.length];
+      paddingIdx++;
+    }
+
+    const partPath = path.join(VIDEO_DIR, `${jobId}_part${lineIdx}.wav`);
+    const escapedText = text.replace(/"/g, '\\"').replace(/`/g, "\\`").replace(/\$/g, "\\$");
+    exec(`espeak "${escapedText}" -v ${voice} -s 140 -w "${partPath}"`);
+
+    const partDur = probeDuration(partPath);
+    segments.push({ text, start: totalDuration, end: totalDuration + partDur });
     audioParts.push(partPath);
-    duration += partDuration;
-    index++;
+    totalDuration += partDur;
+    lineIdx++;
   }
-  if (duration < targetDuration || audioParts.length === 0) throw new Error("Local voice could not reach the requested duration");
 
-  const concatList = path.join(jobDir, `${jobId}-audio-concat.txt`);
-  await fs.writeFile(concatList, audioParts.map((file) => `file '${escapeConcatPath(file)}'`).join("\n"), "utf8");
-  runTool("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", concatList, "-c:a", "pcm_s16le", audioPath]);
+  // Concatenate all audio parts
+  const concatListPath = path.join(VIDEO_DIR, `${jobId}_concat.txt`);
+  const concatContent = audioParts.map((p) => `file '${p}'`).join("\n");
+  exec(`echo '${concatContent.replace(/'/g, "'\\''")}' > "${concatListPath}"`);
+  exec(`ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -c copy "${audioPath}"`);
+
+  // Clean up parts
+  for (const part of audioParts) {
+    try { fsSync.unlinkSync(part); } catch {}
+  }
+  try { fsSync.unlinkSync(concatListPath); } catch {}
+
   const finalDuration = probeDuration(audioPath);
-  return { duration: finalDuration, segments, voiceEngine };
+  return { duration: finalDuration, segments };
 }
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   await ensureSeeded();
-  const body = await request.json().catch(() => ({})) as Record<string, unknown>;
-  const topic = typeof body.topic === "string" ? body.topic.trim() : "";
-  if (!topic || topic.length > 240) return NextResponse.json({ error: "topic must contain 1–240 characters" }, { status: 400 });
+  const body = await req.json().catch(() => ({}));
 
-  const requestedDuration = Number(body.duration ?? 50);
-  if (!Number.isInteger(requestedDuration) || requestedDuration < 10 || requestedDuration > 600) {
-    return NextResponse.json({ error: "duration must be an integer from 10 to 600 seconds" }, { status: 400 });
-  }
-  const voice = typeof body.voice === "string" ? body.voice.slice(0, 24) : "bn";
-  const suppliedScript = typeof body.script === "string" ? body.script.trim() : typeof body.text === "string" ? body.text.trim() : typeof body.transcript === "string" ? body.transcript.trim() : "";
-  if (suppliedScript.length > 8_000) return NextResponse.json({ error: "script must be 8,000 characters or fewer" }, { status: 400 });
-  const mood = typeof body.mood === "string" && MOODS.has(body.mood as MusicMood) ? body.mood as MusicMood : "hopeful";
-  const jobId = `video_${randomUUID()}`;
-  const jobDir = path.join(VIDEO_DIR, jobId);
-  const audioPath = path.join(jobDir, "narration.wav");
-  const musicPath = path.join(jobDir, "instrumental.wav");
+  const topic = body.topic || "Untitled";
+  const script = body.script || `[হুক] ${topic} নিয়ে আজ জানবো\n\n[বিষয়] এই ভিডিওতে আমরা শিখব ${topic} সম্পর্কে\n\n[CTA] আলো লার্নিং জার্নি-তে যুক্ত হোন`;
+  const voice = body.voice || "bn";
+  const requestedDuration = Math.max(50, Math.min(3600, body.duration || 50));
+
+  const jobId = `video_${Date.now()}`;
+  const audioPath = path.join(VIDEO_DIR, `${jobId}_audio.wav`);
   const videoPath = path.join(VIDEO_DIR, `${jobId}.mp4`);
 
-  const scriptResult = suppliedScript
-    ? { data: { title: topic, lines: suppliedScript.split(/\n+/).map((line) => line.trim()).filter(Boolean) }, provider: "provided-by-user", usedFallback: false, qualityPipeline: [] as QualityAgentPass[] }
-    : await generateNarrationScript(topic);
-  if (!scriptResult.data.lines.length) return NextResponse.json({ error: "The script contains no narration lines" }, { status: 400 });
-  const scriptQualityPipeline = scriptResult.qualityPipeline ?? [];
-  await recordAgentPipelineStages("motion graphics narration script", scriptQualityPipeline);
-
-  const agent = await executeAsAgent<Record<string, unknown>>(
+  // EXECUTE AS ALO AGENT — creates AgentRun + audit log
+  type VideoResult = Record<string, any>;
+    const agentResult = await executeAsAgent<VideoResult>(
     {
       agentId: "video_generator",
-      task: `Generate ${requestedDuration}s local motion-graphic video: ${topic.slice(0, 100)}`,
-      input: { topic, voice, duration: requestedDuration, mood, scriptProvider: scriptResult.provider },
-      tools: ["piper.local", "espeak.local", "ffmpeg.local", "procedural-music.local"],
+      task: `Generate ${requestedDuration}s video: ${topic}`,
+      input: { topic, voice, duration: requestedDuration },
+      tools: ["tts.local", "ffmpeg", "ffprobe"],
       requiresApproval: false,
     },
     async () => {
-      await fs.mkdir(jobDir, { recursive: true });
       try {
-        const narration = await generateSpeechToDuration(scriptResult.data.lines, voice, requestedDuration, audioPath, jobDir, jobId);
-        const music = await generateProceduralInstrumental(musicPath, {
-          durationSeconds: Math.min(90, Math.max(10, Math.ceil(narration.duration))),
-          mood,
-          bpm: 88,
-          seed: `${topic}|${mood}`,
-        });
+    await fs.mkdir(VIDEO_DIR, { recursive: true });
 
-        const captionFiles = await Promise.all(narration.segments.map(async (segment, index) => {
-          const filePath = path.join(jobDir, `caption-${index}.txt`);
-          await fs.writeFile(filePath, segment.text.slice(0, 180), "utf8");
-          const fontFile = process.env.VIDEO_FONT_PATH?.trim() || path.join(process.cwd(), "public", "fonts", "HindSiliguri-Bold.ttf");
-          const fontArg = await fs.access(fontFile).then(() => `:fontfile='${escapeFilterPath(fontFile)}'`).catch(() => "");
-          return `drawtext=textfile='${escapeFilterPath(filePath)}'${fontArg}:fontcolor=white:fontsize=50:box=1:boxcolor=0x161324@0.62:boxborderw=28:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${segment.start.toFixed(2)},${segment.end.toFixed(2)})'`;
-        }));
-        const filter = `drawbox=x=0:y=0:w=iw:h=ih:color=0x161324@0.22:t=fill,${captionFiles.join(",")}`;
-        const colorInput = `color=c=0x241b35:s=1080x1920:d=${narration.duration.toFixed(2)}:r=30`;
-        runTool("ffmpeg", [
-          "-y", "-f", "lavfi", "-i", colorInput,
-          "-i", audioPath,
-          "-stream_loop", "-1", "-i", musicPath,
-          "-filter_complex", "[1:a]volume=1.0[voice];[2:a]volume=0.13[bed];[voice][bed]amix=inputs=2:duration=first:dropout_transition=2[mix]",
-          "-vf", filter,
-          "-map", "0:v:0", "-map", "[mix]",
-          "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
-          "-c:a", "aac", "-b:a", "160k", "-shortest", videoPath,
-        ], 600_000);
-        const metadata = probeVideo(videoPath);
-        if (metadata.duration + 0.25 < requestedDuration) throw new Error(`Duration QA failed (${metadata.duration.toFixed(1)}s rendered, ${requestedDuration}s requested)`);
+    // STEP 1: Parse script into lines
+    const scriptLines = script.split("\n").filter((l: string) => l.trim());
 
-        return {
-          data: {
-            status: "COMPLETED",
-            jobId,
-            topic,
-            script: scriptResult.data,
-            scriptProvider: scriptResult.provider,
-            scriptUsedFallback: scriptResult.usedFallback,
-            scriptQualityPipeline,
-            qualityPipeline: scriptQualityPipeline,
-            voiceMode: "LOCAL_SYNTHETIC_SPEECH",
-            voiceEngine: narration.voiceEngine,
-            musicMode: "LOCAL_PROCEDURAL_INSTRUMENTAL",
-            music,
-            video: {
-              filePath: `/storage/videos/${jobId}.mp4`,
-              fileUrl: `/api/media/video/${jobId}`,
-              duration: Math.round(metadata.duration * 10) / 10,
-              requestedDuration,
-              durationQaPassed: true,
-              width: metadata.width,
-              height: metadata.height,
-              fps: metadata.fps,
-              videoCodec: metadata.videoCodec,
-              audioCodec: metadata.audioCodec,
-              audioSampleRate: metadata.audioSampleRate,
-              audioChannels: metadata.audioChannels,
-              fileSize: metadata.fileSize,
-              mimeType: metadata.mimeType,
-            },
-            scenesGenerated: narration.segments.length,
-            sceneTimeline: narration.segments.map((segment, index) => ({ scene: index + 1, start: Math.round(segment.start * 10) / 10, end: Math.round(segment.end * 10) / 10, text: segment.text.slice(0, 100) })),
-            visualMode: "LOCAL_MOTION_GRAPHIC",
-            note: "This is a locally rendered motion-graphics video with synthetic narration and a procedural instrumental, not AI-generated live-action footage.",
-          },
-          provider: "local-ffmpeg+piper-or-espeak+procedural-synth",
-        };
-      } catch (error) {
-        await fs.unlink(videoPath).catch(() => undefined);
-        throw error;
-      } finally {
-        await fs.rm(jobDir, { recursive: true, force: true }).catch(() => undefined);
+    // STEP 2: Generate TTS audio to meet requested duration
+    const { duration: audioDuration, segments } = generateTTSToTarget(
+      scriptLines, voice, requestedDuration, audioPath, jobId
+    );
+
+    // STEP 3: Build scene timeline from actual audio segments
+    const sceneColors = ["0xF59E0B", "0xEC4899", "0x10B981", "0x8B5CF6", "0x06B6D4"];
+    const drawTexts = segments.map((seg, i) => {
+      const start = seg.start.toFixed(2);
+      const end = seg.end.toFixed(2);
+      const escapedText = seg.text.slice(0, 80).replace(/'/g, "\\'").replace(/:/g, "\\:").replace(/%/g, "\\%");
+      const color = sceneColors[i % sceneColors.length];
+      // Background color change per scene + text overlay
+      return `drawtext=fontfile=${FONT_FILE}:text='${escapedText}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${start},${end})'`;
+    });
+
+    const videoFilter = `scale=1920:1080,${drawTexts.join(",")}`;
+
+    // STEP 4: Generate video — background + audio + text overlay
+    // Video duration = audio duration (ensures narration matches video)
+    exec(`ffmpeg -y -f lavfi -i "color=c=0x1a1a2e:s=1920x1080:d=${audioDuration.toFixed(2)}:r=30" -i "${audioPath}" -vf "${videoFilter}" -c:v libx264 -preset fast -pix_fmt yuv420p -c:a aac -b:a 128k -shortest "${videoPath}"`);
+
+    // STEP 5: Validate the generated video with ffprobe
+    const metadata = probeVideo(videoPath);
+
+    // Clean up audio
+    try { await fs.unlink(audioPath); } catch {}
+
+    // STEP 6: Strict duration QA
+    const actualDuration = metadata.duration;
+    const durationMet = actualDuration >= requestedDuration;
+
+    if (!durationMet) {
+      // FAILED — duration requirement not met
+      await db.auditLog.create({
+        data: {
+          actor: "VideoGeneratorAgent",
+          action: "video.qa_failed",
+          detail: `DURATION_REQUIREMENT_NOT_MET: requested=${requestedDuration}s, actual=${actualDuration.toFixed(1)}s, diff=${(requestedDuration - actualDuration).toFixed(1)}s`,
+          severity: "error",
+        },
+      });
+
+      // Clean up the failed video
+      try { await fs.unlink(videoPath); } catch {}
+
+      return {
+        data: {
+          status: "FAILED",
+          errorCode: "DURATION_REQUIREMENT_NOT_MET",
+          message: `Duration ${actualDuration.toFixed(1)}s < ${requestedDuration}s. File discarded.`,
+          jobId, topic, requestedDuration,
+          actualDuration: Math.round(actualDuration * 10) / 10,
+          durationDifference: Math.round((requestedDuration - actualDuration) * 10) / 10,
+          video: undefined as any,
+          audioDuration: undefined as any,
+          scenesGenerated: undefined as any,
+          sceneTimeline: undefined as any,
+        },
+        provider: "local",
+      };
+    }
+
+    // STEP 7: COMPLETED
+    return {
+      data: {
+      status: "COMPLETED",
+      errorCode: undefined as any,
+      message: undefined as any,
+      jobId,
+      topic,
+      video: {
+        filePath: `/storage/videos/${jobId}.mp4`,
+        absolutePath: videoPath,
+        duration: Math.round(actualDuration * 10) / 10,
+        requestedDuration,
+        actualDuration: Math.round(actualDuration * 10) / 10,
+        durationDifference: Math.round((actualDuration - requestedDuration) * 10) / 10,
+        durationQaPassed: true,
+        width: metadata.width,
+        height: metadata.height,
+        fps: metadata.fps,
+        videoCodec: metadata.videoCodec,
+        audioCodec: metadata.audioCodec,
+        audioSampleRate: metadata.audioSampleRate,
+        audioChannels: metadata.audioChannels,
+        fileSize: metadata.fileSize,
+        fileSizeMb: Math.round((metadata.fileSize / 1024 / 1024) * 100) / 100,
+        mimeType: metadata.mimeType,
+        formatName: metadata.formatName,
+      },
+      audioDuration: Math.round(audioDuration * 10) / 10,
+      scenesGenerated: segments.length,
+      sceneTimeline: segments.map((s, i) => ({
+        scene: i + 1,
+        start: Math.round(s.start * 10) / 10,
+        end: Math.round(s.end * 10) / 10,
+        duration: Math.round((s.end - s.start) * 10) / 10,
+        text: s.text.slice(0, 60),
+      })),
+      },
+      provider: "local",
+    };
+      } catch (e: any) {
+        try { await fs.unlink(audioPath); } catch {}
+        try { await fs.unlink(videoPath); } catch {}
+        throw e;
       }
     }
   );
 
-  if (agent.status !== "success") {
-    return NextResponse.json({ status: "FAILED", errorCode: "GENERATION_ERROR", jobId, topic, error: agent.error, agentRunId: agent.runId }, { status: 503 });
+  if (agentResult.status === "success") {
+    return NextResponse.json({
+      ...agentResult.result,
+      agentRunId: agentResult.runId,
+      agentId: agentResult.agentId,
+      agentStatus: agentResult.status,
+      auditId: agentResult.auditId,
+    });
+  } else {
+    return NextResponse.json({
+      status: "FAILED",
+      errorCode: "GENERATION_ERROR",
+      jobId, topic,
+      error: agentResult.error,
+      agentRunId: agentResult.runId,
+      agentId: agentResult.agentId,
+      auditId: agentResult.auditId,
+    }, { status: 500 });
   }
-  return NextResponse.json({ ...agent.result, agentRunId: agent.runId, agentId: agent.agentId, agentStatus: agent.status, auditId: agent.auditId }, { headers: { "Cache-Control": "no-store" } });
 }

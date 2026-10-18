@@ -20,6 +20,9 @@ interface Settings {
   secondaryColor: string;
   accentColor: string;
   domain: string;
+  smtpHost: string;
+  smtpPort: string;
+  smtpFrom: string;
   timezone: string;
   language: string;
   emergencyStop: boolean;
@@ -190,14 +193,28 @@ export default function BrandSettings() {
         </div>
       </Card>
 
-      {/* Email delivery / OTP are intentionally not shown as configurable until transport and security controls exist. */}
+      {/* SMTP */}
       <Card className="p-5">
-        <h3 className="mb-3 flex items-center gap-2 font-semibold">
-          <Mail className="h-4 w-4 text-sky-600" /> Email marketing & OTP
-          <Badge variant="outline" className="ml-1 text-[9px]">not connected</Badge>
+        <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <Mail className="h-4 w-4 text-sky-600" /> SMTP কনফিগারেশন
+          <Badge variant="outline" className="text-[9px] ml-1">external_setup_required</Badge>
         </h3>
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          Marketing Kits can create and review email drafts, but this application has no SMTP delivery or unsubscribe endpoint. Admin sign-in is email/password; email/HTTP OTP issue and verify routes are not implemented. No mail or OTP is sent. Do not paste SMTP passwords into this settings page.
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="sm:col-span-1">
+            <Label className="text-xs">SMTP হোস্ট</Label>
+            <Input value={settings.smtpHost} onChange={(e) => update("smtpHost", e.target.value)} placeholder="smtp.gmail.com" className="h-9 mt-1 text-sm" />
+          </div>
+          <div>
+            <Label className="text-xs">পোর্ট</Label>
+            <Input value={settings.smtpPort} onChange={(e) => update("smtpPort", e.target.value)} className="h-9 mt-1 text-sm" />
+          </div>
+          <div>
+            <Label className="text-xs">প্রেরক ঠিকানা</Label>
+            <Input value={settings.smtpFrom} onChange={(e) => update("smtpFrom", e.target.value)} placeholder="noreply@aloeducation.com" className="h-9 mt-1 text-sm" />
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-2">
+          এই পরিবেশে sendmail উপলব্ধ নয় — external_setup_required। প্রোডাকশনে cPanel SMTP ব্যবহার করুন।
         </p>
       </Card>
 

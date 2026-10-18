@@ -41,12 +41,9 @@ export default function NotificationPanel() {
   };
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(load);
-    const timer = window.setInterval(load, 30000);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearInterval(timer);
-    };
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
   }, []);
 
   const markAll = async () => {

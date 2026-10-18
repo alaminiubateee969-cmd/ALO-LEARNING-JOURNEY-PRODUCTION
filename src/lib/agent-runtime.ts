@@ -15,17 +15,6 @@ export interface AgentTask {
   requiresApproval?: boolean;
 }
 
-export interface AgentPipelineStageReport {
-  agentId: string;
-  role: string;
-  status: "complete" | "fallback" | "skipped";
-  provider: string;
-  latencyMs: number;
-  scoreBefore?: number;
-  scoreAfter?: number;
-  summary: string;
-}
-
 export interface AgentRunResult<T = any> {
   runId: string;
   agentId: string;
@@ -73,7 +62,7 @@ export async function executeAsAgent<T>(
         status: "success",
         outputJson: JSON.stringify(execResult.data).slice(0, 2000),
         finishedAt: new Date(),
-        costEstUsd: 0, // paid AI APIs are disabled; infrastructure costs are not measured here
+        costEstUsd: 0.01, // estimated
       },
     });
 
@@ -148,36 +137,6 @@ export async function executeAsAgent<T>(
 /**
  * Get agent run history for traceability.
  */
-/** Persist the real completion/fallback state of each sequential creative pass. */
-export async function recordAgentPipelineStages(taskLabel: string, stages: AgentPipelineStageReport[]) {
-  const finishedAt = new Date();
-  for (const stage of stages) {
-    const latencyMs = Math.max(0, Math.min(300_000, Math.round(stage.latencyMs)));
-    const startedAt = new Date(finishedAt.getTime() - latencyMs);
-    const status = stage.status === "complete" ? "success" : "blocked_external_setup";
-    const run = await db.aIAgentRun.create({
-      data: {
-        agentId: stage.agentId,
-        status,
-        inputBrief: `${taskLabel}: ${stage.role}`.slice(0, 500),
-        outputJson: JSON.stringify({ provider: stage.provider, status: stage.status, scoreBefore: stage.scoreBefore, scoreAfter: stage.scoreAfter }).slice(0, 1_000),
-        errorMsg: stage.status === "complete" ? null : stage.summary.slice(0, 500),
-        startedAt,
-        finishedAt,
-        costEstUsd: 0,
-      },
-    });
-    await db.auditLog.create({
-      data: {
-        actor: stage.agentId,
-        action: "agent.creative_pipeline_stage",
-        detail: `AgentRun ${run.id}: ${stage.role} ${stage.status} via ${stage.provider}; rubric ${stage.scoreBefore ?? "—"} → ${stage.scoreAfter ?? "—"}`.slice(0, 1_000),
-        severity: stage.status === "complete" ? "info" : "warn",
-      },
-    });
-  }
-}
-
 export async function getAgentRuns(agentId?: string, limit = 20) {
   return db.aIAgentRun.findMany({
     where: agentId ? { agentId } : undefined,

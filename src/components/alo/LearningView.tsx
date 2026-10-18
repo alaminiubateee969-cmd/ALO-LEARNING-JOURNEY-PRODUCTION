@@ -6,7 +6,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { CURRICULUM_UNITS } from "@/lib/reference-curriculum";
 import { TrendingUp, Brain, Trophy, Calendar, AlertTriangle, Target, Clock, MessageSquare } from "lucide-react";
 
 interface Rec {
@@ -225,58 +224,6 @@ export default function LearningView() {
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Workshop curriculum — adapted from the reference link review */}
-      <Card className="p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="text-base font-semibold">📚 Workshop Curriculum (Reference-Adapted)</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Self-contained workshop units with practice plans and retrospectives — structure adapted from huggingface/education-toolkit, leandromoreira/digital_video_introduction, 0voice/audio_video_streaming, and the cursor/plugins teaching pattern. Original ALO wording; every unit links its official source.
-            </p>
-          </div>
-          <Badge variant="outline" className="font-mono text-[10px]">{CURRICULUM_UNITS.length} units</Badge>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          {CURRICULUM_UNITS.map((unit) => (
-            <div key={unit.id} className="rounded-xl border border-border/70 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
-                  {unit.durationMinutes[0]}–{unit.durationMinutes[1]} min
-                </span>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{unit.audience}</span>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{unit.track}</span>
-              </div>
-              <h4 className="mt-2 text-sm font-semibold">{unit.title}</h4>
-              <p className="mt-1 text-[11px] italic text-muted-foreground">{unit.sourceLineage}</p>
-              <ul className="mt-2 space-y-1">
-                {unit.outcomes.map((o) => (
-                  <li key={o} className="text-xs text-muted-foreground">• {o}</li>
-                ))}
-              </ul>
-              <div className="mt-2 space-y-1.5">
-                {unit.modules.map((m) => (
-                  <div key={m.name} className="rounded-lg bg-muted/40 p-2">
-                    <p className="text-xs font-semibold">{m.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{m.detail}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-2 rounded-lg bg-emerald-500/10 p-2 text-[11px] text-emerald-800 dark:text-emerald-300">
-                🔄 Retrospective: {unit.retrospective}
-              </p>
-              <a
-                href={unit.officialReference}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-block text-[11px] text-sky-600 underline dark:text-sky-400"
-              >
-                Official source repository ↗
-              </a>
             </div>
           ))}
         </div>

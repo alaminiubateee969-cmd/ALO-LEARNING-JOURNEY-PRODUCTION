@@ -66,12 +66,7 @@ export async function GET(req: Request) {
 
   if (format === "csv") {
     if (rows.length === 0) {
-      return new NextResponse("id,topic,createdAt\n", {
-        headers: {
-          "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="${filename}.csv"`,
-        },
-      });
+      return new NextResponse("No data", { status: 404 });
     }
     const headers = Object.keys(rows[0]);
     const csv = [

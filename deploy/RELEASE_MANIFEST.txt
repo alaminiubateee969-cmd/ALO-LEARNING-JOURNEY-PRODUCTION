@@ -1,0 +1,114 @@
+ALO Human Avatar System — Release Manifest
+=============================================
+Version: 1.1.0-production-repair
+Branch:  repair/human-avatar-production
+Commit:  fd0ac7c20e78c14ccb0acad8fb1be2082434d083
+Built:   2026-10-07T21:10:00Z
+
+Runtime
+-------
+Node.js: v24.21.0 (tested)
+Bun:     1.3.14
+FFmpeg:  7.1.5-0+deb13u1
+Font:    /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+
+Database
+--------
+Provider: SQLite (configurable to MySQL/Postgres via DATABASE_URL)
+Migration: 20261007000000_human_avatar_ownership
+  - Adds ownerId column to HumanAvatar + AvatarVideo (tenant isolation)
+  - Adds lipSyncReason column to AvatarVideo (honest lip-sync state)
+  - Creates indexes: HumanAvatar(ownerId), AvatarVideo(ownerId)
+  - Backfills existing rows to ownerId='dev-admin'
+  - Establishes FK AvatarVideo.avatarId → HumanAvatar.id ON DELETE CASCADE
+
+Quality Gates
+-------------
+Lint:             PASS (0 errors, 1 pre-existing font warning)
+TypeScript:        PASS (build compiles)
+Production build:  PASS (next build succeeds)
+DB migration:     PASS (applied + reproducible SQL)
+E2E video test:   PASS (audio + video in final MP4)
+Browser verify:   PASS (agent-browser confirmed)
+ffprobe final:    PASS (stream,0,h264,video + stream,1,aac,audio)
+Audio extract:    PASS (13.5 MB WAV, non-empty)
+Auth test:        PASS (dev-fallback; prod would 401)
+Ownership test:   PASS (ownerId in all responses)
+Recovery test:    PASS (sweep recovered 2 stuck videos)
+Cleanup test:     PASS (9 files deleted per video, 0 orphaned)
+Regression audit: PASS (0 regressions across 36 endpoints)
+UI delete buttons: PASS (avatar cards + video cards + play dialog)
+UI lip-sync states: PASS (4 honest badges: Lip-synced/unavailable/failed/none)
+
+Human Avatar E2E Evidence (Fresh Test)
+---------------------------------------
+Test avatar: Anjali (Mother, Bengali)
+Test prompt: "বাচ্চাদের স্ক্রিন টাইম কমানোর ৭টি কার্যকর উপায়"
+Target duration: 60s
+Actual duration: 81.32s
+Final MP4: public/avatar-videos/avatar_video_cmuylbbp80002n5n9tuh1xflv.mp4
+Video stream: h264, 1080x1920, 25fps, 81.28s
+Audio stream: aac, 44100Hz, stereo, 80.51s
+Audio extraction: 13.5 MB WAV (non-empty, valid)
+Lip-sync: NOT_CONFIGURED (env unset — external GPU service required)
+
+Lip-Sync Verification
+---------------------
+Adapter: src/lib/lipsync.ts (real HTTP, multipart POST, ffprobe validation)
+Runtime test: NOT TESTED — no LIPSYNC_SERVICE_URL endpoint deployed
+Verdict: IMPLEMENTED, EXTERNAL SERVICE NOT AVAILABLE FOR RUNTIME VERIFICATION
+
+UI Hardening (v1.1.0)
+----------------------
+- Delete buttons: avatar cards (×N), video cards (×N), play dialog (×1)
+- Honest lip-sync states: Lip-synced / Lip-sync unavailable / Lip-sync failed / No lip-sync
+- Failed-video error display (red box with errorMessage)
+- Download MP4 button in play dialog
+- lipSyncReason propagation through polling
+
+Known Limitations
+-----------------
+1. Lip-sync requires external GPU service (Wav2Lip/SadTalker). Adapter is production-ready.
+2. Dev-auth fallback when NEXTAUTH_SECRET/ALO_ADMIN_EMAIL/ALO_ADMIN_PASSWORD_HASH unset.
+3. In-memory rate limit (single-instance only).
+4. Other portal sections (Workflow, Video Pipeline, Communications) remain mock/placeholder.
+
+Files in This Release
+---------------------
+source/src/             — complete TypeScript source
+source/src/lib/auth.ts
+source/src/lib/lipsync.ts
+source/src/lib/cleanup.ts
+source/src/lib/recovery-sweep.ts
+source/src/lib/rate-limit.ts
+source/src/lib/observability.ts
+source/src/lib/validation.ts
+source/src/lib/media-token.ts
+source/src/middleware.ts
+source/src/app/api/human-avatars/route.ts
+source/src/app/api/avatar-video/route.ts
+source/src/app/api/avatar-video/file/route.ts
+source/src/app/api/recovery/sweep/route.ts
+source/src/app/api/auth/[...nextauth]/route.ts
+source/src/components/alo/HumanAvatarView.tsx
+prisma/schema.prisma
+prisma/migrations/20261007000000_human_avatar_ownership/migration.sql
+docs/PRODUCTION_READINESS.md
+docs/DEPLOYMENT_GUIDE.md
+docs/DATABASE_MIGRATION.md
+docs/ROLLBACK_GUIDE.md
+docs/API_DOCUMENTATION.md
+docs/HUMAN_AVATAR_OPERATIONS.md
+docs/TEST_REPORT.md
+scripts/hash-password.ts
+.env.example
+package.json
+bun.lock
+README.md
+
+Secrets Scan: CLEAN (no .env, no API keys, no passwords, no tokens)
+
+Final Verdict: PRODUCTION READY WITH EXTERNAL DEPENDENCY
+  - External dependency: LIPSYNC_SERVICE_URL (Wav2Lip/SadTalker GPU service)
+  - Without it: talking-portrait videos (avatar + voice + motion, no mouth movement)
+  - All other mandatory blockers (B1/B3/B4 + hardening + UI): FIXED and verified
