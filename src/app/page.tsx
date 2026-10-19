@@ -310,17 +310,30 @@ export default function Home() {
         </div>
       )}
 
-      {/* Sticky footer */}
+      {/* Sticky footer — with cPanel contact */}
       <footer className="mt-auto border-t border-border/60 bg-background/80 backdrop-blur-sm">
-        <div className="px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
+        <div className="px-4 py-3 flex flex-col lg:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
           <p className="flex items-center gap-1.5">
             <Heart className="h-3 w-3 text-rose-500" fill="currentColor" />
             আলো — ভালোবাসা দিয়ে শেখার পথ 💛✨
           </p>
-          <p className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-3 text-xs">
+            <a href="mailto:info@learn.aloeducation.com" className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors">
+              <Mail className="h-3 w-3" /> info@learn.aloeducation.com
+            </a>
+            <span className="hidden sm:inline opacity-30">·</span>
+            <a href="tel:+8801805020103" className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors">
+              <Phone className="h-3 w-3" /> 01805-020103
+            </a>
+            <span className="hidden sm:inline opacity-30">·</span>
+            <a href="https://www.facebook.com/ALOLearningJourney" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors">
+              {/* tiny FB dot */} <span className="h-3 w-3 rounded-full bg-[#1877F2] text-white flex items-center justify-center text-[8px] font-bold">f</span> ALOLearningJourney
+            </a>
+            <span className="hidden sm:inline opacity-30">·</span>
+            <a href="https://learn.aloeducation.com" target="_blank" rel="noreferrer" className="hidden sm:inline hover:text-foreground">learn.aloeducation.com</a>
+          </div>
+          <p className="hidden lg:flex items-center gap-2 text-[11px]">
             <span>Own AI Agents · RAG · Protective Mode</span>
-            <span className="hidden sm:inline">·</span>
-            <span className="hidden sm:inline">learn.aloeducation.com</span>
           </p>
         </div>
       </footer>

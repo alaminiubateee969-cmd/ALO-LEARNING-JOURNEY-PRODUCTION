@@ -16,6 +16,8 @@ const PROTECTED_MEDIA_PREFIXES = [
 function isPublicPath(request: NextRequest): boolean {
   const { pathname, searchParams } = request.nextUrl;
   if (pathname === "/login" || pathname.startsWith("/login/")) return true;
+  if (pathname === "/contact" || pathname.startsWith("/contact/")) return true;
+  if (pathname === "/api/contact" || pathname.startsWith("/api/contact/")) return true;
   if (pathname === "/api/health" && searchParams.get("details") !== "1") return true;
   return pathname === "/api/auth" || pathname.startsWith("/api/auth/");
 }
