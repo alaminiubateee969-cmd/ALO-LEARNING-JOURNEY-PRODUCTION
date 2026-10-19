@@ -6,7 +6,8 @@
 
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
+  // Added rhel-openssl-* for CloudLinux/cPanel (RHEL-based) hosts like 115.187.18.53
+  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x", "rhel-openssl-1.0.x"]
 }
 
 datasource db {
