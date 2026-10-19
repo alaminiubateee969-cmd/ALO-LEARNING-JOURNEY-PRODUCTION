@@ -84,6 +84,15 @@ if (!dbUrl) {
 if (!process.env.NEXTAUTH_SECRET) console.warn("[cpanel] WARNING: NEXTAUTH_SECRET not set - admin login will fail closed in production");
 if (!process.env.NEXTAUTH_URL) console.warn(`[cpanel] WARNING: NEXTAUTH_URL not set - should be https://learn.aloeducation.com (your domain)`);
 if (!process.env.ADMIN_EMAIL) console.warn("[cpanel] WARNING: ADMIN_EMAIL not set");
+// Email (cPanel) diagnostics — mirrors BrandSettings SMTP card
+const smtpHost = process.env.SMTP_HOST || "learn.aloeducation.com";
+const smtpPort = process.env.SMTP_PORT || "465";
+const smtpUser = process.env.SMTP_USER || "info@learn.aloeducation.com";
+if (!process.env.SMTP_PASS) {
+  console.warn(`[cpanel] SMTP: host=${smtpHost}:${smtpPort} user=${smtpUser} — SMTP_PASS not set (set in cPanel → Application Manager → Environment Variables → value from cPanel → Email Accounts → info@learn.aloeducation.com password). Outbound mail will fail until set. IMAP: learn.aloeducation.com:993`);
+} else {
+  console.log(`[cpanel] SMTP ready: ${smtpHost}:${smtpPort} as ${smtpUser} (IMAP 993 for inbox) — https://www.facebook.com/ALOLearningJourney · 01805-020103`);
+}
 
 // --- 4. Locate and launch standalone server ---------------------------------
 const candidates = [

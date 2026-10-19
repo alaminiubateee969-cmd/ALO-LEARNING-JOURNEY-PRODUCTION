@@ -147,6 +147,19 @@ async function checkLocalSpeech(results: Check[]) {
   record(results, "Local speech", false, false, "No local speech engine available");
 }
 
+function checkEmail(results: Check[]) {
+  // cPanel SMTP for info@learn.aloeducation.com — non-critical but visible in details
+  const host = process.env.SMTP_HOST || "learn.aloeducation.com";
+  const port = process.env.SMTP_PORT || "465";
+  const user = process.env.SMTP_USER || "info@learn.aloeducation.com";
+  const pass = process.env.SMTP_PASS || "";
+  if (!pass) {
+    record(results, "Email (SMTP)", false, false, `IMAP ${host}:993 + SMTP ${host}:${port} as ${user} — SMTP_PASS not set (cPanel → Email Accounts → info@learn.aloeducation.com). Outbound mail will fail.`);
+    return;
+  }
+  record(results, "Email (SMTP)", false, true, `IMAP ${host}:993 + SMTP ${host}:${port} as ${user} — configured (FB: ALOLearningJourney · 01805-020103)`);
+}
+
 /**
  * The default public response is a low-detail readiness probe: it checks the
  * database connection and core schema, but never returns host paths or errors.
@@ -161,6 +174,7 @@ export async function GET(request: Request) {
   if (detailsRequested) {
     record(results, "Runtime", true, true, `node ${process.version}`);
     checkEnv(results);
+    checkEmail(results);
     await Promise.all([
       checkDatabase(results),
       checkStorage(results),
