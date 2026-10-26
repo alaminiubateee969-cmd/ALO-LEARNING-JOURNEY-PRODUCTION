@@ -114,3 +114,79 @@ No third-party code or assets were copied. Implementations are original TypeScri
 ## Prior review (2026-10-10) — preserved
 
 The earlier manifest pass (138 GitHub slugs; 40 README/deeper document reads across 26 repos) established the first implementation wave: the Diagram & Button Design Studio (`src/lib/diagram-design.ts`, `src/app/api/diagrams/route.ts`, `DiagramStudioView.tsx`, `primitives.tsx`), the 16 original Marketing Kits + 50-Skill Catalog + Humanizer v3.1 (`marketing-kits.ts`, `humanizer.ts`, `MarketingKitsView.tsx`), the Admissions CRM/quotations/planner/enrichment waterfall (`AdmissionsCRMView.tsx`, `crm/*`), OpenSEO/GEO/pSEO (`SeoView.tsx`), and the local video/voice/music pipeline (`VideoPipelineView.tsx`, `AudioStudioView.tsx`, `/api/video/*`, `/api/voice/*`, `/api/music/*`) with `LOCAL_AI.md` boundaries. That pass explicitly did not fetch non-GitHub websites; this pass closes that gap (all 9 fetched above).
+
+---
+
+# 2026-10-26 pass — reachability audit + Photo → Video
+
+> Supersedes the "where it landed" column below **only where a row says so**.
+> Earlier rows described code that existed; this pass found that several screens
+> were never mounted in the app shell, which made that code unreachable in the
+> running product. That is fixed here.
+
+## A. Root cause found this pass
+
+`src/app/page.tsx` renders one section per nav id. Six finished screens were
+imported nowhere and rendered nowhere, so no user could open them:
+
+| Screen | File | Elements it exposes | Now mounted as |
+|---|---|---|---|
+| Diagram Studio | `src/components/alo/DiagramStudioView.tsx` | 45-type catalogue, 5 skins, 7 node treatments, size presets, draw.io / Excalidraw import + fidelity ledger, `.registry.json` export | nav **Media → Diagram Studio** |
+| Marketing Kits | `src/components/alo/MarketingKitsView.tsx` | 16 kits, 50-skill catalogue, cadence windows, A/B subjects, humanizer pass | nav **Pipeline → Marketing Kits** |
+| Audio Studio | `src/components/alo/AudioStudioView.tsx` | procedural song + local voice, mood/BPM, templates | nav **Media → Audio Studio** |
+| Admissions CRM | `src/components/alo/AdmissionsCRMView.tsx` | lead pipeline, quotations | nav **Distribution → Admissions CRM** |
+| Photo + Voice Clone | `src/components/alo/PhotoVoiceCloneView.tsx` | consent-gated clone flow | nav **Media → Photo + Voice Clone** |
+| API Reference | `src/components/alo/ApiReferenceView.tsx` | OpenAPI browser | nav **System → API Reference** |
+
+All six are also reachable from the Cmd+K palette; Photo → Video and Diagram
+Studio are additionally in the floating quick-actions menu.
+
+## B. New capability — upload photo → finished video
+
+| Source pattern | Element implemented | Location |
+|---|---|---|
+| [harry0703/MoneyPrinterTurbo](https://github.com/harry0703/MoneyPrinterTurbo) (topic→script→TTS→subtitles→render) | one-shot render API producing script-driven voice + burned subtitles + SRT | `src/app/api/video/from-photo/route.ts` |
+| [viniciusenari/slideshow-videomaker](https://github.com/viniciusenari/slideshow-videomaker), [shubhamdevhouse/Animated-VideoMaker](https://github.com/shubhamdevhouse/Animated-VideoMaker) | photos + audio → animated sequence with motion-graphics text | `buildMotionFilter()`, `PhotoToVideoStudio.tsx` |
+| [Augani/openreel-video](https://github.com/Augani/openreel-video) | browser editor surface: per-shot list, reorder, per-shot motion, timeline durations, inline preview | `PhotoToVideoStudio.tsx` |
+| [heygen-com/hyperframes](https://github.com/heygen-com/hyperframes) (write → render) | declarative render contract (`POST` form fields → JSON result with shots/offsets) | `src/lib/photo-video.ts` types |
+| [debpalash/VoiceStudio](https://github.com/debpalash/VoiceStudio) | local-only TTS with an honest engine label (`builtin-formant`) | `src/lib/local-audio.ts` |
+| [mureka.ai](https://www.mureka.ai) | original procedural music bed, four moods, seeded per render | `generateProceduralInstrumental()` |
+| [CapSoftware/Cap](https://github.com/CapSoftware/Cap) | MP4 + `.srt` + thumbnail downloads from the result card | `PhotoToVideoStudio.tsx` |
+| [buffer.com](https://buffer.com) | aspect presets labelled with their publishing destination (Reels/Shorts, IG feed, FB feed, YouTube) | `ASPECT_PRESETS` |
+
+Free-only enforcement is now explicit and testable: `FREE_PIPELINE_POLICY` +
+`assertFreeEngine()` block Sora/Veo/Kling/Runway/HeyGen/Synthesia/ElevenLabs/D-ID/Luma/Pika
+and record `costUsd: 0` for every engine.
+
+## C. Wiring fixes to existing screens
+
+* **Video Pipeline** (`VideoPipelineView.tsx`): the *Storyboard Images* and
+  *Render Preview* buttons were decorative. They now call `/api/images/generate`
+  per scene and `/api/video/from-photo` with the resulting images, show shot
+  thumbnails, and play/download the produced MP4. A CTA links to Photo → Video.
+* **Route inventory** updated with `/api/video/from-photo` and
+  `/api/media/thumbnail/[id]`; `/api/media/video` and `/api/media/subtitle`
+  accept the new `pv_` id namespace.
+
+## D. Evidence
+
+* `npx tsc --noEmit` — clean.
+* `node --experimental-strip-types --test tests/*.test.mjs` — 123 pass, 0 fail
+  (34 new in `tests/photo-video.test.mjs`).
+* Live server: `GET /` returns 200 and contains the new nav labels; a 3-photo
+  render produced a 6.56 s 1080×1920 H.264+AAC MP4 with Bengali SRT; the silent,
+  owner-audio, blocked-engine and path-traversal cases were all exercised.
+* Full behaviour, API contract, limits and the Sharp-free / xfade-free
+  constraints are documented in `docs/PHOTO_TO_VIDEO.md`.
+
+## E. Still honest boundaries
+
+* `fmtlib/fmt`, `armory3d/armorpaint`, `YutaroHayakawa/ipftrace2`,
+  `sibnerian/electron-promise-ipc`, `jitsi/jitsi-videobridge`,
+  `BelledonneCommunications/linphone-iphone`, `0perationPrivacy/VoIP` are C++/native
+  or SIP stacks with no server-side role in this Next.js product. They are listed
+  as reviewed references, not integrated dependencies — copying their code is also
+  licence-incompatible (GPL/AGPL) with this repository.
+* Hosted engines (Sora, Veo, Kling, Runway, HeyGen, ElevenLabs) are **intentionally
+  not integrated**; the requirement for this project is free-only, and the guard
+  now enforces that at the API boundary.

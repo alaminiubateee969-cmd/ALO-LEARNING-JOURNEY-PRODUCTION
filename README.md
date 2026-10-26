@@ -18,6 +18,23 @@ Operator-provided (not independently verified) production settings:
 
 Preserve the existing MySQL database, legacy admissions/OTP data, user assets, and relationships. Do not run an unverified migration or `prisma migrate deploy` against production. The required baseline reconciliation and restored-copy rehearsal are documented in [`MIGRATION-RECOVERY-PLAN.md`](./MIGRATION-RECOVERY-PLAN.md).
 
+## Photo → Video Studio (free-only)
+
+Owner-supplied photos become a finished MP4 (H.264 + AAC) with local voice,
+procedural music, camera motion, burned Bengali captions and a sidecar `.srt`.
+Every stage runs on this server — no hosted model, avatar service or render farm,
+and no paid API. Hosted engines (Sora, Veo, Kling, Runway, HeyGen, ElevenLabs, …)
+are rejected at the API boundary.
+
+- Screen: sidebar **Media → Photo → Video** (also Cmd+K and the quick-action menu)
+- API: `POST /api/video/from-photo` (multipart), `GET /api/video/from-photo`
+- Requires `ffmpeg` + `ffprobe` on the host (or the bundled installers)
+- Contracts, limits and known constraints: [`docs/PHOTO_TO_VIDEO.md`](./docs/PHOTO_TO_VIDEO.md)
+
+Screens that previously existed in the code but were never mounted — Diagram
+Studio, Marketing Kits, Audio Studio, Admissions CRM, Photo + Voice Clone and
+API Reference — are now reachable from the sidebar and the command palette.
+
 ## Local development
 
 Requirements: Node.js 22.x and npm. Use a disposable development database; never point development commands at production.
@@ -45,4 +62,4 @@ npm run build
 
 Read [`DEPLOYMENT.md`](./DEPLOYMENT.md) and [`MIGRATION-RECOVERY-PLAN.md`](./MIGRATION-RECOVERY-PLAN.md) before any operational action. Deployment requires passing CI, verified backup and isolated restore evidence, exact-SHA schema/history preflight, an already healthy PM2 process, protected GitHub Environment approval, and post-deploy health checks. The deploy script deliberately refuses to start a missing PM2 process.
 
-The generic OTP delivery endpoint is disabled until a real provider is implemented and verified. Administrator sign-in OTP is a separate flow. The content, SEO, comment, and media tools produce drafts or local outputs that still require human review; they do not constitute independent fact, safety, legal, or quality certification.
+The generic OTP delivery endpoint is disabled until a real provider is implemented and verified. Administrator sign-in OTP is a separate flow. The content, SEO, comment, and media tools produce drafts or local outputs that still require human review; they do not constitute independent fact, safety, legal, or quality certification. Local media renders (video, voice, music, diagrams) are generated on the host and are only as good as the on-host toolchain — run `node scripts/verify-media-pipeline.mjs` after any server change.

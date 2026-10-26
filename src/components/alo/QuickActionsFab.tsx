@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Lightbulb, Sparkles, ClipboardCheck, Send, BarChart3 } from "lucide-react";
+import { Plus, Lightbulb, Sparkles, ClipboardCheck, Send, BarChart3, Clapperboard, Network } from "lucide-react";
 
 interface QuickAction {
   id: string;
@@ -25,6 +25,8 @@ const ACTIONS: QuickAction[] = [
   { id: "approval", label: "Review Approvals", bn: "অনুমোদন দেখুন", icon: <ClipboardCheck className="h-4 w-4" />, section: "approval", color: "text-rose-600" },
   { id: "publish", label: "Publishing Queue", bn: "প্রকাশনা সারি", icon: <Send className="h-4 w-4" />, section: "publishing", color: "text-emerald-600" },
   { id: "analytics", label: "View Analytics", bn: "অ্যানালিটিক্স", icon: <BarChart3 className="h-4 w-4" />, section: "analytics", color: "text-sky-600" },
+  { id: "photo-video", label: "Photo → Video", bn: "ছবি থেকে ভিডিও", icon: <Clapperboard className="h-4 w-4" />, section: "photo-video", color: "text-rose-600" },
+  { id: "diagram", label: "Diagram Studio", bn: "ডায়াগ্রাম তৈরি", icon: <Network className="h-4 w-4" />, section: "diagram", color: "text-violet-600" },
 ];
 
 export default function QuickActionsFab({ onNavigate }: { onNavigate: (section: string) => void }) {

@@ -13,7 +13,7 @@ const VIDEO_DIR = getVideoStorageDir();
 
 export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
-  if (!/^(?:video|cine)_(?:[0-9a-f-]{36}|\d{10,16})$/i.test(id)) {
+  if (!/^(?:video|cine|pv)_(?:[0-9a-f-]{36}|\d{10,16})$/i.test(id)) {
     return NextResponse.json({ error: "video_not_found" }, { status: 404 });
   }
   const filePath = path.join(VIDEO_DIR, `${id}.mp4`);
