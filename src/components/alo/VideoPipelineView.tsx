@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Video, Film, Plus, Trash2, Clock, Users, ImageIcon, Mic, Play, Loader2, Clapperboard } from "lucide-react";
+import { Video, Film, Plus, Trash2, Clock, ImageIcon, Mic, Play, Loader2, Clapperboard, Sparkles, Download, AlertTriangle } from "lucide-react";
 
 interface Scene {
   id: string;
@@ -82,13 +82,103 @@ const CHARACTERS = [
 const SHOT_TYPES = ["wide", "medium", "close-up", "over-shoulder", "top-down"];
 const EMOTIONS = ["warm", "hopeful", "concerned", "joyful", "calm", "excited"];
 
-export default function VideoPipelineView() {
+export default function VideoPipelineView({ onOpenPhotoStudio }: { onOpenPhotoStudio?: () => void }) {
   const { toast } = useToast();
   const [scenes, setScenes] = useState<Scene[]>(DEFAULT_SCENES);
   const [title, setTitle] = useState("শিশুর ভাষা বিকাশে মায়ের ভূমিকা");
   const [selected, setSelected] = useState<Scene | null>(null);
+  const [images, setImages] = useState<Record<string, string>>({});
+  const [imagesBusy, setImagesBusy] = useState(false);
+  const [renderBusy, setRenderBusy] = useState(false);
+  const [renderResult, setRenderResult] = useState<{ videoUrl: string; srtUrl?: string | null; durationSec: number; width: number; height: number } | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
 
   const totalDuration = scenes.reduce((s, sc) => s + sc.duration, 0);
+
+  const generateStoryboardImages = async () => {
+    if (imagesBusy) return;
+    setImagesBusy(true);
+    setRenderError(null);
+    const next: Record<string, string> = { ...images };
+    let failures = 0;
+    try {
+      for (const scene of scenes) {
+        if (next[scene.id]) continue;
+        const prompt = [
+          "Warm Bengali editorial illustration, child-safe, no text,",
+          scene.visualPrompt || scene.title,
+          `character: ${scene.character}, shot: ${scene.shotType}, mood: ${scene.emotion}`,
+        ].join(" ");
+        try {
+          const response = await fetch("/api/images/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt, filename: `sb_${scene.id}_${Date.now()}.png` }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data.url || /\.svg$/i.test(String(data.url))) {
+            failures++;
+            continue;
+          }
+          next[scene.id] = String(data.url);
+          setImages({ ...next });
+        } catch {
+          failures++;
+        }
+      }
+      if (failures > 0) {
+        toast({
+          title: `${failures}টি দৃশ্যের ছবি তৈরি হয়নি`,
+          description: "Free image model unavailable for those scenes — Photo → Video Studio দিয়ে নিজের ছবি ব্যবহার করুন।",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "স্টোরিবোর্ড ছবি প্রস্তুত ✅", description: "এখন Render চাপলে আসল MP4 তৈরি হবে।" });
+      }
+    } finally {
+      setImagesBusy(false);
+    }
+  };
+
+  const renderStoryboard = async () => {
+    if (renderBusy) return;
+    const ready = scenes.filter((scene) => images[scene.id]);
+    if (ready.length === 0) {
+      toast({ title: "আগে Storyboard Images তৈরি করুন", description: "অথবা Photo → Video Studio-তে নিজের ছবি দিন।", variant: "destructive" });
+      return;
+    }
+    setRenderBusy(true);
+    setRenderError(null);
+    setRenderResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("imagePaths", JSON.stringify(ready.map((scene) => images[scene.id])));
+      formData.append("captions_json", JSON.stringify(ready.map((scene) => scene.voiceover)));
+      formData.append("narration", ready.map((scene) => scene.voiceover).join("\n"));
+      formData.append("title", title);
+      formData.append("aspect", "vertical");
+      formData.append("quality", "standard");
+      formData.append("motion", "auto");
+      formData.append("transition", "fade");
+      formData.append("shotSec", String(Math.round(ready.reduce((sum, scene) => sum + scene.duration, 0) / ready.length)));
+      formData.append("captions", "1");
+      formData.append("music", "hopeful");
+      formData.append("engine", "local");
+      const response = await fetch("/api/video/from-photo", { method: "POST", body: formData });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        setRenderError(String(data.detail ?? data.error ?? response.status));
+        toast({ title: "রেন্ডার ব্যর্থ", description: String(data.detail ?? data.error ?? response.status), variant: "destructive" });
+        return;
+      }
+      setRenderResult({ videoUrl: data.videoUrl, srtUrl: data.srtUrl, durationSec: data.durationSec, width: data.width, height: data.height });
+      toast({ title: "ভিডিও তৈরি হয়েছে ✅", description: `${data.durationSec}s · ${data.width}×${data.height}` });
+    } catch (error) {
+      setRenderError((error as Error).message);
+    } finally {
+      setRenderBusy(false);
+    }
+  };
 
   const addScene = () => {
     const newScene: Scene = {
@@ -145,12 +235,14 @@ export default function VideoPipelineView() {
             <Label className="text-xs">ভিডিও শিরোনাম</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1" />
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="h-9">
-              <ImageIcon className="h-3.5 w-3.5 mr-1.5" /> Storyboard Images
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" className="h-9" onClick={generateStoryboardImages} disabled={imagesBusy}>
+              {imagesBusy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5 mr-1.5" />}
+              {imagesBusy ? "ছবি তৈরি হচ্ছে…" : "Storyboard Images"}
             </Button>
-            <Button size="sm" className="bg-amber-500 hover:bg-amber-600 h-9">
-              <Play className="h-3.5 w-3.5 mr-1.5" /> Render Preview
+            <Button size="sm" className="bg-amber-500 hover:bg-amber-600 h-9" onClick={renderStoryboard} disabled={renderBusy}>
+              {renderBusy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Play className="h-3.5 w-3.5 mr-1.5" />}
+              {renderBusy ? "রেন্ডার হচ্ছে…" : "Render Video (MP4)"}
             </Button>
           </div>
         </div>
@@ -224,7 +316,16 @@ export default function VideoPipelineView() {
                       <span>·</span>
                       <span className="italic">{s.emotion}</span>
                     </div>
-                    <p className="text-[11px] text-muted-foreground line-clamp-1">{s.visualPrompt}</p>
+                    <div className="flex items-center gap-2">
+                      {images[s.id] ? (
+                        <img src={images[s.id]} alt={s.title} className="h-9 w-9 rounded object-cover shrink-0" />
+                      ) : (
+                        <span className="h-9 w-9 rounded bg-muted flex items-center justify-center shrink-0">
+                          <ImageIcon className="h-3.5 w-3.5 text-muted-foreground/60" />
+                        </span>
+                      )}
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 flex-1">{s.visualPrompt}</p>
+                    </div>
                   </div>
                   <Button
                     size="sm"
@@ -334,6 +435,59 @@ export default function VideoPipelineView() {
           )}
         </Card>
       </div>
+
+      {/* Own-photo CTA */}
+      <Card className="p-4 border-0 bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-violet-500/15">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="rounded-xl bg-white/70 dark:bg-white/10 p-2.5">
+            <Sparkles className="h-5 w-5 text-amber-600" />
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-sm">নিজের ছবি আপলোড করে সরাসরি ভিডিও বানান</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Photo → Video Studio: ছবি + বাংলা ভয়েস + মিউজিক + ক্যাপশন → এক ক্লিকে MP4। কোনো paid API নেই।
+            </p>
+          </div>
+          <Button size="sm" className="h-9 bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600" onClick={onOpenPhotoStudio}>
+            <Clapperboard className="h-3.5 w-3.5 mr-1.5" /> Photo → Video খুলুন
+          </Button>
+        </div>
+      </Card>
+
+      {renderError && (
+        <Card className="p-3 border border-rose-300 bg-rose-50 dark:bg-rose-950/30">
+          <p className="text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" /> রেন্ডার ব্যর্থ
+          </p>
+          <p className="text-[11px] text-rose-700/80 dark:text-rose-300/80 mt-1 break-words">{renderError}</p>
+        </Card>
+      )}
+
+      {renderResult && (
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold flex items-center gap-2 text-sm">
+              <Film className="h-4 w-4 text-emerald-600" /> স্টোরিবোর্ড ভিডিও
+            </h3>
+            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+              {renderResult.durationSec}s · {renderResult.width}×{renderResult.height}
+            </Badge>
+          </div>
+          <video src={renderResult.videoUrl} controls playsInline className="w-full max-h-[420px] rounded-xl bg-black" />
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700" asChild>
+              <a href={renderResult.videoUrl} download>
+                <Download className="h-3 w-3 mr-1" /> MP4 ডাউনলোড
+              </a>
+            </Button>
+            {renderResult.srtUrl && (
+              <Button size="sm" variant="outline" className="h-8 text-xs" asChild>
+                <a href={renderResult.srtUrl} download>SRT ডাউনলোড</a>
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Export specs */}
       <Card className="p-4">

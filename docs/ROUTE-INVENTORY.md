@@ -61,6 +61,7 @@
 /api/media/audio/[id]
 /api/media/scene/[id]
 /api/media/subtitle/[id]
+/api/media/thumbnail/[id]
 /api/media/video/[id]
 /api/music/generate
 /api/notifications
@@ -77,6 +78,7 @@
 /api/social
 /api/telegram
 /api/video/cinematic
+/api/video/from-photo
 /api/video/generate
 /api/video/storyboard
 /api/voice-studio

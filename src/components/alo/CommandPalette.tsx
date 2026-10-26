@@ -47,6 +47,14 @@ export default function CommandPalette({
     { id: "nav-history", label: "Content History", bn: "ইতিহাস", group: "Navigate", icon: "📜", action: () => onNavigate("history") },
     { id: "nav-learning", label: "Self-Learning", bn: "শেখা", group: "Navigate", icon: "🎓", action: () => onNavigate("learning") },
     { id: "nav-backups", label: "Backups", bn: "ব্যাকআপ", group: "Navigate", icon: "💾", action: () => onNavigate("backups") },
+    { id: "nav-photo-video", label: "Photo → Video Studio", bn: "ছবি→ভিডিও", group: "Navigate", icon: "🎬", action: () => onNavigate("photo-video"), keywords: "image to video upload photo mp4 voiceover captions" },
+    { id: "nav-video", label: "Video Pipeline", bn: "ভিডিও", group: "Navigate", icon: "🎞️", action: () => onNavigate("video") },
+    { id: "nav-audio-studio", label: "Audio Studio", bn: "অডিও", group: "Navigate", icon: "🎧", action: () => onNavigate("audio-studio"), keywords: "song music voice tts synth" },
+    { id: "nav-diagram", label: "Diagram Studio", bn: "ডায়াগ্রাম", group: "Navigate", icon: "🕸️", action: () => onNavigate("diagram"), keywords: "mermaid drawio excalidraw flowchart svg" },
+    { id: "nav-marketing-kits", label: "Marketing Kits", bn: "মার্কেটিং", group: "Navigate", icon: "📣", action: () => onNavigate("marketing-kits"), keywords: "email cadence campaign copy skills" },
+    { id: "nav-admissions-crm", label: "Admissions CRM", bn: "ভর্তি সিআরএম", group: "Navigate", icon: "🎓", action: () => onNavigate("admissions-crm"), keywords: "leads pipeline quotation students" },
+    { id: "nav-photo-voice-clone", label: "Photo + Voice Clone", bn: "ক্লোন", group: "Navigate", icon: "🧬", action: () => onNavigate("photo-voice-clone"), keywords: "consent clone voice avatar" },
+    { id: "nav-api-reference", label: "API Reference", bn: "এপিআই", group: "Navigate", icon: "🧩", action: () => onNavigate("api-reference"), keywords: "openapi endpoints docs" },
     { id: "nav-settings", label: "Settings & Ops", bn: "সেটিংস", group: "Navigate", icon: "⚙️", action: () => onNavigate("settings") },
   ];
 

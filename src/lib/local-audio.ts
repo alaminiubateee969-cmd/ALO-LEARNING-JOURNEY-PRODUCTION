@@ -4,7 +4,7 @@ import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export type MusicMood = "calm" | "hopeful" | "playful" | "reflective";
-export type SpeechEngine = "piper-local" | "espeak-local";
+export type SpeechEngine = "piper-local" | "espeak-local" | "builtin-formant";
 
 function run(command: string, args: string[], input?: string, timeout = 60_000) {
   return spawnSync(command, args, {
@@ -212,7 +212,7 @@ export async function synthesizeLocalSpeech(
 
   // Fallback to built-in formant speech WAV synthesizer so local speech always succeeds
   const durationSeconds = await synthesizeBuiltInSpeechWav(content, outputPath, safeVoice);
-  return { engine: "espeak-local", durationSeconds };
+  return { engine: "builtin-formant", durationSeconds };
 }
 
 const MOOD_DATA: Record<MusicMood, { tonic: number; scale: number[]; bars: Array<{ root: number; minor: boolean }> }> = {

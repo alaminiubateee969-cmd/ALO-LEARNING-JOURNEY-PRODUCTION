@@ -27,6 +27,8 @@ server.log
 
 # Storage (generated media — don't commit large binaries)
 storage/videos/
+storage/photo-video/
+storage/local-db.json
 storage/backups/
 storage/scene-assets/
 storage/uploads/

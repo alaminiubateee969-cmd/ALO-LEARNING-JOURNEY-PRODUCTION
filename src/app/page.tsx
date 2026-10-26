@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   LayoutDashboard, Brain, Sparkles, ClipboardCheck, BookOpen,
   Send, BarChart3, Terminal, Users, Settings, Menu, Heart, ShieldCheck, Bell, MessageSquare, Lightbulb, GraduationCap, History, Database, Search, Command, Video, DollarSign, Calendar, Workflow, RefreshCw, Phone, TrendingUp, Mail, KeyRound, Mic, FileAudio, Image as ImageIcon, UserCircle,
+  Megaphone, Network, Code2, UserPlus, Clapperboard,
 } from "lucide-react";
 import Dashboard from "@/components/alo/Dashboard";
 import AgentsView from "@/components/alo/AgentsView";
@@ -49,12 +50,21 @@ import VoiceStudioView from "@/components/alo/VoiceStudioView";
 import AsrView from "@/components/alo/AsrView";
 import ImageStudioView from "@/components/alo/ImageStudioView";
 import HumanAvatarView from "@/components/alo/HumanAvatarView";
+import PhotoToVideoStudio from "@/components/alo/PhotoToVideoStudio";
+import DiagramStudioView from "@/components/alo/DiagramStudioView";
+import MarketingKitsView from "@/components/alo/MarketingKitsView";
+import AudioStudioView from "@/components/alo/AudioStudioView";
+import AdmissionsCRMView from "@/components/alo/AdmissionsCRMView";
+import PhotoVoiceCloneView from "@/components/alo/PhotoVoiceCloneView";
+import ApiReferenceView from "@/components/alo/ApiReferenceView";
 
 type Section =
   | "dashboard" | "agents" | "loop" | "growth" | "command" | "seo" | "inkbox" | "topics" | "studio" | "approval" | "rag"
   | "social" | "analytics" | "comments" | "telegram" | "family" | "family-studio"
   | "history" | "video" | "calendar" | "workflow" | "communications" | "learning" | "backups" | "publishing" | "costs" | "crm"
-  | "otp" | "voice-studio" | "asr-studio" | "image-studio" | "human-avatars" | "settings";
+  | "otp" | "voice-studio" | "asr-studio" | "image-studio" | "human-avatars" | "settings"
+  | "photo-video" | "diagram" | "marketing-kits" | "audio-studio" | "admissions-crm"
+  | "photo-voice-clone" | "api-reference";
 
 const NAV: { id: Section; label: string; bn: string; icon: React.ReactNode; group: string }[] = [
   { id: "dashboard", label: "Dashboard", bn: "ড্যাশবোর্ড", icon: <LayoutDashboard className="h-4 w-4" />, group: "Overview" },
@@ -78,16 +88,23 @@ const NAV: { id: Section; label: string; bn: string; icon: React.ReactNode; grou
   { id: "calendar", label: "Calendar", bn: "ক্যালেন্ডার", icon: <Calendar className="h-4 w-4" />, group: "Distribution" },
   { id: "communications", label: "Communications", bn: "যোগাযোগ", icon: <Phone className="h-4 w-4" />, group: "Distribution" },
   { id: "family", label: "Family Models", bn: "ক্যারেক্টার", icon: <Users className="h-4 w-4" />, group: "Media" },
+  { id: "photo-video", label: "Photo → Video", bn: "ছবি→ভিডিও", icon: <Clapperboard className="h-4 w-4" />, group: "Media" },
   { id: "video", label: "Video Pipeline", bn: "ভিডিও", icon: <Video className="h-4 w-4" />, group: "Media" },
+  { id: "audio-studio", label: "Audio Studio", bn: "অডিও", icon: <FileAudio className="h-4 w-4" />, group: "Media" },
   { id: "family-studio", label: "Family Studio", bn: "ফ্যামিলি", icon: <Heart className="h-4 w-4" />, group: "Media" },
   { id: "voice-studio", label: "Voice Studio", bn: "ভয়েস", icon: <Mic className="h-4 w-4" />, group: "Media" },
   { id: "asr-studio", label: "ASR Studio", bn: "স্পিচ→টেক্সট", icon: <FileAudio className="h-4 w-4" />, group: "Media" },
   { id: "image-studio", label: "Image Studio Pro", bn: "ইমেজ প্রো", icon: <ImageIcon className="h-4 w-4" />, group: "Media" },
   { id: "human-avatars", label: "Human Avatars", bn: "হিউম্যান এজেন্ট", icon: <UserCircle className="h-4 w-4" />, group: "Media" },
+  { id: "photo-voice-clone", label: "Photo + Voice Clone", bn: "ক্লোন", icon: <UserPlus className="h-4 w-4" />, group: "Media" },
+  { id: "diagram", label: "Diagram Studio", bn: "ডায়াগ্রাম", icon: <Network className="h-4 w-4" />, group: "Media" },
+  { id: "marketing-kits", label: "Marketing Kits", bn: "মার্কেটিং", icon: <Megaphone className="h-4 w-4" />, group: "Pipeline" },
+  { id: "admissions-crm", label: "Admissions CRM", bn: "ভর্তি সিআরএম", icon: <Users className="h-4 w-4" />, group: "Distribution" },
   { id: "otp", label: "OTP Service", bn: "ওটিপি", icon: <KeyRound className="h-4 w-4" />, group: "System" },
   { id: "costs", label: "Cost & Usage", bn: "খরচ", icon: <DollarSign className="h-4 w-4" />, group: "System" },
   { id: "learning", label: "Self-Learning", bn: "শেখা", icon: <GraduationCap className="h-4 w-4" />, group: "System" },
   { id: "backups", label: "Backups", bn: "ব্যাকআপ", icon: <Database className="h-4 w-4" />, group: "System" },
+  { id: "api-reference", label: "API Reference", bn: "এপিআই", icon: <Code2 className="h-4 w-4" />, group: "System" },
   { id: "settings", label: "Settings & Ops", bn: "সেটিংস", icon: <Settings className="h-4 w-4" />, group: "System" },
 ];
 
@@ -269,7 +286,14 @@ export default function Home() {
             {section === "calendar" && <CalendarView />}
             {section === "communications" && <CommunicationsView />}
             {section === "family" && <FamilyView />}
-            {section === "video" && <VideoPipelineView />}
+            {section === "photo-video" && <PhotoToVideoStudio />}
+            {section === "video" && <VideoPipelineView onOpenPhotoStudio={() => pick("photo-video")} />}
+            {section === "audio-studio" && <AudioStudioView />}
+            {section === "diagram" && <DiagramStudioView />}
+            {section === "marketing-kits" && <MarketingKitsView onNavigate={(next) => pick(next as Section)} />}
+            {section === "admissions-crm" && <AdmissionsCRMView />}
+            {section === "photo-voice-clone" && <PhotoVoiceCloneView />}
+            {section === "api-reference" && <ApiReferenceView />}
             {section === "family-studio" && <FamilyStudioView />}
             {section === "voice-studio" && <VoiceStudioView />}
             {section === "asr-studio" && <AsrView />}

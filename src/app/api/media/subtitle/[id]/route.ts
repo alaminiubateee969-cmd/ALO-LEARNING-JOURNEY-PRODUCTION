@@ -10,7 +10,7 @@ const VIDEO_DIR = getVideoStorageDir();
 
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
-  if (!/^cine_(?:[0-9a-f-]{36}|\d{10,16})$/i.test(id)) {
+  if (!/^(?:cine|pv)_(?:[0-9a-f-]{36}|\d{10,16})$/i.test(id)) {
     return NextResponse.json({ error: "subtitle_not_found" }, { status: 404 });
   }
   try {
