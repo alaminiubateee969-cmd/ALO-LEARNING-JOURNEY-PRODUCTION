@@ -101,8 +101,8 @@ function Carousel({
 
     return () => {
       window.cancelAnimationFrame(frame)
-      api.off("select", onSelect)
       api.off("reInit", onSelect)
+      api.off("select", onSelect)
     }
   }, [api, onSelect])
 

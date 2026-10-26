@@ -1,4 +1,19 @@
-# ALO Education — Deployment Verification & Safe Cleanup
+# Historical Audit Archive — 2026-09 to 2026-10
+
+> **Historical, non-authoritative records.** This directory contains reports
+> from earlier checkouts, branches, and operator-provided audits. It includes
+> conflicting/obsolete paths, schema/model counts, security statements, test
+> results, and readiness claims; no item here proves the current VPS or live
+> database state. Do not run any cleanup, migration, bootstrap, or deployment
+> command copied from these reports without a new review and explicit approval.
+> For current repository-only readiness and checks use
+> `../deploy/docs/PRODUCTION_READINESS.md` and `../deploy/docs/TEST_REPORT.md`;
+> for current deployment and migration blockers use `../DEPLOYMENT.md` and
+> `../MIGRATION-RECOVERY-PLAN.md`. `../COMPLETE-AUDIT-REPORT.md`,
+> `../POST-REPAIR-AUDIT-REPORT.md`, and `../worklog.md` are explicitly historical
+> snapshots and must not be treated as current verification.
+
+# ALO Education — Historical Deployment Verification & Safe Cleanup
 
 **Report date (UTC):** 2026-09-14
 **Prepared from:** the Git checkout of `alaminiubateee969-cmd/ALO-LEARNING-JOURNEY-PRODUCTION`

@@ -1,4 +1,13 @@
-# 02 — VERIFIED FINDINGS (repository + GitHub side)
+# 02 — Historical Verified Findings (repository + GitHub side; earlier checkout)
+
+> **Historical snapshot — not current production evidence.** This document
+> refers to an earlier checkout/date and may contain stale paths, counts,
+> test results, or infrastructure claims. Use the current repository
+> baseline at `../COMPLETE-AUDIT-REPORT.md`, deployment blockers at
+> `../DEPLOYMENT.md`, and migration procedure at
+> `../MIGRATION-RECOVERY-PLAN.md`. Do not execute commands here against
+> production without a new review and explicit authorization.
+
 
 Everything in this document was **directly observed**, not inferred. Each item
 carries the command or file:line that proves it. Items that could not be

@@ -9,11 +9,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Settings, Server, ShieldCheck, ScrollText, Loader2, AlertOctagon, Activity } from "lucide-react";
 import BrandSettings from "./BrandSettings";
+import AiProvidersSettings from "./AiProvidersSettings";
 
 interface Health {
   status: string;
-  checks?: { name: string; ok: boolean; detail: string }[];
-  note?: string;
+  checks: { name: string; ok: boolean; detail: string }[];
+  note: string;
 }
 
 export default function SettingsView() {
@@ -25,7 +26,7 @@ export default function SettingsView() {
 
   const load = () => {
     Promise.all([
-      fetch("/api/health?details=1").then((r) => r.json()),
+      fetch("/api/health").then((r) => r.json()),
       fetch("/api/audit").then((r) => r.json()),
     ])
       .then(([h, a]) => {
@@ -82,6 +83,9 @@ export default function SettingsView() {
       {/* Brand & system settings */}
       <BrandSettings />
 
+      {/* AI provider management (OmniRoute-style add-provider helper) */}
+      <AiProvidersSettings />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Server health */}
         <Card className="p-5">
@@ -97,11 +101,11 @@ export default function SettingsView() {
           ) : (
             <>
               <div className="flex items-center gap-2 mb-3">
-                <StatusPill status={health.status === "ok" ? "safe" : health.status === "degraded" ? "pending" : "failed"} />
-                <span className="text-sm font-medium capitalize">{health.status}</span>
+                <StatusPill status={health.status === "COMPLETE" ? "safe" : "pending"} />
+                <span className="text-sm font-medium">{health.status}</span>
               </div>
               <div className="space-y-1.5">
-                {(health.checks ?? []).map((c) => (
+                {health.checks.map((c) => (
                   <div key={c.name} className="flex items-center justify-between gap-2 text-xs py-1.5 border-b border-border/40 last:border-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className={`h-2 w-2 rounded-full shrink-0 ${c.ok ? "bg-emerald-500" : "bg-amber-500"}`} />
@@ -110,9 +114,8 @@ export default function SettingsView() {
                     <span className="text-muted-foreground truncate text-right">{c.detail}</span>
                   </div>
                 ))}
-                {!health.checks?.length && <p className="text-xs text-muted-foreground">Detailed checks are available only to signed-in administrators.</p>}
               </div>
-              {health.note && <p className="text-[11px] text-muted-foreground mt-3">{health.note}</p>}
+              <p className="text-[11px] text-muted-foreground mt-3">{health.note}</p>
             </>
           )}
         </Card>
@@ -126,7 +129,7 @@ export default function SettingsView() {
             <div className="rounded-lg bg-muted/40 p-3">
               <p className="font-semibold mb-1">Own AI Agent নীতি</p>
               <p className="text-muted-foreground">
-                AI inference routes only to private Ollama/ComfyUI endpoints or clearly reported local fallbacks. No OpenAI/Gemini/Claude/ElevenLabs or other paid AI APIs are called by content/media generation.
+                External providers (OpenAI/Gemini/Claude/ElevenLabs ইত্যাদি) শুধু inference tool। মূল ব্রেন আমাদের নিজস্ব Agent Kernel + Orchestrator + RAG + Protective Mode।
               </p>
             </div>
             <div className="rounded-lg bg-muted/40 p-3">

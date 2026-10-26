@@ -29,24 +29,11 @@ function record(
 async function checkDatabase(results: Check[]) {
   try {
     const { db } = await import("@/lib/db");
-    const { ensureSeeded } = await import("@/lib/seed");
     const started = Date.now();
     await db.$queryRaw`SELECT 1`;
-    await ensureSeeded();
+    const companies = String(await db.company.count());
     const ms = Date.now() - started;
-
-    try {
-      const companies = String(await db.company.count());
-      record(results, "Database", true, true, `query ok in ${ms}ms; Company rows=${companies}`);
-    } catch (error) {
-      record(
-        results,
-        "Database schema",
-        true,
-        false,
-        `connection ok but Company.count() failed — schema likely not pushed: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300)
-      );
-    }
+    record(results, "Database", true, true, `query and Company schema check ok in ${ms}ms; Company rows=${companies}`);
   } catch (error) {
     record(
       results,
@@ -61,7 +48,16 @@ async function checkDatabase(results: Check[]) {
 function checkEnv(results: Check[]) {
   const url = process.env.DATABASE_URL;
   if (!url) {
-    record(results, "DATABASE_URL", true, true, "local persistent database store active (set DATABASE_URL for external MySQL)");
+    const developmentFallback = process.env.NODE_ENV !== "production";
+    record(
+      results,
+      "DATABASE_URL",
+      true,
+      developmentFallback,
+      developmentFallback
+        ? "unset; local JSON persistence is a development-only fallback"
+        : "missing in production; a configured MySQL connection is required"
+    );
     return;
   }
   const scheme = url.split(":")[0] || "unknown";
@@ -69,7 +65,28 @@ function checkEnv(results: Check[]) {
   const target = isFile
     ? `file path (${path.basename(url.replace(/^file:/, ""))})`
     : `${scheme}://<host redacted>`;
-  record(results, "DATABASE_URL", true, true, `set; scheme=${scheme}; ${target}`);
+  const mysqlRequired = process.env.NODE_ENV === "production";
+  const mysqlConfigured = scheme === "mysql" || scheme === "mysqls";
+  const ok = !mysqlRequired || mysqlConfigured;
+  record(results, "DATABASE_URL", true, ok, `set; scheme=${scheme}; ${target}${!ok ? "; production requires MySQL" : ""}`);
+}
+
+async function checkCoreConfiguration(results: Check[]) {
+  const url = process.env.DATABASE_URL ?? "";
+  const scheme = url.split(":")[0] || "";
+  const mysqlOk = Boolean(url) && (process.env.NODE_ENV !== "production" || scheme === "mysql" || scheme === "mysqls");
+  record(results, "MySQL configuration", true, mysqlOk, mysqlOk ? "configured" : "production requires a MySQL DATABASE_URL");
+
+  const { isAdminAuthenticationConfigured } = await import("@/lib/auth-config");
+  const authOk = isAdminAuthenticationConfigured();
+  const authIsCritical = process.env.NODE_ENV === "production";
+  record(
+    results,
+    "Administrator authentication",
+    authIsCritical,
+    authOk,
+    authOk ? "configured" : "not configured; production admin routes fail closed",
+  );
 }
 
 async function checkStorage(results: Check[]) {
@@ -130,6 +147,19 @@ async function checkLocalSpeech(results: Check[]) {
   record(results, "Local speech", false, false, "No local speech engine available");
 }
 
+function checkEmail(results: Check[]) {
+  // cPanel SMTP for info@learn.aloeducation.com — non-critical but visible in details
+  const host = process.env.SMTP_HOST || "learn.aloeducation.com";
+  const port = process.env.SMTP_PORT || "465";
+  const user = process.env.SMTP_USER || "info@learn.aloeducation.com";
+  const pass = process.env.SMTP_PASS || "";
+  if (!pass) {
+    record(results, "Email (SMTP)", false, false, `IMAP ${host}:993 + SMTP ${host}:${port} as ${user} — SMTP_PASS not set (cPanel → Email Accounts → info@learn.aloeducation.com). Outbound mail will fail.`);
+    return;
+  }
+  record(results, "Email (SMTP)", false, true, `IMAP ${host}:993 + SMTP ${host}:${port} as ${user} — configured (FB: ALOLearningJourney · 01805-020103)`);
+}
+
 /**
  * The default public response is a low-detail readiness probe: it checks the
  * database connection and core schema, but never returns host paths or errors.
@@ -139,10 +169,12 @@ async function checkLocalSpeech(results: Check[]) {
 export async function GET(request: Request) {
   const results: Check[] = [];
   const detailsRequested = new URL(request.url).searchParams.get("details") === "1";
+  await checkCoreConfiguration(results);
 
   if (detailsRequested) {
     record(results, "Runtime", true, true, `node ${process.version}`);
     checkEnv(results);
+    checkEmail(results);
     await Promise.all([
       checkDatabase(results),
       checkStorage(results),
@@ -165,7 +197,8 @@ export async function GET(request: Request) {
     failedOptional: failedOptional.map((check) => check.name),
   };
   const legacyStatus = failedOptional.length || failedCritical.length ? "PARTIAL" : "COMPLETE";
-  const baseResponse = { status, legacyStatus, httpStatus, checkedAt };
+  const releaseSha = /^[0-9a-f]{40}$/.test(process.env.RELEASE_SHA ?? "") ? process.env.RELEASE_SHA : "unknown";
+  const baseResponse = { status, legacyStatus, httpStatus, checkedAt, releaseSha };
 
   return NextResponse.json(
     detailsRequested ? { ...baseResponse, checks: results, summary } : baseResponse,

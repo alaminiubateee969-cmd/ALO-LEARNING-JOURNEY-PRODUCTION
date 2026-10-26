@@ -1,6 +1,6 @@
 // ALO Learning Journey — DB seed (server-only)
 // Seeds a single demo company + sample operational data if DB is empty.
-// The 40-agent roster is static (src/lib/agents.ts) — not stored in DB.
+// The agent roster is static (src/lib/agents.ts) — not stored in DB.
 
 import { db } from "./db";
 import { PLATFORMS } from "./platforms";
@@ -8,14 +8,15 @@ import { PLATFORMS } from "./platforms";
 let seeded = false;
 
 export async function ensureSeeded() {
-  if (seeded) return;
+  // Sample companies, contacts, analytics, and posts are local preview data.
+  // Never seed or backfill that sample content into the production database.
+  if (process.env.NODE_ENV === "production" || seeded) return;
   seeded = true;
   const companyCount = await db.company.count();
   if (companyCount > 0) {
     // Already seeded in a previous run — but make sure newer collections
     // (e.g. CommentInbox added in round 2) are backfilled if empty.
     await backfillComments();
-    await reconcileLegacySocialConnections();
     return;
   }
 
@@ -38,18 +39,18 @@ export async function ensureSeeded() {
     
   });
 
-  // Social connections are setup records, not proof of a live provider account.
-  // A provider must complete its real OAuth callback before it can be marked
-  // connected. Do not seed fictional accounts that make the dashboard look live.
+  // Social connections from platform registry
   for (const p of PLATFORMS) {
     await db.socialConnection.create({
       data: {
         platform: p.id,
-        accountName: `${p.name} (setup required)`,
-        handle: null,
-        status: "external_setup_required",
-        tokenExpiry: null,
-        lastSyncAt: null,
+        accountName: p.connected ? `${p.name} Official` : `${p.name} (pending)`,
+        handle: p.id === "facebook" ? "aloeducation" : null,
+        status: p.connected ? "connected" : "external_setup_required",
+        tokenExpiry: p.connected
+          ? new Date(Date.now() + 1000 * 60 * 60 * 24 * 12)
+          : null,
+        lastSyncAt: p.connected ? new Date(Date.now() - 1000 * 60 * 30) : null,
       },
     });
   }
@@ -90,20 +91,13 @@ export async function ensureSeeded() {
     { title: "FAQ — স্ক্রিন টাইম", sourceType: "faq", content: "স্ক্রিন টাইম কত হওয়া উচিত? ২ বছরের কম বয়সীদের জন্য স্ক্রিন এড়িয়ে চলুন। ২-৫ বছরে দিনে ১ ঘণ্টার বেশি নয়, এবং সেটি পিতামাতার সাথে দেখুন।", tags: ["screentime", "faq"] },
   ];
   for (const d of docs) {
-    const createdDoc = await db.ragDocument.create({
+    await db.ragDocument.create({
       data: {
         title: d.title,
         sourceType: d.sourceType,
         content: d.content,
         tagsJson: JSON.stringify(d.tags),
         chunkCount: 2,
-      },
-    });
-    await db.ragChunk.create({
-      data: {
-        documentId: createdDoc.id,
-        text: d.content,
-        keywordsJson: JSON.stringify(d.tags),
       },
     });
   }
@@ -123,14 +117,14 @@ export async function ensureSeeded() {
   };
   for (const p of platforms) {
     for (const [metric, values] of Object.entries(metrics)) {
-      for (const [i, v] of values.entries()) {
+      values.forEach((v, i) => {
         const day = new Date(Date.now() - (6 - i) * 1000 * 60 * 60 * 24);
-        await db.analyticsSnapshot
+        db.analyticsSnapshot
           .create({
             data: { platform: p, metric, value: Math.round(v * (0.7 + Math.random() * 0.6)), capturedAt: day },
           })
           .catch(() => {});
-      }
+      });
     }
   }
 
@@ -189,27 +183,6 @@ export async function ensureSeeded() {
       { platform: "whatsapp", authorName: "ফারজানা", text: "ধন্যবাদ, খুব কাজে লেগেছে 💛", postTopic: "প্যারেন্টিং", category: "praise", riskLevel: "low", status: "replied", draftReply: "ধন্যবাদ ফারজানা! আপনার অভিজ্ঞতা শেয়ার করায় আনন্দিত 💛", repliedAt: new Date(Date.now() - 1000 * 60 * 60 * 2) },
     ],
   });
-  await backfillComments();
-}
-
-// Versions before the social integration existed seeded these five fictional
-// records as connected. Only downgrade the exact legacy records so a future
-// real OAuth implementation can persist a verified connection independently.
-async function reconcileLegacySocialConnections() {
-  const legacyPlatforms = ["facebook", "instagram", "youtube", "whatsapp", "telegram"];
-  await db.socialConnection.updateMany({
-    where: {
-      platform: { in: legacyPlatforms },
-      status: "connected",
-      accountName: { endsWith: " Official" },
-    },
-    data: {
-      status: "external_setup_required",
-      handle: null,
-      tokenExpiry: null,
-      lastSyncAt: null,
-    },
-  });
 }
 
 // Backfill CommentInbox for DBs seeded before round 2 (idempotent).
@@ -246,144 +219,19 @@ async function backfillComments() {
     }
 
     const count = await db.commentInbox.count();
-    if (count === 0) {
-      await db.commentInbox.createMany({
-        data: [
-          { platform: "facebook", authorName: "রিয়া আক্তার", authorHandle: "@riya", text: "অসাধারণ ভিডিও! আমার মেয়েও এখন এই রুটিন মানছে 💛", postTopic: "ঘুমের রুটিন", category: "praise", riskLevel: "low", status: "new" },
-          { platform: "instagram", authorName: "তানভীর", authorHandle: "@tanvir", text: "আপনারা কি বলেন — ২ বছরের শিশু এখনো কথা বলে না, কী করব?", postTopic: "ভাষা বিকাশ", category: "development_sensitive", riskLevel: "high", status: "new" },
-          { platform: "youtube", authorName: "অজ্ঞাত", text: "এই ভিডিওতে যা বলা হয়েছে তা সম্পূর্ণ ভুল, ডাক্তারি পরামর্শ ছাড়া বলবেন না", postTopic: "স্ক্রিন টাইম", category: "medical_sensitive", riskLevel: "high", status: "new" },
-          { platform: "tiktok", authorName: "সুমাইয়া", text: "ভালো লেগেছে, শেয়ার করলাম 🌱", postTopic: "প্যারেন্টিং", category: "praise", riskLevel: "low", status: "new" },
-          { platform: "facebook", authorName: "বট ইউজার", text: "জিতে যান ১ লাখ টাকা এখনই ক্লিক করুন http://spam.example", postTopic: "ঘুমের রুটিন", category: "spam", riskLevel: "medium", status: "new" },
-          { platform: "instagram", authorName: "নাদিয়া", text: "এই টপিকের উপর আরও ভিডিও চাই", postTopic: "ভাষা বিকাশ", category: "question", riskLevel: "low", status: "new" },
-          { platform: "youtube", authorName: "অসন্তুষ্ট", text: "এত সময় কোথায় পাব? বাস্তবসম্মত নয়", postTopic: "স্ক্রিন টাইম", category: "complaint", riskLevel: "medium", status: "new" },
-          { platform: "whatsapp", authorName: "ফারজানা", text: "ধন্যবাদ, খুব কাজে লেগেছে 💛", postTopic: "প্যারেন্টিং", category: "praise", riskLevel: "low", status: "replied", draftReply: "ধন্যবাদ ফারজানা! আপনার অভিজ্ঞতা শেয়ার করায় আনন্দিত 💛", repliedAt: new Date(Date.now() - 1000 * 60 * 60 * 2) },
-        ],
-      });
-    }
-
-    const pkgCount = await db.contentPackage.count();
-    if (pkgCount === 0) {
-      await db.contentPackage.create({
-        data: {
-          topic: "১৮ মাসের শিশুর ভাষা বিকাশ ও প্রতিদিনের বন্ডিং",
-          reelScript: "[হুক — ৩ সেকেন্ড] ১৮ মাসের শিশুর সাথে প্রতিদিন কীভাবে কথা বললে ভাষা বিকাশ সহজ হয়? 💛\n\n[ধাপসমূহ] ১. চোখের দিকে তাকিয়ে স্পষ্টভাবে কথা বলুন। ২. ছবির বই দেখিয়ে গল্প বলুন। ৩. শিশুর ছোট শব্দগুলো আনন্দের সাথে রিপিট করুন।\n\n[CTA] আপনার অভিজ্ঞতা কমেন্টে জানান ✨",
-          hooksJson: JSON.stringify([
-            "মাত্র ১০ মিনিটে শিশুর ভাষা বিকাশ সহজ করুন 💛",
-            "১৮ মাসের শিশুর সাথে কথা বলার ৩টি সোনালী নিয়ম ✨",
-            "তুলনা নয়, ভালোবাসায় ভাষা শেখা 🌱",
-          ]),
-          seoKeywords: JSON.stringify(["ভাষা বিকাশ", "শিশু প্যারেন্টিং", "আলো লার্নিং জার্নি"]),
-          captionsJson: JSON.stringify({
-            facebook: "১৮ মাসের শিশুর ভাষা বিকাশে পিতামাতার প্রতিদিনের ১০ মিনিট কথোপকথনই সবচেয়ে বড় ভূমিকা রাখে 💛",
-            instagram: "ভালোবাসা ও ধৈর্যে শিশুর ভাষা বিকাশ ✨ #ALOLearningJourney",
-            youtube: "১৮ মাসের শিশুর ভাষা বিকাশ | আলো লার্নিং জার্নি 💛",
-          }),
-          hashtagsJson: JSON.stringify(["#ParentingBangla", "#ChildDevelopment", "#ALOLearningJourney"]),
-          imagePrompt: "Warm pastel editorial illustration of a Bengali mother and toddler reading a picture book together, child-safe, no real faces, no text",
-          voiceDirection: "Warm, gentle Bengali narration",
-          cta: "আপনার অভিজ্ঞতা কমেন্টে শেয়ার করুন ✨",
-          disclaimerBn: "প্রয়োজনে pediatrician বা speech therapist-এর পরামর্শ নিন 💛",
-          qualityScore: 94,
-          safetyStatus: "safe",
-          ragCitations: JSON.stringify([{ title: "Child Development Milestones", type: "docx", relevance: 0.92 }]),
-        },
-      });
-    }
-
-    const leadCount = await db.lead.count();
-    if (leadCount === 0) {
-      const firstCompany = await db.company.findFirst({ where: { active: true }, orderBy: { createdAt: "asc" } });
-      if (firstCompany) {
-        const lead1 = await db.lead.create({
-          data: {
-            companyId: firstCompany.id,
-            fullName: "Nusrat Jahan",
-            email: "nusrat.jahan@example.com",
-            phone: "+8801711223344",
-            targetCountry: "United Kingdom",
-            studyLevel: "Postgraduate (MSc)",
-            courseInterest: "MSc Education & Child Development",
-            intake: "September 2027",
-            source: "website",
-            stage: "proposal_sent",
-            consentStatus: "consented",
-            consentRecordedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3),
-            nextFollowUp: new Date(Date.now() + 1000 * 60 * 60 * 24),
-            notes: "Interested in UK scholarship options and evening family consultation.",
-          },
-        });
-        await db.leadActivity.create({
-          data: {
-            leadId: lead1.id,
-            type: "consultation_booked",
-            body: "Initial counselling session completed; quotation sent for review.",
-            actor: "admin",
-          },
-        });
-        await db.quotation.create({
-          data: {
-            leadId: lead1.id,
-            number: "ALO-2026-DEMO01",
-            title: "UK Postgraduate Admissions & Counselling Package",
-            currency: "BDT",
-            status: "sent",
-            subtotal: "25000.00",
-            discountAmount: "2500.00",
-            taxRate: "0.00",
-            taxAmount: "0.00",
-            total: "22500.00",
-            validUntil: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
-            terms: "Service fee covers university shortlisting, SOP guidance, and application review.",
-            notes: "Early-intake discount applied.",
-            items: {
-              create: [
-                {
-                  description: "University Shortlisting & Application Strategy",
-                  quantity: 1,
-                  unitPrice: "15000.00",
-                  lineTotal: "15000.00",
-                  position: 0,
-                },
-                {
-                  description: "SOP & Academic Portfolio Review",
-                  quantity: 1,
-                  unitPrice: "10000.00",
-                  lineTotal: "10000.00",
-                  position: 1,
-                },
-              ],
-            },
-          },
-        });
-
-        const lead2 = await db.lead.create({
-          data: {
-            companyId: firstCompany.id,
-            fullName: "Tanvir Ahmed",
-            email: "tanvir.ahmed@example.com",
-            phone: "+8801819556677",
-            targetCountry: "Australia",
-            studyLevel: "Undergraduate",
-            courseInterest: "Bachelor of Early Childhood Education",
-            intake: "February 2027",
-            source: "social",
-            stage: "qualified",
-            consentStatus: "consented",
-            consentRecordedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
-            nextFollowUp: new Date(),
-            notes: "Requested follow-up call today regarding IELTS preparation.",
-          },
-        });
-        await db.leadActivity.create({
-          data: {
-            leadId: lead2.id,
-            type: "call",
-            body: "Verified academic transcripts and preferred Melbourne campuses.",
-            actor: "admin",
-          },
-        });
-      }
-    }
+    if (count > 0) return;
+    await db.commentInbox.createMany({
+      data: [
+        { platform: "facebook", authorName: "রিয়া আক্তার", authorHandle: "@riya", text: "অসাধারণ ভিডিও! আমার মেয়েও এখন এই রুটিন মানছে 💛", postTopic: "ঘুমের রুটিন", category: "praise", riskLevel: "low", status: "new" },
+        { platform: "instagram", authorName: "তানভীর", authorHandle: "@tanvir", text: "আপনারা কি বলেন — ২ বছরের শিশু এখনো কথা বলে না, কী করব?", postTopic: "ভাষা বিকাশ", category: "development_sensitive", riskLevel: "high", status: "new" },
+        { platform: "youtube", authorName: "অজ্ঞাত", text: "এই ভিডিওতে যা বলা হয়েছে তা সম্পূর্ণ ভুল, ডাক্তারি পরামর্শ ছাড়া বলবেন না", postTopic: "স্ক্রিন টাইম", category: "medical_sensitive", riskLevel: "high", status: "new" },
+        { platform: "tiktok", authorName: "সুমাইয়া", text: "ভালো লেগেছে, শেয়ার করলাম 🌱", postTopic: "প্যারেন্টিং", category: "praise", riskLevel: "low", status: "new" },
+        { platform: "facebook", authorName: "বট ইউজার", text: "জিতে যান ১ লাখ টাকা এখনই ক্লিক করুন http://spam.example", postTopic: "ঘুমের রুটিন", category: "spam", riskLevel: "medium", status: "new" },
+        { platform: "instagram", authorName: "নাদিয়া", text: "এই টপিকের উপর আরও ভিডিও চাই", postTopic: "ভাষা বিকাশ", category: "question", riskLevel: "low", status: "new" },
+        { platform: "youtube", authorName: "অসন্তুষ্ট", text: "এত সময় কোথায় পাব? বাস্তবসম্মত নয়", postTopic: "স্ক্রিন টাইম", category: "complaint", riskLevel: "medium", status: "new" },
+        { platform: "whatsapp", authorName: "ফারজানা", text: "ধন্যবাদ, খুব কাজে লেগেছে 💛", postTopic: "প্যারেন্টিং", category: "praise", riskLevel: "low", status: "replied", draftReply: "ধন্যবাদ ফারজানা! আপনার অভিজ্ঞতা শেয়ার করায় আনন্দিত 💛", repliedAt: new Date(Date.now() - 1000 * 60 * 60 * 2) },
+      ],
+    });
   } catch {
     // ignore — table may not exist yet
   }

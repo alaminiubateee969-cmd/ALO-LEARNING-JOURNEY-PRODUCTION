@@ -131,7 +131,7 @@ export default function MarketingKitsView({ onNavigate }: { onNavigate: (section
       setPolishedBodies((current) => ({ ...current, [activeCacheKey]: renderTemplate(body.draft, fields) }));
       setPolishPipeline((current) => ({ ...current, [activeCacheKey]: body.qualityPipeline ?? [] }));
       toast({
-        title: body.usedFallback ? "Template retained; local model unavailable" : "Three local agents reviewed the email draft",
+        title: body.usedFallback ? "Template retained; local model unavailable" : "Email draft revised through local model prompts",
         description: "Draft only. No email was sent; verify claims, consent, preferences and every placeholder.",
       });
     } catch (error) {
@@ -238,7 +238,7 @@ export default function MarketingKitsView({ onNavigate }: { onNavigate: (section
       <SectionHeader
         title="Marketing Kits & Skills"
         bn="মার্কেটিং কিট ও স্কিল"
-        desc="16 editable multi-channel campaign kits (UK, Canada, USA, Australia, Germany, IELTS, Scholarships, Bengali Parenting, AARRR & CRO), 50 Marketing Skills reference matrix, and local Anti-AI-Slop Humanizer."
+        desc="19 editable multi-channel campaign kits (UK, Canada, USA, Australia, Germany, IELTS, Scholarships, Bengali Parenting, AARRR, CRO & timed drip cadences), 50 Marketing Skills reference matrix, and local Anti-AI-Slop Humanizer."
         icon={<Megaphone className="h-5 w-5" />}
         action={
           <div className="flex flex-wrap items-center gap-2">
@@ -385,8 +385,43 @@ export default function MarketingKitsView({ onNavigate }: { onNavigate: (section
                       <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Message angle</p>
                       <p className="mt-1 text-xs leading-relaxed">{selected.angle}</p>
                     </div>
+                    {selected.trigger && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Automation trigger</p>
+                        <p className="mt-1 font-mono text-xs leading-relaxed">{selected.trigger}</p>
+                      </div>
+                    )}
+                    {selected.sendWindow && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Send window guidance</p>
+                        <p className="mt-1 text-xs leading-relaxed">{selected.sendWindow}</p>
+                      </div>
+                    )}
                   </div>
                 </Card>
+
+                {selected.cadence && selected.cadence.length > 0 && (
+                  <Card className="p-4 sm:p-5">
+                    <div className="mb-3">
+                      <h3 className="text-sm font-semibold">Timed drip cadence (planning only — ALO never sends automatically)</h3>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Angle rotation from coreyhaines31/marketingskills follow-up research: each touch adds one new value piece. Day offsets are planning metadata.
+                      </p>
+                    </div>
+                    <ol className="space-y-2">
+                      {selected.cadence.map((step) => (
+                        <li key={`${step.day}-${step.channel}`} className="flex flex-wrap items-start gap-2 rounded-lg border border-border/60 p-2.5">
+                          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber-700 dark:text-amber-400">Day {step.day}</span>
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{step.channel}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-semibold">{step.angle}</span>
+                            <span className="block text-xs text-muted-foreground">{step.note}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </Card>
+                )}
 
                 <Card className="p-4 sm:p-5">
                   <div className="mb-3 flex items-center justify-between gap-2">
@@ -445,7 +480,7 @@ export default function MarketingKitsView({ onNavigate }: { onNavigate: (section
                           {activeAsset.channel === "Email" && (
                             <Button type="button" size="sm" variant="outline" disabled={polishBusy} onClick={() => void polishEmailDraft()}>
                               {polishBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                              {polishBusy ? "Reviewing…" : "Refine draft with local agents"}
+                              {polishBusy ? "Reviewing…" : "Revise draft with local model prompts"}
                             </Button>
                           )}
                           <Button type="button" size="sm" variant="outline" disabled={humanizeAssetBusy} onClick={() => void humanizeActiveAsset()}>

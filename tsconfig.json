@@ -7,6 +7,7 @@
       "esnext"
     ],
     "allowJs": true,
+    "allowImportingTsExtensions": true,
     "strict": true,
     "noEmit": true,
     "noImplicitAny": false,
@@ -39,6 +40,10 @@
   "exclude": [
     "node_modules",
     "examples/**/*",
-    "skills/**/*"
+    "skills/**/*",
+    "download/**/*",
+    "storage/**/*",
+    "deploy/**/*",
+    "scripts/**/*"
   ]
 }

@@ -17,6 +17,7 @@ interface Rec {
 
 interface Learning {
   period: string;
+  sourceMessage: string;
   totals: Record<string, number>;
   byPlatform: Record<string, Record<string, number>>;
   bestPlatform: string;
@@ -36,7 +37,7 @@ const platformEmoji: Record<string, string> = {
 export default function LearningView() {
   const { toast } = useToast();
   const [data, setData] = useState<Learning | null>(null);
-  const [appliedIds, setAppliedIds] = useState<number[]>([]);
+  const [reviewedIds, setReviewedIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -70,9 +71,9 @@ export default function LearningView() {
   return (
     <div className="alo-fade-up space-y-6">
       <SectionHeader
-        title="Self-Learning"
-        bn="সাপ্তাহিক শেখা"
-        desc="WeeklyLearningAgent গত ৭ দিনের পারফরম্যান্স বিশ্লেষণ করে সুপারিশ তৈরি করে। এটি কখনো স্বয়ংক্রিয়ভাবে safety বা brand rules পুনরায় লেখে না — সব সুপারিশ অ্যাডমিন অনুমোদনের অপেক্ষায় থাকে।"
+        title="Weekly Data Summary"
+        bn="সাপ্তাহিক ডেটা সারাংশ"
+        desc="Heuristic summaries use stored analytics snapshots, comment records, and post statuses only; platform data and delivery are not verified. Suggestions are not applied to content or scheduled as actions."
         icon={<Brain className="h-5 w-5" />}
         action={
           <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100">
@@ -80,14 +81,15 @@ export default function LearningView() {
           </Badge>
         }
       />
+      <Card className="border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">{data.sourceMessage}</Card>
 
       {/* KPI summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        <StatCard label="মোট ভিউ" value={data.totals.views ?? 0} sub="৭ দিন" icon={<TrendingUp className="h-4 w-4" />} tone="sky" />
-        <StatCard label="মোট রিচ" value={data.totals.reach ?? 0} icon={<Target className="h-4 w-4" />} tone="emerald" />
-        <StatCard label="এনগেজমেন্ট %" value={data.engagement} sub="engagement rate" icon={<MessageSquare className="h-4 w-4" />} tone="amber" />
-        <StatCard label="সংবেদনশীল %" value={data.sensitiveRate} sub="মন্তব্যের" icon={<AlertTriangle className="h-4 w-4" />} tone="rose" />
-        <StatCard label="প্রকাশিত" value={data.publishedCount} sub="পোস্ট" icon={<Trophy className="h-4 w-4" />} tone="violet" />
+        <StatCard label="Stored view samples" value={data.totals.views ?? 0} sub="Sum · last 7 days" icon={<TrendingUp className="h-4 w-4" />} tone="sky" />
+        <StatCard label="Stored reach samples" value={data.totals.reach ?? 0} sub="Sum · last 7 days" icon={<Target className="h-4 w-4" />} tone="emerald" />
+        <StatCard label="Engagement proxy" value={`${data.engagement}%`} sub="Shares + saves + comments ÷ reach" icon={<MessageSquare className="h-4 w-4" />} tone="amber" />
+        <StatCard label="Sensitive-comment share" value={`${data.sensitiveRate}%`} sub="Stored comments · last 7 days" icon={<AlertTriangle className="h-4 w-4" />} tone="rose" />
+        <StatCard label="Records marked published" value={data.publishedCount} sub="Delivery unverified" icon={<Trophy className="h-4 w-4" />} tone="violet" />
       </div>
 
       {/* Best platform + best day */}
@@ -98,9 +100,9 @@ export default function LearningView() {
               {platformEmoji[data.bestPlatform] ?? "🏆"}
             </div>
             <div>
-              <p className="text-[11px] uppercase text-muted-foreground tracking-wide">সেরা প্ল্যাটফর্ম</p>
+              <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Highest stored view-sample sum</p>
               <p className="text-xl font-bold capitalize">{data.bestPlatform}</p>
-              <p className="text-xs text-muted-foreground">{data.bestPlatformViews.toLocaleString()} ভিউ</p>
+              <p className="text-xs text-muted-foreground">{data.bestPlatformViews.toLocaleString()} stored values · unverified</p>
             </div>
           </div>
         </Card>
@@ -110,9 +112,9 @@ export default function LearningView() {
               <Calendar className="h-6 w-6 text-white" />
             </div>
             <div>
-              <p className="text-[11px] uppercase text-muted-foreground tracking-wide">সেরা দিন</p>
+              <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Highest stored view-sample day</p>
               <p className="text-xl font-bold">{data.bestDay}</p>
-              <p className="text-xs text-muted-foreground">{data.bestDayViews.toLocaleString()} ভিউ</p>
+              <p className="text-xs text-muted-foreground">{data.bestDayViews.toLocaleString()} stored values</p>
             </div>
           </div>
         </Card>
@@ -122,9 +124,9 @@ export default function LearningView() {
               <Clock className="h-6 w-6 text-white" />
             </div>
             <div>
-              <p className="text-[11px] uppercase text-muted-foreground tracking-wide">প্রাইম টাইম</p>
-              <p className="text-xl font-bold">৭–৯টা</p>
-              <p className="text-xs text-muted-foreground">সন্ধ্যা</p>
+              <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Example window · not measured</p>
+              <p className="text-xl font-bold">7–9 PM</p>
+              <p className="text-xs text-muted-foreground">Not based on account analytics</p>
             </div>
           </div>
         </Card>
@@ -133,7 +135,7 @@ export default function LearningView() {
       {/* Per-platform breakdown */}
       <Card className="p-5">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-amber-600" /> প্ল্যাটফর্ম পারফরম্যান্স
+          <TrendingUp className="h-4 w-4 text-amber-600" /> Stored snapshot values by platform
         </h3>
         <div className="space-y-4">
           {Object.entries(data.byPlatform).map(([p, m]) => {
@@ -165,7 +167,7 @@ export default function LearningView() {
         </div>
         <div className="mt-4">
           <div className="flex items-center justify-between text-xs mb-2">
-            <span className="text-muted-foreground">এনগেজমেন্ট রেট</span>
+            <span className="text-muted-foreground">Stored engagement proxy</span>
             <span className="font-medium">{data.engagement}%</span>
           </div>
           <Progress value={Math.min(100, data.engagement * 5)} className="h-2" />
@@ -175,8 +177,8 @@ export default function LearningView() {
       {/* Recommendations */}
       <Card className="p-5">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
-          <Brain className="h-4 w-4 text-violet-600" /> WeeklyLearningAgent সুপারিশ
-          <Badge variant="outline" className="text-[9px] ml-1">admin approval দরকার</Badge>
+          <Brain className="h-4 w-4 text-violet-600" /> Rule-based suggestions
+          <Badge variant="outline" className="text-[9px] ml-1">Advisory · not applied or saved</Badge>
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {data.recommendations.map((r, i) => (
@@ -195,31 +197,19 @@ export default function LearningView() {
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">{r.detail}</p>
-                  {/* Apply recommendation actions */}
-                  <div className="flex flex-wrap gap-1.5 mt-2.5">
-                    {r.priority === "high" && (
-                      <button
-                        onClick={() => {
-                          setAppliedIds((s) => [...s, i]);
-                          toast({ title: "সুপারিশ প্রয়োগ করা হয়েছে ✅", description: r.title });
-                        }}
-                        disabled={appliedIds.includes(i)}
-                        className="rounded-md bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed px-2 py-1 text-[10px] font-medium text-white transition-colors"
-                      >
-                        {appliedIds.includes(i) ? "✓ প্রয়োগ হয়েছে" : "প্রয়োগ করুন"}
-                      </button>
-                    )}
+                  <div className="mt-2.5 flex items-center gap-2">
                     <button
-                      onClick={() => toast({ title: "মন্তব্য সংরক্ষিত", description: "এই সুপারিশটি পরে দেখা হবে" })}
-                      className="rounded-md border border-border hover:bg-muted px-2 py-1 text-[10px] font-medium transition-colors"
+                      onClick={() => {
+                        setReviewedIds((ids) => [...ids, i]);
+                        toast({
+                          title: "Marked reviewed for this session only",
+                          description: "No content, schedule, safety rule, or stored setting was changed.",
+                        });
+                      }}
+                      disabled={reviewedIds.includes(i)}
+                      className="rounded-md border border-border px-2 py-1 text-[10px] font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      পরে দেখব
-                    </button>
-                    <button
-                      onClick={() => toast({ title: "বাতিল করা হয়েছে", description: r.title, variant: "destructive" })}
-                      className="rounded-md border border-border hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 px-2 py-1 text-[10px] font-medium transition-colors"
-                    >
-                      বাতিল
+                      {reviewedIds.includes(i) ? "Reviewed · session only" : "Mark reviewed · session only"}
                     </button>
                   </div>
                 </div>

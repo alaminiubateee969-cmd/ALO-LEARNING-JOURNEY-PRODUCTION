@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Lightbulb, Sparkles, ClipboardCheck, Send, BarChart3, UserRoundPlus, Megaphone } from "lucide-react";
+import { Plus, Lightbulb, Sparkles, ClipboardCheck, Send, BarChart3 } from "lucide-react";
 
 interface QuickAction {
   id: string;
@@ -20,8 +20,6 @@ interface QuickAction {
 }
 
 const ACTIONS: QuickAction[] = [
-  { id: "enquiry", label: "New enquiry", bn: "নতুন এনকোয়ারি", icon: <UserRoundPlus className="h-4 w-4" />, section: "crm", color: "text-amber-600" },
-  { id: "kit", label: "Marketing kits", bn: "ক্যাম্পেইন কপি", icon: <Megaphone className="h-4 w-4" />, section: "marketing-kits", color: "text-rose-600" },
   { id: "idea", label: "New Idea", bn: "নতুন আইডিয়া", icon: <Lightbulb className="h-4 w-4" />, section: "topics", color: "text-violet-600" },
   { id: "studio", label: "Generate Content", bn: "কনটেন্ট তৈরি", icon: <Sparkles className="h-4 w-4" />, section: "studio", color: "text-amber-600" },
   { id: "approval", label: "Review Approvals", bn: "অনুমোদন দেখুন", icon: <ClipboardCheck className="h-4 w-4" />, section: "approval", color: "text-rose-600" },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SectionHeader, StatusPill } from "./primitives";
+import { SectionHeader } from "./primitives";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +49,7 @@ export default function PackageHistoryView({ onDuplicate }: { onDuplicate?: (top
       <SectionHeader
         title="Content History"
         bn="কনটেন্ট ইতিহাস"
-        desc="ContentWriterAgent দ্বারা তৈরি সকল প্যাকেজ ব্রাউজ করুন। সম্পূর্ণ স্ক্রিপ্ট, ক্যাপশন, হুক ও কোয়ালিটি স্কোর দেখুন।"
+        desc="Browse stored content drafts. Historical model-provided scores are unverified; content is not independently fact-checked or safety-certified here."
         icon={<History className="h-5 w-5" />}
         action={
           <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
@@ -88,8 +88,8 @@ export default function PackageHistoryView({ onDuplicate }: { onDuplicate?: (top
                     <FileText className="h-4 w-4 text-amber-600" />
                   </div>
                   <div className="flex items-center gap-1">
-                    <Badge variant="outline" className="text-[9px]">Q {p.qualityScore}</Badge>
-                    <StatusPill status={p.safetyStatus === "pending" ? "pending" : p.safetyStatus === "safe" ? "safe" : "needs_revision"} />
+                    <Badge variant="outline" className="text-[9px]">{p.qualityScore > 0 ? `Model self-score ${p.qualityScore} (unverified)` : "Not independently scored"}</Badge>
+                    <Badge variant="outline" className="text-[9px]">{p.safetyStatus === "pending" ? "Human review required" : p.safetyStatus === "safe" ? "Safety status unverified" : "Needs revision"}</Badge>
                   </div>
                 </div>
                 <h3 className="font-semibold text-sm leading-snug line-clamp-2">{p.topic}</h3>
@@ -119,7 +119,7 @@ export default function PackageHistoryView({ onDuplicate }: { onDuplicate?: (top
               <FileText className="h-4 w-4 text-amber-600" /> {selected?.topic}
             </DialogTitle>
             <DialogDescription>
-              Q{selected?.qualityScore} · {selected?.safetyStatus} · {selected && new Date(selected.createdAt).toLocaleString()}
+              {selected && selected.qualityScore > 0 ? `Model self-score ${selected.qualityScore} (unverified)` : "Not independently scored"} · {selected?.safetyStatus === "safe" ? "safety status unverified" : selected?.safetyStatus === "pending" ? "human review required" : selected?.safetyStatus} · {selected && new Date(selected.createdAt).toLocaleString()}
             </DialogDescription>
           </DialogHeader>
           {selected && (

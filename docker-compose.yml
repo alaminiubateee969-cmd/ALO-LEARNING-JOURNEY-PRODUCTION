@@ -1,0 +1,40 @@
+# Optional local/sandbox container profile only; not the verified VPS deployment.
+# It does not start a proxy or override DATABASE_URL. Supply a MySQL URL in the
+# ignored .env file and review the volumes/ports before starting any container.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3017:3017"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3017"
+      HOSTNAME: 0.0.0.0
+    volumes:
+      - alo-storage:/app/storage
+      - alo-generated:/app/public/generated
+      - alo-avatars:/app/public/avatars
+      - alo-avatar-videos:/app/public/avatar-videos
+      - alo-avatar-audio:/app/public/avatar-audio
+      - alo-avatar-scenes:/app/public/avatar-scenes
+      - alo-avatar-thumbs:/app/public/avatar-thumbs
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:3017/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  alo-storage:
+  alo-generated:
+  alo-avatars:
+  alo-avatar-videos:
+  alo-avatar-audio:
+  alo-avatar-scenes:
+  alo-avatar-thumbs:

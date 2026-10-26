@@ -3,6 +3,18 @@ export interface MarketingAssetTemplate {
   channel: "Email" | "WhatsApp" | "Social post" | "Carousel" | "Landing page" | "SMS";
   title: string;
   body: string;
+  /** A/B subject or hook variants (knsoftic/Email_Markting DecideAbTests pattern) — human picks, never auto-sent. */
+  abVariants?: string[];
+  /** Drip offset in days from the kit trigger (RunAutomations/DispatchScheduledCampaigns pattern). */
+  sequenceDay?: number;
+}
+
+/** Timed drip step: automation trigger → scheduled draft (planning metadata only — ALO never sends). */
+export interface MarketingCadenceStep {
+  day: number;
+  channel: "Email" | "WhatsApp" | "SMS";
+  angle: string;
+  note: string;
 }
 
 export interface MarketingKit {
@@ -15,7 +27,8 @@ export interface MarketingKit {
     | "Readiness"
     | "Country pathway"
     | "Lead magnet"
-    | "Growth & CRO";
+    | "Growth & CRO"
+    | "Lifecycle & Retention";
   objective: string;
   audience: string;
   angle: string;
@@ -24,6 +37,12 @@ export interface MarketingKit {
   fields: Array<{ key: string; label: string; defaultValue: string }>;
   guardrails: string[];
   assets: MarketingAssetTemplate[];
+  /** Automation trigger, e.g. "lead_magnet_downloaded" — planning metadata from the Email_Markting automation model. */
+  trigger?: string;
+  /** Local send window guidance (Tuesday–Thursday, 9–11 AM or 1–3 PM recipient-local). */
+  sendWindow?: string;
+  /** Timed touch cadence with angle rotation (marketingskills cold-email follow-up research). */
+  cadence?: MarketingCadenceStep[];
 }
 
 export interface MarketingSkillItem {
@@ -615,7 +634,155 @@ export const MARKETING_KITS: MarketingKit[] = [
       },
     ],
   },
-];
+  // ── Drip sequence kits (marketingskills emails/sequence-templates + cold-email follow-up + Email_Markting automations) ──
+  {
+    id: "welcome-nurture-sequence",
+    title: "7-Touch Welcome & Lead-Nurture Drip",
+    category: "Enquiry follow-up",
+    objective: "Deliver the promised lead magnet, then nurture a new enquiry to a consultation decision over 14 days.",
+    audience: "Parents and students who downloaded a checklist or joined the list and asked for updates.",
+    angle: "Deliver value first, then story, proof, objection handling, and one clear offer — one new value piece per touch.",
+    topic: "Welcome & nurture sequence",
+    sourceInspiration: "coreyhaines31/marketingskills skills/emails/references/sequence-templates.md (Welcome Sequence) + knsoftic/Email_Markting automations",
+    trigger: "lead_magnet_downloaded",
+    sendWindow: "Tue–Thu, 9–11 AM or 1–3 PM recipient-local time. Avoid Monday mornings and Friday afternoons.",
+    cadence: [
+      { day: 0, channel: "Email", angle: "Deliver + introduce", note: "Give the promised checklist immediately. One next action. Set expectations." },
+      { day: 1, channel: "Email", angle: "Quick win", note: "Help them use the checklist for one small success today." },
+      { day: 3, channel: "Email", angle: "Story / why", note: "Why ALO verifies official sources — short origin note." },
+      { day: 5, channel: "WhatsApp", angle: "Social proof", note: "A relatable anonymised outcome; soft CTA to the readiness review." },
+      { day: 7, channel: "Email", angle: "Overcome objection", note: "Address the 'no time / too late' hesitation with a simple path." },
+      { day: 10, channel: "Email", angle: "Core resource", note: "Point at the country pathway kit that matches their enquiry." },
+      { day: 14, channel: "Email", angle: "Consultation offer", note: "Summarise value, clear offer, no manufactured urgency." },
+    ],
+    fields: [
+      { key: "first_name", label: "First name", defaultValue: "there" },
+      { key: "magnet", label: "Delivered lead magnet", defaultValue: "your checklist" },
+      { key: "advisor", label: "Advisor / team name", defaultValue: "ALO Education team" },
+      { key: "booking_link", label: "Booking link", defaultValue: "[add verified booking link]" },
+    ],
+    guardrails: [
+      "Each touch adds one genuinely new value piece — never 'just bumping this'.",
+      "No manufactured urgency; deadline claims must link to the official source.",
+      "Preference/unsubscribe link on every email; STOP handling on WhatsApp.",
+    ],
+    assets: [
+      {
+        id: "email",
+        channel: "Email",
+        title: "Day 0 — deliver the magnet",
+        sequenceDay: 0,
+        abVariants: ["Subject: Your {{magnet}} is inside", "Subject: Here's the {{magnet}} you asked for"],
+        body: "Subject: Your {{magnet}} is inside\n\nHi {{first_name}},\n\nHere is the {{magnet}} you asked for. The fastest way to use it: pick the one section that matches your situation this week and complete just that.\n\nOver the next two weeks I will send a few short notes on verifying official sources, timing, and common questions. One clear next step when you are ready: {{booking_link}}\n\nKind regards,\n{{advisor}}",
+      },
+      {
+        id: "email",
+        channel: "Email",
+        title: "Day 3 — why we verify",
+        sequenceDay: 3,
+        body: "Subject: Why every ALO checklist links to the official source\n\nHi {{first_name}},\n\nOne reason our checklists look different: every requirement we list is checked against the official institution or government page on the day we publish it, and re-checked each term.\n\nIf a detail matters to your plan, open the source link in the checklist and confirm it yourself — that habit protects every application.\n\n{{advisor}}",
+      },
+      {
+        id: "whatsapp",
+        channel: "WhatsApp",
+        title: "Day 5 — proof note",
+        sequenceDay: 5,
+        body: "Hi {{first_name}} — a short example: a family we advised last term used the same {{magnet}} to build their question list, then confirmed three details directly with the institution before booking anything. If a chat helps, {{booking_link}}. Reply STOP to opt out.",
+      },
+    ],
+  },
+  {
+    id: "partner-followup-cadence",
+    title: "Partner Outreach 5-Touch Follow-Up Cadence",
+    category: "Growth & CRO",
+    objective: "Run a 5-touch, angle-rotated outreach cadence to school counsellors and university representatives.",
+    audience: "School counsellors, teachers, and university international-office representatives.",
+    angle: "Each follow-up stands alone with a new angle (value → insight → proof → resource → respectful close). Never 'just bumping this'.",
+    topic: "Institutional partner outreach cadence",
+    sourceInspiration: "coreyhaines31/marketingskills skills/cold-email/references/follow-up-sequences.md (cadence + breakup email)",
+    trigger: "partner_list_approved",
+    sendWindow: "Tuesday–Thursday peaks (Thursday 6.87% reply rate). 9–11 AM or 1–3 PM local. Cap at 5 emails total.",
+    cadence: [
+      { day: 0, channel: "Email", angle: "Personalised hook + value prop + soft CTA", note: "Maximum personalisation investment." },
+      { day: 3, channel: "Email", angle: "New value piece (stat or resource)", note: "Waiting 3 days lifts response up to 31%." },
+      { day: 7, channel: "Email", angle: "Social proof from a similar institution", note: "Different angle — one new value proposition only." },
+      { day: 14, channel: "Email", angle: "New insight or trend resource", note: "Demonstrate expertise without pressure." },
+      { day: 21, channel: "Email", angle: "Breakup — leave the door open", note: "Acknowledge silence; 10–15% reply rates on breakups (Close.com). After this, stop." },
+    ],
+    fields: [
+      { key: "contact_name", label: "Contact name", defaultValue: "there" },
+      { key: "institution", label: "Institution / school", defaultValue: "your institution" },
+      { key: "signal", label: "Trigger signal observed", defaultValue: "your recent programme update" },
+      { key: "sender", label: "Sender name & role", defaultValue: "ALO Education partnerships" },
+    ],
+    guardrails: [
+      "Only contact professional addresses with a legitimate-interest basis; honour opt-outs within one working day.",
+      "Cap at 5 emails total — past the 4th follow-up spam complaints triple (Woodpecker research).",
+      "The breakup email states it is the final message and means it.",
+    ],
+    assets: [
+      {
+        id: "email",
+        channel: "Email",
+        title: "Day 0 — personalised intro",
+        sequenceDay: 0,
+        abVariants: ["Subject: A verified-checklist idea for {{institution}} students", "Subject: Quick idea after {{signal}}"],
+        body: "Subject: A verified-checklist idea for {{institution}} students\n\nHi {{contact_name}},\n\nI noticed {{signal}}. We help students compare study options using checklists that link every requirement to its official source.\n\nIf useful, I can share the {{institution}}-specific question sheet we prepared — no call required.\n\nBest,\n{{sender}}",
+      },
+      {
+        id: "email",
+        channel: "Email",
+        title: "Day 21 — breakup",
+        sequenceDay: 21,
+        body: "Subject: Closing the loop, {{contact_name}}\n\nHi {{contact_name}},\n\nI have reached out a couple of times and understand this may not be a priority. This is my last note for now — if comparing verified checklists becomes useful later, just reply and I will send the sheet.\n\nWishing {{institution}} a strong term.\n\n{{sender}}",
+      },
+    ],
+  },
+  {
+    id: "reengagement-recovery",
+    title: "Stalled Enquiry Re-Engagement Recovery",
+    category: "Lifecycle & Retention",
+    objective: "Re-engage enquiries that went quiet after counselling with helpful checklists, not pressure.",
+    audience: "CRM leads stalled 14+ days after a counselling conversation.",
+    angle: "Helpful check-in with one new useful asset; acknowledges silence without guilt or false urgency.",
+    topic: "Re-engagement drip",
+    sourceInspiration: "coreyhaines31/marketingskills skills/emails (Re-Engagement Sequence) + blader/humanizer voice rules",
+    trigger: "lead_stalled_14d",
+    sendWindow: "Recipient-local Tuesday–Thursday mornings. Stop all sends on reply or opt-out.",
+    cadence: [
+      { day: 0, channel: "Email", angle: "Helpful check-in + one new asset", note: "No guilt, no 'just bumping'." },
+      { day: 7, channel: "WhatsApp", angle: "Answer the likely objection", note: "Timing, cost, or readiness — ask which is blocking." },
+      { day: 21, channel: "Email", angle: "Respectful close", note: "Leave the door open; remove from nurture after this." },
+    ],
+    fields: [
+      { key: "first_name", label: "First name", defaultValue: "there" },
+      { key: "course", label: "Course / subject", defaultValue: "your course options" },
+      { key: "asset", label: "New useful asset", defaultValue: "the updated readiness checklist" },
+    ],
+    guardrails: [
+      "Never invent deadlines or scarcity to force a reply.",
+      "Stop the sequence on any reply; move the lead to manual follow-up.",
+      "After the final touch, suppress the lead from nurture for 90 days.",
+    ],
+    assets: [
+      {
+        id: "email",
+        channel: "Email",
+        title: "Day 0 — check-in",
+        sequenceDay: 0,
+        abVariants: ["Subject: A useful update for your {{course}} plan", "Subject: Still comparing {{course}} options?"],
+        body: "Subject: A useful update for your {{course}} plan\n\nHi {{first_name}},\n\nWe updated {{asset}} this month, and it may help with the questions you were comparing. Here is the direct link.\n\nIf your plans changed, that is completely fine — just reply and tell us what would be useful now (or nothing at all).\n\n{{advisor}}",
+      },
+      {
+        id: "whatsapp",
+        channel: "WhatsApp",
+        title: "Day 7 — unblock question",
+        sequenceDay: 7,
+        body: "Hi {{first_name}} — when a plan goes quiet it is usually timing, cost, or readiness. Which one is the current blocker? Happy to send just the relevant checklist. Reply STOP to opt out.",
+      },
+    ],
+  },
+]
 
 /**
  * 50 Marketing Skills Reference Matrix (inspired by coreyhaines31/marketingskills).

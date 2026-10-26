@@ -3,19 +3,11 @@ import { isAdminOtpDeliveryConfigured } from "@/lib/auth-config";
 import { verifyAdminCredentials } from "@/lib/auth";
 import { AdminOtpRateLimitError, queueAdminOtp } from "@/lib/admin-otp";
 import { db } from "@/lib/db";
+import { isSameOriginRequest } from "@/lib/same-origin";
 
 export const runtime = "nodejs";
 export const maxDuration = 20;
 
-function sameOriginRequest(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return process.env.NODE_ENV !== "production";
-  try {
-    return new URL(origin).origin === new URL(request.url).origin;
-  } catch {
-    return false;
-  }
-}
 
 const genericAccepted = () => NextResponse.json(
   { accepted: true, message: "If the administrator credentials are valid, an SMS code has been queued." },
@@ -23,7 +15,7 @@ const genericAccepted = () => NextResponse.json(
 );
 
 export async function POST(request: Request) {
-  if (!sameOriginRequest(request)) {
+  if (!isSameOriginRequest(request)) {
     return NextResponse.json({ error: "same_origin_required" }, { status: 403, headers: { "Cache-Control": "no-store" } });
   }
 

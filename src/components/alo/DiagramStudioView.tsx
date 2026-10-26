@@ -22,6 +22,7 @@ import {
 import {
   DIAGRAM_PRESETS,
   DIAGRAM_SKINS,
+  DIAGRAM_SIZE_PRESETS,
   DIAGRAM_TYPES_45,
   parseMermaidToEditorialPreset,
   renderEditorialDiagramSvg,
@@ -30,6 +31,12 @@ import {
   type DiagramPreset,
   type DiagramSkinId,
 } from "@/lib/diagram-design";
+import {
+  exportBlockRegistry,
+  parseDrawioToEditorialPreset,
+  parseExcalidrawToEditorialPreset,
+  type FidelityLedger,
+} from "@/lib/diagram-import";
 import { useToast } from "@/hooks/use-toast";
 
 const SAMPLE_MERMAID = `graph LR
@@ -49,6 +56,13 @@ export default function DiagramStudioView() {
   const [mermaidTitle, setMermaidTitle] = useState("Student Enquiry to Verified Quotation Flow");
   const [typeQuery, setTypeQuery] = useState("");
   const [typeCategory, setTypeCategory] = useState("all");
+  const [importKind, setImportKind] = useState<"mermaid" | "drawio" | "excalidraw">("mermaid");
+  const [drawioText, setDrawioText] = useState("");
+  const [excalidrawText, setExcalidrawText] = useState("");
+  const [ledger, setLedger] = useState<FidelityLedger | null>(null);
+  const [sizeId, setSizeId] = useState("doc-inline");
+  const [offlineFonts, setOfflineFonts] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
   const [pngBusy, setPngBusy] = useState(false);
   const [demoViewMode, setDemoViewMode] = useState<"diagram" | "table" | "kanban">("diagram");
   const [activeBeaconRole, setActiveBeaconRole] = useState<"frontend" | "backend" | "database" | "cloud" | "security">("frontend");
@@ -57,13 +71,20 @@ export default function DiagramStudioView() {
   const activeSkin = DIAGRAM_SKINS[skinId];
 
   const svgMarkup = useMemo(
-    () => renderEditorialDiagramSvg(activePreset, skinId, dottedPaper),
-    [activePreset, skinId, dottedPaper]
+    () => renderEditorialDiagramSvg(activePreset, skinId, dottedPaper, sizeId),
+    [activePreset, skinId, dottedPaper, sizeId]
   );
   const htmlMarkup = useMemo(
-    () => renderSelfContainedDiagramHtml(activePreset, skinId, dottedPaper),
-    [activePreset, skinId, dottedPaper]
+    () => renderSelfContainedDiagramHtml(activePreset, skinId, dottedPaper, sizeId, offlineFonts),
+    [activePreset, skinId, dottedPaper, sizeId, offlineFonts]
   );
+  const registryJson = useMemo(() => {
+    try {
+      return JSON.stringify(exportBlockRegistry(htmlMarkup, `${activePreset.id}.html`), null, 2);
+    } catch {
+      return null;
+    }
+  }, [htmlMarkup, activePreset.id]);
   const doctor = useMemo(() => verifyDiagramDoctor(skinId, activePreset), [skinId, activePreset]);
 
   const filteredTypes = useMemo(
@@ -94,6 +115,69 @@ export default function DiagramStudioView() {
       title: "Redrawn as orthogonal Editorial SVG",
       description: `${parsed.nodes.length} nodes · ${parsed.edges.length} orthogonal connectors (r=8 bends)`,
     });
+  }
+
+  async function redrawImport() {
+    setImportBusy(true);
+    try {
+      if (importKind === "mermaid") {
+        redrawMermaid();
+        return;
+      }
+      if (importKind === "drawio") {
+        const { preset: parsed, ledger: led } = await parseDrawioToEditorialPreset(drawioText, mermaidTitle);
+        setCustomPreset(parsed);
+        setLedger(led);
+        setTab("canvas");
+        toast({
+          title: "draw.io redrawn (not converted)",
+          description: `${led.keptNodes} nodes · ${led.keptEdges} connectors kept of ${led.sourceNodes}/${led.sourceEdges} source. Fidelity ledger in Import tab.`,
+        });
+        return;
+      }
+      const { preset: parsed, ledger: led } = parseExcalidrawToEditorialPreset(excalidrawText, mermaidTitle);
+      setCustomPreset(parsed);
+      setLedger(led);
+      setTab("canvas");
+      toast({
+        title: "Excalidraw board redrawn (not rendered)",
+        description: `${led.keptNodes} nodes · ${led.keptEdges} connectors kept of ${led.sourceNodes}/${led.sourceEdges} source. Fidelity ledger in Import tab.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Import failed",
+        description: error instanceof Error ? error.message : "Check the source file and retry.",
+        variant: "destructive",
+      });
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  function downloadRegistry() {
+    if (!registryJson) {
+      toast({
+        title: "No block registry on this diagram",
+        description: "--registry applies only to Traceable block decomposition diagrams carrying data-block-* metadata.",
+        variant: "destructive",
+      });
+      return;
+    }
+    downloadFile(registryJson, `${activePreset.id}.registry.json`, "application/json;charset=utf-8");
+    toast({ title: "Exported .registry.json", description: "Block metadata projection — no timestamp, diff-friendly." });
+  }
+
+  async function handleImportFile(file: File) {
+    const text = await file.text();
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith(".excalidraw") || lower.endsWith(".json")) {
+      setImportKind("excalidraw");
+      setExcalidrawText(text);
+    } else {
+      setImportKind("drawio");
+      setDrawioText(text);
+    }
+    toast({ title: `Loaded ${file.name}`, description: "Review the source, then press Redraw." });
   }
 
   function downloadFile(content: string, filename: string, mime: string) {
@@ -178,6 +262,10 @@ export default function DiagramStudioView() {
               <FileCode2 className="h-3.5 w-3.5" />
               Export .HTML
             </Button>
+            <Button type="button" variant="outline" size="sm" onClick={downloadRegistry}>
+              <FileCode2 className="h-3.5 w-3.5" />
+              .registry.json
+            </Button>
             <Button
               type="button"
               size="sm"
@@ -204,7 +292,7 @@ export default function DiagramStudioView() {
           </TabsTrigger>
           <TabsTrigger value="mermaid" className="gap-1.5 text-xs">
             <Wand2 className="h-3.5 w-3.5" />
-            Mermaid Redraw
+            Import & Redraw
           </TabsTrigger>
           <TabsTrigger value="doctor" className="gap-1.5 text-xs">
             <ShieldCheck className="h-3.5 w-3.5" />
@@ -288,6 +376,33 @@ export default function DiagramStudioView() {
                   <span>Opt-in dotted paper ground (22px grid)</span>
                 </label>
               </Card>
+
+              <Card className="space-y-2.5 p-3.5">
+                <div>
+                  <Label className="text-xs font-semibold">3. Canvas Size & Fonts</Label>
+                  <p className="text-[11px] text-muted-foreground">output-spec.md size presets incl. print A3 landscape</p>
+                </div>
+                <select
+                  value={sizeId}
+                  onChange={(e) => setSizeId(e.target.value)}
+                  className="w-full rounded-md border border-border/70 bg-background px-2 py-1.5 text-xs"
+                >
+                  {DIAGRAM_SIZE_PRESETS.map((size) => (
+                    <option key={size.id} value={size.id}>
+                      {size.label} — {size.viewBox.width}×{size.viewBox.height} ({size.use})
+                    </option>
+                  ))}
+                </select>
+                <label className="flex cursor-pointer items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={offlineFonts}
+                    onChange={(e) => setOfflineFonts(e.target.checked)}
+                    className="h-4 w-4 accent-amber-600"
+                  />
+                  <span>Offline fonts (system stacks only — no Google Fonts request)</span>
+                </label>
+              </Card>
             </aside>
 
             <div className="min-w-0 space-y-3">
@@ -350,7 +465,7 @@ export default function DiagramStudioView() {
             <div>
               <h2 className="text-base font-semibold">Button & Interactive Control Design System</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                Production-ready button primitives synthesized from <strong>Archify (&ldquo;The Evidence Console&rdquo;)</strong>, <strong>Diagram Design Editorial</strong>, <strong>Omarchy TUI</strong>, <strong>Twenty / Frappe CRM</strong>, and <strong>ALO Warm Gradient</strong>.
+                Interactive UI pattern previews adapted from <strong>Archify (&ldquo;The Evidence Console&rdquo;)</strong>, <strong>Diagram Design Editorial</strong>, <strong>Omarchy TUI</strong>, <strong>Twenty / Frappe CRM</strong>, and <strong>ALO Warm Gradient</strong>. This showcase does not imply that the depicted backend actions are connected.
               </p>
             </div>
 
@@ -395,7 +510,7 @@ export default function DiagramStudioView() {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <p className="font-mono text-[10px] uppercase tracking-wider text-[#bf4520]">Pattern 02 · Diagram Design Editorial</p>
-                    <h3 className="text-sm font-semibold text-[#2d3142] mt-0.5">WCAG 4.71:1 Editorial Tactile Buttons</h3>
+                    <h3 className="text-sm font-semibold text-[#2d3142] mt-0.5">Editorial Tactile Button Preview · contrast not audited</h3>
                   </div>
                   <Button
                     type="button"
@@ -417,14 +532,14 @@ export default function DiagramStudioView() {
                   No drop shadows. Uses <code>rx=6</code> outer frame, <code>rx=2</code> rectangular type tag, and darkened burnt-tangerine (<code>#bf4520</code>) that clears 4.71:1 contrast on white-smoke paper.
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <EditorialButton variant="accent" tag="ACT" onClick={() => toast({ title: "Focal Editorial Action triggered" })}>
+                  <EditorialButton variant="accent" tag="ACT" onClick={() => toast({ title: "Preview only", description: "No schematic was generated." })}>
                     Generate Schematic
                   </EditorialButton>
-                  <EditorialButton variant="paper" tag="DOC" onClick={() => toast({ title: "Style Guide Profile loaded" })}>
+                  <EditorialButton variant="paper" tag="DOC" onClick={() => toast({ title: "Preview only", description: "No style guide profile was loaded." })}>
                     Inspect Style Guide
                   </EditorialButton>
-                  <EditorialButton variant="link" tag="API" onClick={() => toast({ title: "Verified HTTP endpoint" })}>
-                    Verify Contrast (4.71:1)
+                  <EditorialButton variant="link" tag="API" onClick={() => toast({ title: "Preview only", description: "No HTTP endpoint or contrast audit was checked." })}>
+                    Contrast example (not verified)
                   </EditorialButton>
                 </div>
               </Card>
@@ -476,7 +591,7 @@ export default function DiagramStudioView() {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <p className="font-mono text-[10px] uppercase tracking-wider text-emerald-600">Pattern 04 · Omarchy & Command Palette</p>
-                    <h3 className="text-sm font-semibold mt-0.5">Keyboard-First Hotkey Action Buttons</h3>
+                    <h3 className="text-sm font-semibold mt-0.5">Hotkey Badge Button Preview · shortcuts not wired</h3>
                   </div>
                   <Button
                     type="button"
@@ -492,12 +607,12 @@ export default function DiagramStudioView() {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Pairs every high-frequency operator action with an inline monospace <code>&lt;kbd&gt;</code> chord badge for keyboard-driven workflows.
+                  Shows inline monospace <code>&lt;kbd&gt;</code> chord badges for visual preview. These buttons do not register or execute keyboard shortcuts.
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <HotkeyButton label="Open Command Center" hotkey="⌘K" onClick={() => toast({ title: "Press Cmd+K / Ctrl+K anytime" })} />
-                  <HotkeyButton label="Run 3-Agent Review" hotkey="⇧↵" onClick={() => toast({ title: "Writer → Critic → Finalist pipeline ready" })} />
-                  <HotkeyButton label="Export Encrypted Backup" hotkey="⌘B" onClick={() => toast({ title: "AES-256-GCM snapshot ready" })} />
+                  <HotkeyButton label="Command Center (preview)" hotkey="⌘K" onClick={() => toast({ title: "Preview only", description: "No command palette shortcut is registered here." })} />
+                  <HotkeyButton label="Prompt review (preview)" hotkey="⇧↵" onClick={() => toast({ title: "Preview only", description: "This button does not run a review pipeline." })} />
+                  <HotkeyButton label="Backup export (preview)" hotkey="⌘B" onClick={() => toast({ title: "Preview only", description: "No backup was created or encrypted." })} />
                 </div>
               </Card>
             </div>
@@ -509,52 +624,111 @@ export default function DiagramStudioView() {
           <Card className="p-4 sm:p-5 space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold">Import from Mermaid / DSL → Redraw as Orthogonal Editorial SVG</h2>
+                <h2 className="text-base font-semibold">Import Mermaid / draw.io / Excalidraw → Redraw as Editorial SVG</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Paste any Mermaid graph (<code>graph LR</code>, <code>graph TD</code>, <code>flowchart</code>) and redraw it into our clean orthogonal design system (no diagonal lines, no Mermaid default styling).
+                  A <strong>redraw, not a conversion</strong> (diagram-design v2.6.110 import pipelines): source geometry, palette, and hand-dragged coordinates are discarded; components and relationships redraw on the 4px grid with r=8 orthogonal connectors. Every import ships a fidelity ledger.
                 </p>
               </div>
-              <Button type="button" onClick={redrawMermaid} className="bg-amber-500 text-white hover:bg-amber-600">
-                <RefreshCw className="h-4 w-4" />
-                Redraw into Editorial Canvas
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border/70 px-2.5 py-1.5 text-xs hover:bg-muted/50">
+                  <FileCode2 className="h-3.5 w-3.5" />
+                  Load .drawio / .excalidraw
+                  <input
+                    type="file"
+                    accept=".drawio,.xml,.excalidraw,.json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void handleImportFile(f);
+                    }}
+                  />
+                </label>
+                <Button type="button" onClick={() => void redrawImport()} disabled={importBusy} className="bg-amber-500 text-white hover:bg-amber-600">
+                  {importBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  Redraw into Editorial Canvas
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold">Source format:</span>
+              {(["mermaid", "drawio", "excalidraw"] as const).map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => setImportKind(kind)}
+                  className={`rounded-full border px-3 py-1 text-xs transition-all ${
+                    importKind === kind ? "border-amber-500 bg-amber-500/10 font-semibold" : "border-border/70 hover:bg-muted/50"
+                  }`}
+                >
+                  {kind === "mermaid" ? "Mermaid / DSL" : kind === "drawio" ? "draw.io XML" : "Excalidraw JSON"}
+                </button>
+              ))}
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-3">
                 <div>
-                  <Label htmlFor="mermaid-title" className="text-xs">Diagram Title</Label>
-                  <Input
-                    id="mermaid-title"
-                    value={mermaidTitle}
-                    onChange={(e) => setMermaidTitle(e.target.value)}
-                    className="mt-1"
-                  />
+                  <Label htmlFor="import-title" className="text-xs">Diagram Title</Label>
+                  <Input id="import-title" value={mermaidTitle} onChange={(e) => setMermaidTitle(e.target.value)} className="mt-1" />
                 </div>
-                <div>
-                  <Label htmlFor="mermaid-input" className="text-xs">Mermaid / Node-Edge Definition (up to 9 nodes)</Label>
-                  <Textarea
-                    id="mermaid-input"
-                    value={mermaidText}
-                    onChange={(e) => setMermaidText(e.target.value)}
-                    rows={8}
-                    className="mt-1 font-mono text-xs"
-                  />
-                </div>
+                {importKind === "mermaid" && (
+                  <div>
+                    <Label htmlFor="mermaid-input" className="text-xs">Mermaid / Node-Edge Definition (up to 9 nodes)</Label>
+                    <Textarea id="mermaid-input" value={mermaidText} onChange={(e) => setMermaidText(e.target.value)} rows={8} className="mt-1 font-mono text-xs" />
+                  </div>
+                )}
+                {importKind === "drawio" && (
+                  <div>
+                    <Label htmlFor="drawio-input" className="text-xs">draw.io XML (raw mxfile or compressed &lt;diagram&gt; payload — .drawio.png pixel exports are rejected by design)</Label>
+                    <Textarea id="drawio-input" value={drawioText} onChange={(e) => setDrawioText(e.target.value)} rows={8} className="mt-1 font-mono text-xs" placeholder='<mxfile><diagram name="Page-1">…</diagram></mxfile>' />
+                  </div>
+                )}
+                {importKind === "excalidraw" && (
+                  <div>
+                    <Label htmlFor="excalidraw-input" className="text-xs">Excalidraw scene JSON (saved .excalidraw — links, embeds, and image pixels are counted and discarded)</Label>
+                    <Textarea id="excalidraw-input" value={excalidrawText} onChange={(e) => setExcalidrawText(e.target.value)} rows={8} className="mt-1 font-mono text-xs" placeholder='{"type":"excalidraw","elements":[…]}' />
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs">Live Orthogonal Preview</Label>
-                <div
-                  className="overflow-hidden rounded-xl border border-border/70"
-                  dangerouslySetInnerHTML={{
-                    __html: renderEditorialDiagramSvg(
-                      parseMermaidToEditorialPreset(mermaidText, mermaidTitle),
-                      skinId,
-                      dottedPaper
-                    ),
-                  }}
-                />
+                <Label className="text-xs">Fidelity Ledger (every import ships one)</Label>
+                <div className="max-h-[320px] space-y-1.5 overflow-y-auto rounded-xl border border-border/70 p-3 text-xs">
+                  {ledger ? (
+                    <>
+                      <p className="font-semibold">
+                        {ledger.sourceFormat} source: {ledger.sourceNodes} nodes · {ledger.sourceEdges} edges · {ledger.sourceContainers} containers
+                      </p>
+                      <p className="text-muted-foreground">
+                        Redraw: {ledger.keptNodes} nodes · {ledger.keptEdges} connectors kept. Source coordinates and palette discarded by design.
+                      </p>
+                      {ledger.warnings.map((w, i) => (
+                        <p key={`w${i}`} className="rounded-md bg-amber-500/10 p-1.5 text-amber-700 dark:text-amber-400">⚠ {w}</p>
+                      ))}
+                      <ul className="space-y-1">
+                        {ledger.entries.slice(0, 24).map((entry, i) => (
+                          <li key={i} className="flex items-start gap-1.5">
+                            <span
+                              className={`mt-0.5 rounded px-1 py-0.5 font-mono text-[9px] uppercase ${
+                                entry.action === "dropped" ? "bg-red-500/10 text-red-600 dark:text-red-400" : entry.action === "merged" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                              }`}
+                            >
+                              {entry.action}
+                            </span>
+                            <span>
+                              <strong>{entry.source}</strong> — {entry.reason}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      Load a .drawio or .excalidraw source and press Redraw. The ledger lists every kept, rewritten, merged, and dropped element with its reason — nothing is dropped silently. Mermaid redraws keep all parsed nodes under the 9-node budget.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </Card>

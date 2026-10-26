@@ -41,49 +41,32 @@ export interface AgentMessageResult {
 
 // Maximum A2A hops before escalation (prevents infinite agent loops)
 const MAX_HOPS = 10;
-const MAX_RETRY = 3;
 
-// Check if Inkbox is configured and available
+// No verified Inkbox HTTP adapter or dispatcher exists in this repository.
+// A stored "connected" flag is metadata only and must never be treated as a probe.
 export async function checkInkboxHealth(): Promise<InkboxHealthResult> {
-  // In this environment, Inkbox is NOT configured (no endpoint, no API key).
-  // This is the honest state. ALO continues operating without it.
-  const integrations = await db.inkboxIntegration.findMany().catch(() => []);
-  const connected = integrations.filter((i) => i.status === "connected");
-
-  if (connected.length === 0) {
-    return {
-      available: false,
-      status: "not_connected",
-      endpoint: null,
-      channels: [],
-      lastError: "Inkbox endpoint not configured. ALO operates in standalone mode.",
-      fallbackActive: true, // ALO uses internal channels
-    };
-  }
-
+  const integrations = await db.inkboxIntegration.findMany();
+  const hasSavedConfiguration = integrations.length > 0;
   return {
-    available: true,
-    status: "connected",
-    endpoint: connected[0].configJson ? JSON.parse(connected[0].configJson).endpoint : null,
-    channels: connected[0].channels ? JSON.parse(connected[0].channels) : [],
-    lastError: null,
-    fallbackActive: false,
+    available: false,
+    status: "not_connected",
+    endpoint: null,
+    channels: [],
+    lastError: hasSavedConfiguration
+      ? "Saved Inkbox settings have not been probed; no verified API adapter or message dispatcher is configured."
+      : "Inkbox API adapter is not configured. Internal messages can be queued but are not delivered.",
+    fallbackActive: true,
   };
 }
 
-// Send a message between agents (A2A communication)
-// If Inkbox is available, uses Inkbox. If not, uses internal DB channel.
+// Store an A2A request for visibility. No external transport or internal worker
+// exists, so a created message remains pending until a dispatcher is implemented.
 export async function sendAgentMessage(input: AgentMessageInput): Promise<AgentMessageResult> {
   const health = await checkInkboxHealth();
 
-  // Check hop count to prevent infinite agent loops
   if (input.taskId) {
-    const existingHops = await db.agentMessage.count({
-      where: { taskId: input.taskId },
-    }).catch(() => 0);
-
+    const existingHops = await db.agentMessage.count({ where: { taskId: input.taskId } });
     if (existingHops >= MAX_HOPS) {
-      // Escalate to human — max hops exceeded
       const msg = await db.agentMessage.create({
         data: {
           senderAgentId: input.senderAgentId,
@@ -109,48 +92,7 @@ export async function sendAgentMessage(input: AgentMessageInput): Promise<AgentM
     }
   }
 
-  if (health.available) {
-    // INKBOX PATH: send via Inkbox
-    // In production, this would call the Inkbox API:
-    // POST {endpoint}/messages
-    // with the message payload
-    try {
-      // Simulated Inkbox call (since no endpoint configured)
-      // In production: const response = await fetch(`${health.endpoint}/messages`, ...)
-      const inkboxMessageId = `inkbx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-      const msg = await db.agentMessage.create({
-        data: {
-          senderAgentId: input.senderAgentId,
-          recipientAgentId: input.recipientAgentId,
-          taskId: input.taskId ?? null,
-          objective: input.objective,
-          context: input.context ? JSON.stringify(input.context) : null,
-          requiredOutput: input.requiredOutput ?? null,
-          priority: input.priority ?? "normal",
-          status: "delivered",
-          channel: "inkbox",
-          inkboxMessageId,
-          deliveredAt: new Date(),
-        },
-      });
-
-      return {
-        messageId: msg.id,
-        status: "delivered",
-        channel: "inkbox",
-        inkboxMessageId,
-        failureReason: null,
-        fallbackUsed: false,
-      };
-    } catch (e: any) {
-      // Inkbox call failed — fall back to internal
-      return await fallbackToInternal(input, `Inkbox error: ${e.message}`);
-    }
-  } else {
-    // FALLBACK PATH: Inkbox not available — use internal DB channel
-    return await fallbackToInternal(input, "Inkbox not connected — using internal channel");
-  }
+  return fallbackToInternal(input, health.lastError ?? "No verified message dispatcher is configured.");
 }
 
 // Internal fallback: ALO continues operating without Inkbox
@@ -164,16 +106,16 @@ async function fallbackToInternal(input: AgentMessageInput, reason: string): Pro
       context: input.context ? JSON.stringify(input.context) : null,
       requiredOutput: input.requiredOutput ?? null,
       priority: input.priority ?? "normal",
-      status: "delivered", // delivered internally (not via Inkbox)
+      status: "pending", // persisted to DB; no worker has dispatched or delivered it
       channel: "internal",
       inkboxMessageId: null,
-      deliveredAt: new Date(),
+      deliveredAt: null,
     },
   });
 
   return {
     messageId: msg.id,
-    status: "delivered",
+    status: "pending",
     channel: "internal",
     inkboxMessageId: null,
     failureReason: reason,
@@ -187,19 +129,22 @@ export async function configureInkboxIdentity(
   name: string,
   config: { endpoint?: string; apiKey?: string; channels?: ChannelType[] }
 ): Promise<{ ok: boolean; status: InkboxStatus; message: string }> {
-  // In this environment, we cannot actually connect to Inkbox (no endpoint).
-  // We store the configuration but mark as not_connected until verified.
-  const existing = await db.inkboxIntegration.findFirst({ where: { agentId } }).catch(() => null);
+  // Keep non-secret connection metadata only. apiKey is intentionally not stored;
+  // no endpoint probe or live delivery implementation exists.
+  if (!agentId.trim() || !name.trim()) {
+    return { ok: false, status: "error", message: "Agent id and display name are required." };
+  }
+  const existing = await db.inkboxIntegration.findFirst({ where: { agentId: agentId.trim() } });
 
   const data = {
-    name,
-    agentId,
+    name: name.trim(),
+    agentId: agentId.trim(),
     inkboxIdentityId: null,
     channels: JSON.stringify(config.channels ?? []),
     status: "not_connected" as InkboxStatus,
     configJson: config.endpoint ? JSON.stringify({ endpoint: config.endpoint }) : null,
-    lastHealthCheck: new Date(),
-    lastError: "Inkbox endpoint not available in this environment. Configuration stored. ALO operates in standalone mode.",
+    lastHealthCheck: null,
+    lastError: "Settings are unverified metadata only; no Inkbox adapter or message dispatcher is installed.",
   };
 
   if (existing) {
@@ -211,21 +156,19 @@ export async function configureInkboxIdentity(
   return {
     ok: true,
     status: "not_connected",
-    message: "Inkbox configuration stored. Endpoint not reachable — ALO continues in standalone mode. When Inkbox becomes available, this identity will connect automatically.",
+    message: "Connection metadata saved, but it is unverified. No Inkbox connection or automatic delivery attempt will occur until a verified adapter is implemented.",
   };
 }
 
 // Get all agent identities and their Inkbox status
 export async function getAgentIdentities() {
-  const integrations = await db.inkboxIntegration.findMany().catch(() => []);
-  return integrations;
+  return db.inkboxIntegration.findMany();
 }
 
 // Get A2A message log
 export async function getMessageLog(limit = 20) {
-  const messages = await db.agentMessage.findMany({
+  return db.agentMessage.findMany({
     orderBy: { createdAt: "desc" },
     take: limit,
-  }).catch(() => []);
-  return messages;
+  });
 }

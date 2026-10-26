@@ -57,6 +57,7 @@ interface Project {
   status: string;
   currentStage: string | null;
   qualityScore: number;
+  executionVerified?: boolean;
   createdAt: string;
   profiles: { id: string; personName: string; personType: string }[];
 }
@@ -187,13 +188,17 @@ export default function FamilyStudioView() {
   const approveAsset = async (id: string) => {
     setBusy(`approve-${id}`);
     try {
-      await fetch("/api/family-studio", {
+      const response = await fetch("/api/family-studio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "approve_asset", id }),
       });
-      toast({ title: "অনুমোদিত ✅" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Asset approval failed");
+      toast({ title: "অনুমোদিত ✅", description: "এই ফাইলে স্বয়ংক্রিয় quality/duplicate পরীক্ষা হয়নি।" });
       if (selectedProfile) loadProfile(selectedProfile.id);
+    } catch (error) {
+      toast({ title: "Asset approval failed", description: error instanceof Error ? error.message : "Unknown error", variant: "destructive" });
     } finally { setBusy(null); }
   };
 
@@ -265,20 +270,6 @@ export default function FamilyStudioView() {
     } finally { setBusy(null); }
   };
 
-  const startPipeline = async (projectId: string) => {
-    setBusy(`pipeline-${projectId}`);
-    try {
-      const res = await fetch("/api/family-projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "start_pipeline", projectId }),
-      });
-      const d = await res.json();
-      toast({ title: `${d.stagesCreated}-stage pipeline initialized 🔄`, description: d.message?.slice(0, 60) });
-      load();
-    } finally { setBusy(null); }
-  };
-
   const fmtSize = (b: number) => b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)}MB` : b >= 1024 ? `${(b / 1024).toFixed(0)}KB` : `${b}B`;
 
   return (
@@ -286,7 +277,7 @@ export default function FamilyStudioView() {
       <SectionHeader
         title="Private Family AI Studio"
         bn="প্রাইভেট ফ্যামিলি স্টুডিও"
-        desc="পরিবারের পরিচয় প্রোফাইল — আপনি, আপনার স্ত্রী, আপনার সন্তান। সম্পূর্ণ প্রাইভেট, consent-gated। Multi-asset reference library, identity consistency, one-click production pipeline।"
+        desc="পরিবারের consent-gated প্রোফাইল, private reference uploads, এবং project drafts। Identity-aware media generation ও production pipeline বর্তমানে implemented নয়."
         icon={<Heart className="h-5 w-5" />}
         action={
           <div className="flex gap-2">
@@ -334,7 +325,7 @@ export default function FamilyStudioView() {
             <Card className="p-12 text-center">
               <Users className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
               <p className="font-medium text-sm">কোনো ফ্যামিলি প্রোফাইল নেই</p>
-              <p className="text-xs text-muted-foreground mt-1">ফ্যামিলি প্রোফাইল ইচ্ছাকৃতভাবে seed করা হয় না—নাম, সম্মতি এবং (শিশুর ক্ষেত্রে) অভিভাবকের তথ্য দিয়ে “প্রোফাইল” চেপে তৈরি করুন।</p>
+              <p className="text-xs text-muted-foreground mt-1">&quot;প্রোফাইল&quot; চেপে শুরু করুন।</p>
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -440,6 +431,7 @@ export default function FamilyStudioView() {
                   </Select>
                 </div>
                 {/* File input (batch) */}
+                <p className="mb-2 text-[11px] text-amber-700 dark:text-amber-300">Automatic image-quality and duplicate detection is not available. Assets remain unapproved until an administrator reviews them manually.</p>
                 <div
                   className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-amber-300 transition-colors"
                   onClick={() => fileRef.current?.click()}
@@ -449,7 +441,14 @@ export default function FamilyStudioView() {
                   <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
                   <p className="text-sm font-medium">ফাইল টেনে আনুন বা ক্লিক করুন</p>
                   <p className="text-xs text-muted-foreground mt-1">একাধিক ফাইল নির্বাচন করতে পারেন (batch upload)</p>
-                  <input ref={fileRef} type="file" multiple className="hidden" onChange={onFileChange} accept="image/*,video/*,audio/*" />
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={onFileChange}
+                    accept={uploadMeta.assetType === "photo" ? "image/jpeg,image/png,image/webp" : uploadMeta.assetType === "video" ? "video/mp4,video/webm" : "audio/mpeg,audio/wav,audio/ogg,audio/flac,audio/webm,audio/mp4"}
+                  />
                 </div>
                 {busy === "upload" && <p className="text-xs text-amber-600 mt-2"><Loader2 className="h-3 w-3 inline mr-1 animate-spin" />আপলোড হচ্ছে…</p>}
               </Card>
@@ -470,7 +469,7 @@ export default function FamilyStudioView() {
                     <p className="text-[8px] truncate">{a.fileName ?? a.filePath.split("/").pop()}</p>
                     <div className="flex items-center justify-between text-[8px] text-muted-foreground mt-0.5">
                       <span>{fmtSize(a.fileSize)}</span>
-                      <span>Q:{(a.qualityScore * 100).toFixed(0)}</span>
+                      <span title={a.qualityScore > 0 ? "Recorded quality score" : "Not evaluated"}>{a.qualityScore > 0 ? `Q:${(a.qualityScore * 100).toFixed(0)}` : "Q:—"}</span>
                     </div>
                     <div className="flex gap-0.5 mt-1">
                       {!a.approved && (
@@ -510,16 +509,17 @@ export default function FamilyStudioView() {
                       <p className="font-semibold text-sm">{p.title}</p>
                       <p className="text-xs text-muted-foreground line-clamp-1">{p.prompt}</p>
                     </div>
-                    <StatusPill status={p.status === "completed" ? "approved" : p.status === "failed" ? "failed" : p.status === "running" ? "running" : "pending"} />
+                    <StatusPill status={p.executionVerified ? (p.status === "completed" ? "approved" : p.status === "failed" ? "failed" : p.status === "running" ? "running" : "pending") : "unverified"} />
                   </div>
                   <div className="flex items-center gap-2 flex-wrap text-[10px] text-muted-foreground mb-2">
                     <span>👥 {p.profiles.map((pr) => pr.personName).join(", ") || "—"}</span>
-                    {p.currentStage && <span>• 🔄 {p.currentStage}</span>}
-                    {p.qualityScore > 0 && <span>• ⭐ {p.qualityScore}</span>}
+                    {p.currentStage && <span>• Recorded stage (unverified): {p.currentStage}</span>}
+                    {p.qualityScore > 0 && <span>• Recorded score (unverified): {p.qualityScore}</span>}
+                    {!p.executionVerified && <span className="basis-full text-amber-700">Pipeline is not implemented; saved status and scores are not validated outputs.</span>}
                   </div>
-                  <Button size="sm" className="h-7 text-xs bg-amber-500 hover:bg-amber-600" onClick={() => startPipeline(p.id)} disabled={busy === `pipeline-${p.id}`}>
-                    {busy === `pipeline-${p.id}` ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Play className="h-3 w-3 mr-1" />}
-                    Pipeline শুরু
+                  <Button size="sm" variant="outline" className="h-7 text-xs" disabled title="The identity-aware family media pipeline is not implemented.">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    Pipeline unavailable
                   </Button>
                 </Card>
               ))}
@@ -542,9 +542,7 @@ export default function FamilyStudioView() {
               ))}
             </div>
             <p className="text-[10px] text-muted-foreground mt-3">
-              Image stage = local/provider (কাজ করে)। Video, voice, lip-sync, upscaling = BLOCKED_EXTERNAL_SETUP
-              (বিশেষায়িত মডেল প্রয়োজন)। প্রতিটি স্টেজ quality score + identity score উৎপাদন করে।
-              ব্যর্থ হলে retry → ব্যর্থ হলে escalate।
+              This is a pipeline design preview, not an executable identity-aware workflow. No stage scores, identity scores, retries, or outputs are generated here. General local media tools are separate and do not use these family profiles.
             </p>
           </Card>
         </TabsContent>
@@ -553,7 +551,7 @@ export default function FamilyStudioView() {
         <TabsContent value="quality" className="mt-4">
           <Card className="p-5">
             <h3 className="font-semibold mb-4 flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-amber-600" /> Quality Judge + Identity Consistency
+              <ShieldCheck className="h-4 w-4 text-amber-600" /> Quality criteria (design preview; not executable)
             </h3>
             <div className="space-y-2">
               {["identity_consistency", "facial_realism", "expression", "eyes", "hands", "body", "lighting", "clothing", "background", "motion", "temporal_consistency", "voice_consistency", "lip_sync", "audio", "story", "composition", "resolution"].map((metric) => (
@@ -564,8 +562,7 @@ export default function FamilyStudioView() {
               ))}
             </div>
             <p className="text-[10px] text-muted-foreground mt-3">
-              সকল quality metrics এর জন্য বিশেষায়িত ML মডেল প্রয়োজন (face comparison, voice matching, etc.)।
-              শুধুমাত্র PASS আউটপুট final asset হয়। ব্যর্থ হলে responsible stage-এ ফেরত যায়।
+              Design-only status: no model evaluates these metrics; no PASS/final asset or retry loop is generated.
             </p>
           </Card>
         </TabsContent>

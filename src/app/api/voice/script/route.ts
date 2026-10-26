@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     data: {
       actor: "voice_scriptwriter",
       action: "voice.narration_script_draft",
-      detail: `Narration script ${result.usedFallback ? "kept as local fallback" : "reviewed through sequential local agents"}; ${qualityPipeline.length} review-stage records; no speech synthesized.`,
+      detail: `Narration script ${result.usedFallback ? "kept as local fallback" : "revised through prompts to the same local model"}; ${qualityPipeline.length} prompt-stage records; no speech synthesized.`,
       severity: result.usedFallback ? "warn" : "info",
     },
   });

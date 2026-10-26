@@ -1,0 +1,1044 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useMemo, useState } from "react";
+     4→import { Card } from "@/components/ui/card";
+     5→import { Button } from "@/components/ui/button";
+     6→import { Badge } from "@/components/ui/badge";
+     7→import { Input } from "@/components/ui/input";
+     8→import { Label } from "@/components/ui/label";
+     9→import { Slider } from "@/components/ui/slider";
+    10→import {
+    11→  Select,
+    12→  SelectContent,
+    13→  SelectItem,
+    14→  SelectTrigger,
+    15→  SelectValue,
+    16→} from "@/components/ui/select";
+    17→import {
+    18→  Table,
+    19→  TableBody,
+    20→  TableCell,
+    21→  TableHead,
+    22→  TableHeader,
+    23→  TableRow,
+    24→} from "@/components/ui/table";
+    25→import { useToast } from "@/hooks/use-toast";
+    26→import {
+    27→  KeyRound,
+    28→  ShieldCheck,
+    29→  Send,
+    30→  CheckCircle2,
+    31→  AlertTriangle,
+    32→  Clock,
+    33→  RefreshCw,
+    34→  Smartphone,
+    35→  Mail,
+    36→  MessageCircle,
+    37→  Phone,
+    38→  ListChecks,
+    39→  Hash,
+    40→  Timer,
+    41→  XCircle,
+    42→  Sparkles,
+    43→} from "lucide-react";
+    44→
+    45→/* ------------------------------- types ------------------------------- */
+    46→
+    47→type Channel = "sms" | "email" | "whatsapp" | "voice";
+    48→type Purpose = "verification" | "login" | "transaction" | "reset";
+    49→type OtpStatus =
+    50→  | "pending"
+    51→  | "delivered"
+    52→  | "verified"
+    53→  | "expired"
+    54→  | "failed";
+    55→
+    56→interface OtpRequestRow {
+    57→  id: string;
+    58→  channel: string;
+    59→  recipient: string;
+    60→  code: string;
+    61→  purpose: string;
+    62→  status: OtpStatus;
+    63→  attempts: number;
+    64→  maxAttempts: number;
+    65→  expiresAt: string;
+    66→  createdAt: string;
+    67→}
+    68→
+    69→interface OtpStats {
+    70→  total: number;
+    71→  pending: number;
+    72→  delivered: number;
+    73→  verified: number;
+    74→  expired: number;
+    75→  failed: number;
+    76→}
+    77→
+    78→interface OtpListResponse {
+    79→  requests: OtpRequestRow[];
+    80→  stats: OtpStats;
+    81→}
+    82→
+    83→interface SendResponse {
+    84→  ok: boolean;
+    85→  id?: string;
+    86→  channel?: Channel;
+    87→  recipient?: string;
+    88→  purpose?: Purpose;
+    89→  status?: string;
+    90→  expiresAt?: string;
+    91→  ttlSeconds?: number;
+    92→  devPreviewCode?: string;
+    93→  error?: string | null;
+    94→}
+    95→
+    96→interface VerifyResponse {
+    97→  ok: boolean;
+    98→  status?: string;
+    99→  recipient?: string;
+   100→  purpose?: string;
+   101→  verifiedAt?: string;
+   102→  error?: string;
+   103→  attemptsRemaining?: number;
+   104→}
+   105→
+   106→/* --------------------------- visual config --------------------------- */
+   107→
+   108→const CHANNEL_META: Record<
+   109→  Channel,
+   110→  { label: string; bn: string; icon: React.ReactNode; tint: string }
+   111→> = {
+   112→  sms: {
+   113→    label: "SMS",
+   114→    bn: "এসএমএস",
+   115→    icon: <Smartphone className="h-3.5 w-3.5" />,
+   116→    tint: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+   117→  },
+   118→  email: {
+   119→    label: "Email",
+   120→    bn: "ইমেইল",
+   121→    icon: <Mail className="h-3.5 w-3.5" />,
+   122→    tint: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+   123→  },
+   124→  whatsapp: {
+   125→    label: "WhatsApp",
+   126→    bn: "হোয়াটসঅ্যাপ",
+   127→    icon: <MessageCircle className="h-3.5 w-3.5" />,
+   128→    tint: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",
+   129→  },
+   130→  voice: {
+   131→    label: "Voice",
+   132→    bn: "ভয়েস",
+   133→    icon: <Phone className="h-3.5 w-3.5" />,
+   134→    tint: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
+   135→  },
+   136→};
+   137→
+   138→const PURPOSE_META: Record<Purpose, { label: string; bn: string }> = {
+   139→  verification: { label: "Verification", bn: "যাচাইকরণ" },
+   140→  login: { label: "Login", bn: "লগইন" },
+   141→  transaction: { label: "Transaction", bn: "লেনদেন" },
+   142→  reset: { label: "Reset", bn: "রিসেট" },
+   143→};
+   144→
+   145→const STATUS_META: Record<
+   146→  OtpStatus,
+   147→  { label: string; bn: string; className: string }
+   148→> = {
+   149→  pending: {
+   150→    label: "Pending",
+   151→    bn: "অপেক্ষমান",
+   152→    className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+   153→  },
+   154→  delivered: {
+   155→    label: "Delivered",
+   156→    bn: "পৌঁছেছে",
+   157→    className: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300",
+   158→  },
+   159→  verified: {
+   160→    label: "Verified",
+   161→    bn: "যাচাই হয়েছে",
+   162→    className:
+   163→      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+   164→  },
+   165→  expired: {
+   166→    label: "Expired",
+   167→    bn: "মেয়াদোত্তীর্ণ",
+   168→    className: "bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300",
+   169→  },
+   170→  failed: {
+   171→    label: "Failed",
+   172→    bn: "ব্যর্থ",
+   173→    className: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
+   174→  },
+   175→};
+   176→
+   177→const STAT_TILES: {
+   178→  key: keyof OtpStats;
+   179→  label: string;
+   180→  bn: string;
+   181→  className: string;
+   182→}[] = [
+   183→  {
+   184→    key: "total",
+   185→    label: "Total",
+   186→    bn: "মোট",
+   187→    className:
+   188→      "bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-200",
+   189→  },
+   190→  {
+   191→    key: "pending",
+   192→    label: "Pending",
+   193→    bn: "অপেক্ষমান",
+   194→    className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+   195→  },
+   196→  {
+   197→    key: "delivered",
+   198→    label: "Delivered",
+   199→    bn: "পৌঁছেছে",
+   200→    className: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300",
+   201→  },
+   202→  {
+   203→    key: "verified",
+   204→    label: "Verified",
+   205→    bn: "যাচাই হয়েছে",
+   206→    className:
+   207→      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+   208→  },
+   209→  {
+   210→    key: "expired",
+   211→    label: "Expired",
+   212→    bn: "মেয়াদোত্তীর্ণ",
+   213→    className: "bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300",
+   214→  },
+   215→  {
+   216→    key: "failed",
+   217→    label: "Failed",
+   218→    bn: "ব্যর্থ",
+   219→    className: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
+   220→  },
+   221→];
+   222→
+   223→/* --------------------------- helpers --------------------------- */
+   224→
+   225→function maskRecipient(recipient: string): string {
+   226→  if (!recipient) return "—";
+   227→  // email: a***@domain.com
+   228→  if (recipient.includes("@")) {
+   229→    const [u, d] = recipient.split("@");
+   230→    if (!u || !d) return recipient;
+   231→    const head = u.slice(0, Math.min(2, u.length));
+   232→    return `${head}${"•".repeat(Math.max(2, u.length - 2))}@${d}`;
+   233→  }
+   234→  // phone: keep country code & last 2
+   235→  const trimmed = recipient.replace(/\s|-/g, "");
+   236→  if (trimmed.length <= 4) return "•".repeat(trimmed.length);
+   237→  const head = trimmed.startsWith("+") ? "+" : "";
+   238→  const body = trimmed.startsWith("+") ? trimmed.slice(1) : trimmed;
+   239→  const last2 = body.slice(-2);
+   240→  return `${head}${"•".repeat(Math.max(2, body.length - 2))}${last2}`;
+   241→}
+   242→
+   243→function formatMMSS(totalSeconds: number): string {
+   244→  const s = Math.max(0, Math.floor(totalSeconds));
+   245→  const m = Math.floor(s / 60);
+   246→  const r = s % 60;
+   247→  return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+   248→}
+   249→
+   250→function formatTime(iso: string): string {
+   251→  if (!iso) return "—";
+   252→  try {
+   253→    return new Date(iso).toLocaleString(undefined, {
+   254→      month: "short",
+   255→      day: "2-digit",
+   256→      hour: "2-digit",
+   257→      minute: "2-digit",
+   258→    });
+   259→  } catch {
+   260→    return iso;
+   261→  }
+   262→}
+   263→
+   264→/* --------------------------- component --------------------------- */
+   265→
+   266→export default function OtpView() {
+   267→  const { toast } = useToast();
+   268→
+   269→  // --- data ---
+   270→  const [requests, setRequests] = useState<OtpRequestRow[]>([]);
+   271→  const [stats, setStats] = useState<OtpStats | null>(null);
+   272→  const [loading, setLoading] = useState(true);
+   273→  const [refreshing, setRefreshing] = useState(false);
+   274→
+   275→  // --- send form state ---
+   276→  const [sendRecipient, setSendRecipient] = useState("");
+   277→  const [channel, setChannel] = useState<Channel>("sms");
+   278→  const [purpose, setPurpose] = useState<Purpose>("verification");
+   279→  const [ttlSeconds, setTtlSeconds] = useState<number>(300);
+   280→  const [sending, setSending] = useState(false);
+   281→  const [sendError, setSendError] = useState<string | null>(null);
+   282→
+   283→  // active send result (dev preview)
+   284→  const [activeSend, setActiveSend] = useState<SendResponse | null>(null);
+   285→  const [secondsLeft, setSecondsLeft] = useState<number>(0);
+   286→
+   287→  // --- verify form state ---
+   288→  const [verifyRecipient, setVerifyRecipient] = useState("");
+   289→  const [verifyCode, setVerifyCode] = useState("");
+   290→  const [verifying, setVerifying] = useState(false);
+   291→  const [verifyResult, setVerifyResult] = useState<
+   292→    | { ok: true; recipient?: string; purpose?: string; verifiedAt?: string }
+   293→    | { ok: false; error?: string; attemptsRemaining?: number }
+   294→    | null
+   295→  >(null);
+   296→
+   297→  /* ----------------------- data fetching ----------------------- */
+   298→
+   299→  const load = useCallback(async (silent = false) => {
+   300→    if (silent) setRefreshing(true);
+   301→    try {
+   302→      const res = await fetch("/api/otp");
+   303→      const data: OtpListResponse = await res.json();
+   304→      setRequests(data.requests ?? []);
+   305→      setStats(data.stats ?? null);
+   306→    } catch (e) {
+   307→      if (!silent) setSendError(String(e));
+   308→    } finally {
+   309→      setLoading(false);
+   310→      setRefreshing(false);
+   311→    }
+   312→  }, []);
+   313→
+   314→  useEffect(() => {
+   315→    load();
+   316→  }, [load]);
+   317→
+   318→  // prefill verify recipient when a send completes
+   319→  useEffect(() => {
+   320→    if (activeSend?.recipient) setVerifyRecipient(activeSend.recipient);
+   321→  }, [activeSend]);
+   322→
+   323→  /* ----------------------- countdown timer ----------------------- */
+   324→
+   325→  useEffect(() => {
+   326→    if (!activeSend?.expiresAt) return;
+   327→    const compute = () => {
+   328→      const ms = new Date(activeSend.expiresAt!).getTime() - Date.now();
+   329→      setSecondsLeft(Math.max(0, Math.floor(ms / 1000)));
+   330→    };
+   331→    compute();
+   332→    const t = window.setInterval(compute, 1000);
+   333→    return () => window.clearInterval(t);
+   334→  }, [activeSend]);
+   335→
+   336→  /* ----------------------- send handler ----------------------- */
+   337→
+   338→  const handleSend = async () => {
+   339→    setSendError(null);
+   340→    if (!sendRecipient.trim()) {
+   341→      setSendError("Recipient is required / প্রাপক প্রয়োজন");
+   342→      return;
+   343→    }
+   344→    setSending(true);
+   345→    setActiveSend(null);
+   346→    setVerifyResult(null);
+   347→    try {
+   348→      const res = await fetch("/api/otp", {
+   349→        method: "POST",
+   350→        headers: { "Content-Type": "application/json" },
+   351→        body: JSON.stringify({
+   352→          action: "send",
+   353→          recipient: sendRecipient.trim(),
+   354→          channel,
+   355→          purpose,
+   356→          ttlSeconds,
+   357→        }),
+   358→      });
+   359→      const data: SendResponse = await res.json();
+   360→      if (!res.ok || !data.ok) {
+   361→        setSendError(data.error ?? `Failed (${res.status})`);
+   362→        toast({
+   363→          title: "Send failed",
+   364→          description: data.error ?? `HTTP ${res.status}`,
+   365→          variant: "destructive",
+   366→        });
+   367→        return;
+   368→      }
+   369→      setActiveSend(data);
+   370→      toast({
+   371→        title: "OTP sent",
+   372→        description: `${channel.toUpperCase()} → ${maskRecipient(
+   373→          sendRecipient.trim()
+   374→        )}`,
+   375→      });
+   376→      load(true);
+   377→    } catch (e) {
+   378→      setSendError(String(e));
+   379→    } finally {
+   380→      setSending(false);
+   381→    }
+   382→  };
+   383→
+   384→  /* ----------------------- verify handler ----------------------- */
+   385→
+   386→  const handleVerify = async () => {
+   387→    setVerifyResult(null);
+   388→    if (!verifyRecipient.trim() || !verifyCode.trim()) {
+   389→      setVerifyResult({
+   390→        ok: false,
+   391→        error: "Recipient and code are required / প্রাপক ও কোড প্রয়োজন",
+   392→      });
+   393→      return;
+   394→    }
+   395→    setVerifying(true);
+   396→    try {
+   397→      const res = await fetch("/api/otp", {
+   398→        method: "POST",
+   399→        headers: { "Content-Type": "application/json" },
+   400→        body: JSON.stringify({
+   401→          action: "verify",
+   402→          recipient: verifyRecipient.trim(),
+   403→          code: verifyCode.trim(),
+   404→        }),
+   405→      });
+   406→      const data: VerifyResponse = await res.json();
+   407→      if (res.ok && data.ok) {
+   408→        setVerifyResult({
+   409→          ok: true,
+   410→          recipient: data.recipient,
+   411→          purpose: data.purpose,
+   412→          verifiedAt: data.verifiedAt,
+   413→        });
+   414→        toast({
+   415→          title: "Verified ✓",
+   416→          description: `${verifyRecipient.trim()} → ${data.purpose ?? "verification"}`,
+   417→        });
+   418→        load(true);
+   419→      } else {
+   420→        setVerifyResult({
+   421→          ok: false,
+   422→          error: data.error ?? `Failed (${res.status})`,
+   423→          attemptsRemaining: data.attemptsRemaining,
+   424→        });
+   425→      }
+   426→    } catch (e) {
+   427→      setVerifyResult({ ok: false, error: String(e) });
+   428→    } finally {
+   429→      setVerifying(false);
+   430→    }
+   431→  };
+   432→
+   433→  /* ----------------------- derived ----------------------- */
+   434→
+   435→  const codeExpiringSoon = secondsLeft > 0 && secondsLeft <= 30;
+   436→  const codeExpired = activeSend && secondsLeft <= 0;
+   437→
+   438→  const statTiles = useMemo(() => {
+   439→    if (!stats) return [];
+   440→    return STAT_TILES.map((t) => ({ ...t, value: stats[t.key] ?? 0 }));
+   441→  }, [stats]);
+   442→
+   443→  /* ----------------------- loading skeleton ----------------------- */
+   444→
+   445→  if (loading) {
+   446→    return (
+   447→      <div className="alo-fade-up space-y-5">
+   448→        <div className="h-28 rounded-2xl alo-shimmer" />
+   449→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+   450→          <div className="h-80 rounded-2xl alo-shimmer" />
+   451→          <div className="h-80 rounded-2xl alo-shimmer" />
+   452→        </div>
+   453→        <div className="h-64 rounded-2xl alo-shimmer" />
+   454→      </div>
+   455→    );
+   456→  }
+   457→
+   458→  /* ----------------------- render ----------------------- */
+   459→
+   460→  return (
+   461→    <div className="alo-fade-up space-y-5">
+   462→      {/* ============ HEADER CARD ============ */}
+   463→      <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-500/10 via-amber-500/10 to-teal-500/10 p-6 shadow-sm">
+   464→        <div className="flex flex-wrap items-start justify-between gap-4">
+   465→          <div className="flex items-start gap-3">
+   466→            <div className="rounded-2xl bg-gradient-to-br from-emerald-400/30 to-amber-400/30 p-3 text-emerald-700 dark:text-emerald-300 alo-glow">
+   467→              <KeyRound className="h-6 w-6" />
+   468→            </div>
+   469→            <div>
+   470→              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+   471→                OTP / Verification Service{" "}
+   472→                <span className="alo-text-grad">ওটিপি সার্ভিস</span>
+   473→              </h1>
+   474→              <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+   475→                Generate, dispatch, and verify 6-digit one-time passcodes across
+   476→                SMS, email, WhatsApp &amp; voice channels.{" "}
+   477→                <span className="text-emerald-700 dark:text-emerald-300 font-medium">
+   478→                  ছয় অঙ্কের কোড তৈরি, প্রেরণ এবং যাচাই।
+   479→                </span>
+   480→              </p>
+   481→            </div>
+   482→          </div>
+   483→          <Button
+   484→            variant="outline"
+   485→            size="sm"
+   486→            onClick={() => load(true)}
+   487→            disabled={refreshing}
+   488→            className="h-8"
+   489→          >
+   490→            <RefreshCw
+   491→              className={`h-3.5 w-3.5 mr-1.5 ${
+   492→                refreshing ? "animate-spin" : ""
+   493→              }`}
+   494→            />
+   495→            Refresh
+   496→          </Button>
+   497→        </div>
+   498→
+   499→        {/* stats row */}
+   500→        <div className="mt-5 flex flex-wrap gap-2">
+   501→          {statTiles.length === 0 ? (
+   502→            <span className="text-xs text-muted-foreground">
+   503→              Loading stats…
+   504→            </span>
+   505→          ) : (
+   506→            statTiles.map((t) => (
+   507→              <Badge
+   508→                key={t.key}
+   509→                variant="outline"
+   510→                className={`px-2.5 py-1 text-[11px] font-semibold gap-1.5 ${t.className} border-0`}
+   511→              >
+   512→                <span className="tabular-nums text-sm font-bold">{t.value}</span>
+   513→                <span className="opacity-80">
+   514→                  {t.label} · <span className="font-normal">{t.bn}</span>
+   515→                </span>
+   516→              </Badge>
+   517→            ))
+   518→          )}
+   519→        </div>
+   520→      </Card>
+   521→
+   522→      {/* ============ TWO COLUMN GRID ============ */}
+   523→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+   524→        {/* ---------- LEFT: SEND OTP ---------- */}
+   525→        <Card className="p-6 border-0 bg-gradient-to-br from-emerald-500/5 to-amber-500/5 shadow-sm">
+   526→          <div className="flex items-center justify-between mb-5">
+   527→            <div className="flex items-center gap-2.5">
+   528→              <div className="rounded-xl bg-emerald-100 dark:bg-emerald-900/30 p-2 text-emerald-700 dark:text-emerald-300">
+   529→                <Send className="h-4 w-4" />
+   530→              </div>
+   531→              <div>
+   532→                <h2 className="font-semibold leading-tight">
+   533→                  Send OTP{" "}
+   534→                  <span className="text-muted-foreground font-normal text-sm">
+   535→                    / কোড পাঠান
+   536→                  </span>
+   537→                </h2>
+   538→                <p className="text-[11px] text-muted-foreground">
+   539→                  Dispatch a fresh 6-digit code to a recipient.
+   540→                </p>
+   541→              </div>
+   542→            </div>
+   543→            {activeSend?.ok && (
+   544→              <Badge
+   545→                className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-0"
+   546→              >
+   547→                <Sparkles className="h-3 w-3 mr-1" />
+   548→                Sent
+   549→              </Badge>
+   550→            )}
+   551→          </div>
+   552→
+   553→          <div className="space-y-4">
+   554→            {/* recipient */}
+   555→            <div className="space-y-1.5">
+   556→              <Label htmlFor="otp-recipient" className="text-xs">
+   557→                Recipient <span className="text-muted-foreground">/ প্রাপক</span>
+   558→              </Label>
+   559→              <Input
+   560→                id="otp-recipient"
+   561→                value={sendRecipient}
+   562→                onChange={(e) => setSendRecipient(e.target.value)}
+   563→                placeholder="+8801XXXXXXXXX  ·  user@example.com"
+   564→                className="font-mono text-sm h-10"
+   565→                autoComplete="off"
+   566→                spellCheck={false}
+   567→              />
+   568→              <p className="text-[10px] text-muted-foreground">
+   569→                Phone for SMS / WhatsApp / Voice · Email for the email channel.
+   570→              </p>
+   571→            </div>
+   572→
+   573→            {/* channel + purpose */}
+   574→            <div className="grid grid-cols-2 gap-3">
+   575→              <div className="space-y-1.5">
+   576→                <Label className="text-xs">
+   577→                  Channel <span className="text-muted-foreground">/ চ্যানেল</span>
+   578→                </Label>
+   579→                <Select
+   580→                  value={channel}
+   581→                  onValueChange={(v) => setChannel(v as Channel)}
+   582→                >
+   583→                  <SelectTrigger className="w-full h-10">
+   584→                    <SelectValue />
+   585→                  </SelectTrigger>
+   586→                  <SelectContent>
+   587→                    {(Object.keys(CHANNEL_META) as Channel[]).map((c) => {
+   588→                      const m = CHANNEL_META[c];
+   589→                      return (
+   590→                        <SelectItem key={c} value={c}>
+   591→                          <span className="flex items-center gap-2">
+   592→                            {m.icon}
+   593→                            <span>{m.label}</span>
+   594→                            <span className="text-muted-foreground text-[10px]">
+   595→                              · {m.bn}
+   596→                            </span>
+   597→                          </span>
+   598→                        </SelectItem>
+   599→                      );
+   600→                    })}
+   601→                  </SelectContent>
+   602→                </Select>
+   603→              </div>
+   604→
+   605→              <div className="space-y-1.5">
+   606→                <Label className="text-xs">
+   607→                  Purpose <span className="text-muted-foreground">/ উদ্দেশ্য</span>
+   608→                </Label>
+   609→                <Select
+   610→                  value={purpose}
+   611→                  onValueChange={(v) => setPurpose(v as Purpose)}
+   612→                >
+   613→                  <SelectTrigger className="w-full h-10">
+   614→                    <SelectValue />
+   615→                  </SelectTrigger>
+   616→                  <SelectContent>
+   617→                    {(Object.keys(PURPOSE_META) as Purpose[]).map((p) => {
+   618→                      const m = PURPOSE_META[p];
+   619→                      return (
+   620→                        <SelectItem key={p} value={p}>
+   621→                          <span>
+   622→                            {m.label}{" "}
+   623→                            <span className="text-muted-foreground text-[10px]">
+   624→                              · {m.bn}
+   625→                            </span>
+   626→                          </span>
+   627→                        </SelectItem>
+   628→                      );
+   629→                    })}
+   630→                  </SelectContent>
+   631→                </Select>
+   632→              </div>
+   633→            </div>
+   634→
+   635→            {/* ttl slider */}
+   636→            <div className="space-y-2">
+   637→              <div className="flex items-center justify-between">
+   638→                <Label className="text-xs flex items-center gap-1.5">
+   639→                  <Timer className="h-3.5 w-3.5 text-amber-600" />
+   640→                  TTL{" "}
+   641→                  <span className="text-muted-foreground">/ মেয়াদ</span>
+   642→                </Label>
+   643→                <Badge
+   644→                  variant="outline"
+   645→                  className="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border-0 font-mono"
+   646→                >
+   647→                  {ttlSeconds}s · {formatMMSS(ttlSeconds)}
+   648→                </Badge>
+   649→              </div>
+   650→              <Slider
+   651→                min={60}
+   652→                max={900}
+   653→                step={30}
+   654→                value={[ttlSeconds]}
+   655→                onValueChange={(v) => setTtlSeconds(v[0] ?? 300)}
+   656→                className="py-2"
+   657→              />
+   658→              <div className="flex justify-between text-[10px] text-muted-foreground">
+   659→                <span>60s</span>
+   660→                <span>5m</span>
+   661→                <span>10m</span>
+   662→                <span>15m</span>
+   663→              </div>
+   664→            </div>
+   665→
+   666→            {/* send button */}
+   667→            <Button
+   668→              onClick={handleSend}
+   669→              disabled={sending}
+   670→              className="w-full h-10 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm"
+   671→            >
+   672→              {sending ? (
+   673→                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+   674→              ) : (
+   675→                <Send className="h-4 w-4 mr-2" />
+   676→              )}
+   677→              {sending ? "Sending…" : "Send OTP"}
+   678→            </Button>
+   679→
+   680→            {/* inline error */}
+   681→            {sendError && (
+   682→              <div className="flex items-start gap-2 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/50 p-3">
+   683→                <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+   684→                <p className="text-xs text-rose-700 dark:text-rose-300">
+   685→                  {sendError}
+   686→                </p>
+   687→              </div>
+   688→            )}
+   689→
+   690→            {/* dev preview box */}
+   691→            {activeSend?.ok && activeSend.devPreviewCode && (
+   692→              <div
+   693→                className={`relative overflow-hidden rounded-xl border-2 p-4 ${
+   694→                  codeExpired
+   695→                    ? "border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40"
+   696→                    : codeExpiringSoon
+   697→                    ? "border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/20"
+   698→                    : "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20"
+   699→                }`}
+   700→              >
+   701→                <div className="flex items-center justify-between gap-2 mb-2">
+   702→                  <div className="flex items-center gap-1.5">
+   703→                    <Hash className="h-3.5 w-3.5 text-amber-600" />
+   704→                    <span className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+   705→                      Dev Preview · ডেভ প্রিভিউ
+   706→                    </span>
+   707→                  </div>
+   708→                  <div
+   709→                    className={`flex items-center gap-1 font-mono text-xs font-semibold ${
+   710→                      codeExpired
+   711→                        ? "text-slate-500"
+   712→                        : codeExpiringSoon
+   713→                        ? "text-rose-600"
+   714→                        : "text-emerald-700 dark:text-emerald-300"
+   715→                    }`}
+   716→                  >
+   717→                    <Clock className="h-3.5 w-3.5" />
+   718→                    {codeExpired ? "expired" : formatMMSS(secondsLeft)}
+   719→                  </div>
+   720→                </div>
+   721→                <div className="flex items-center justify-center">
+   722→                  <span className="font-mono text-4xl sm:text-5xl font-bold tracking-[0.3em] text-foreground tabular-nums select-all">
+   723→                    {activeSend.devPreviewCode}
+   724→                  </span>
+   725→                </div>
+   726→                <p className="text-[10px] text-muted-foreground text-center mt-2">
+   727→                  In production this code is delivered via the provider and{" "}
+   728→                  <span className="font-semibold">never</span> returned to the
+   729→                  client.
+   730→                </p>
+   731→                {/* progress bar */}
+   732→                {!codeExpired && activeSend.ttlSeconds && (
+   733→                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted">
+   734→                    <div
+   735→                      className={`h-full transition-all duration-1000 ease-linear ${
+   736→                        codeExpiringSoon ? "bg-rose-500" : "bg-emerald-500"
+   737→                      }`}
+   738→                      style={{
+   739→                        width: `${
+   740→                          activeSend.ttlSeconds > 0
+   741→                            ? (secondsLeft / activeSend.ttlSeconds) * 100
+   742→                            : 0
+   743→                        }%`,
+   744→                      }}
+   745→                    />
+   746→                  </div>
+   747→                )}
+   748→              </div>
+   749→            )}
+   750→          </div>
+   751→        </Card>
+   752→
+   753→        {/* ---------- RIGHT: VERIFY OTP ---------- */}
+   754→        <Card className="p-6 border-0 bg-gradient-to-br from-teal-500/5 to-emerald-500/5 shadow-sm">
+   755→          <div className="flex items-center justify-between mb-5">
+   756→            <div className="flex items-center gap-2.5">
+   757→              <div className="rounded-xl bg-teal-100 dark:bg-teal-900/30 p-2 text-teal-700 dark:text-teal-300">
+   758→                <ShieldCheck className="h-4 w-4" />
+   759→              </div>
+   760→              <div>
+   761→                <h2 className="font-semibold leading-tight">
+   762→                  Verify OTP{" "}
+   763→                  <span className="text-muted-foreground font-normal text-sm">
+   764→                    / কোড যাচাই
+   765→                  </span>
+   766→                </h2>
+   767→                <p className="text-[11px] text-muted-foreground">
+   768→                  Confirm a recipient&apos;s one-time code.
+   769→                </p>
+   770→              </div>
+   771→            </div>
+   772→            {verifyResult?.ok && (
+   773→              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-0">
+   774→                <CheckCircle2 className="h-3 w-3 mr-1" />
+   775→                Verified
+   776→              </Badge>
+   777→            )}
+   778→          </div>
+   779→
+   780→          <div className="space-y-4">
+   781→            {/* recipient */}
+   782→            <div className="space-y-1.5">
+   783→              <Label htmlFor="otp-verify-recipient" className="text-xs">
+   784→                Recipient{" "}
+   785→                <span className="text-muted-foreground">/ প্রাপক</span>
+   786→              </Label>
+   787→              <Input
+   788→                id="otp-verify-recipient"
+   789→                value={verifyRecipient}
+   790→                onChange={(e) => setVerifyRecipient(e.target.value)}
+   791→                placeholder="auto-filled from last send"
+   792→                className="font-mono text-sm h-10"
+   793→                autoComplete="off"
+   794→                spellCheck={false}
+   795→              />
+   796→              <p className="text-[10px] text-muted-foreground">
+   797→                Must match the recipient used when sending the OTP.
+   798→              </p>
+   799→            </div>
+   800→
+   801→            {/* code input */}
+   802→            <div className="space-y-1.5">
+   803→              <Label htmlFor="otp-verify-code" className="text-xs">
+   804→                Code <span className="text-muted-foreground">/ কোড</span>
+   805→              </Label>
+   806→              <Input
+   807→                id="otp-verify-code"
+   808→                value={verifyCode}
+   809→                onChange={(e) =>
+   810→                  setVerifyCode(e.target.value.replace(/[^\d]/g, "").slice(0, 6))
+   811→                }
+   812→                onKeyDown={(e) => {
+   813→                  if (e.key === "Enter") handleVerify();
+   814→                }}
+   815→                placeholder="••••••"
+   816→                inputMode="numeric"
+   817→                maxLength={6}
+   818→                className="font-mono text-2xl tracking-[0.4em] h-14 text-center"
+   819→              />
+   820→              <div className="flex justify-between text-[10px] text-muted-foreground">
+   821→                <span>6 digits only</span>
+   822→                <span>{verifyCode.length}/6</span>
+   823→              </div>
+   824→            </div>
+   825→
+   826→            {/* verify button */}
+   827→            <Button
+   828→              onClick={handleVerify}
+   829→              disabled={verifying || verifyCode.length !== 6}
+   830→              className="w-full h-10 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white shadow-sm disabled:opacity-60"
+   831→            >
+   832→              {verifying ? (
+   833→                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+   834→              ) : (
+   835→                <ShieldCheck className="h-4 w-4 mr-2" />
+   836→              )}
+   837→              {verifying ? "Verifying…" : "Verify Code"}
+   838→            </Button>
+   839→
+   840→            {/* results */}
+   841→            {verifyResult && verifyResult.ok && (
+   842→              <div className="rounded-xl border-2 border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+   843→                <div className="flex items-start gap-2.5">
+   844→                  <div className="rounded-full bg-emerald-100 dark:bg-emerald-900/50 p-1.5">
+   845→                    <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
+   846→                  </div>
+   847→                  <div className="flex-1 min-w-0">
+   848→                    <p className="font-semibold text-emerald-800 dark:text-emerald-200">
+   849→                      Verified successfully · সফলভাবে যাচাই হয়েছে
+   850→                    </p>
+   851→                    <div className="mt-1.5 space-y-0.5 text-xs text-emerald-700 dark:text-emerald-300">
+   852→                      {verifyResult.recipient && (
+   853→                        <p>
+   854→                          <span className="opacity-70">Recipient:</span>{" "}
+   855→                          <span className="font-mono">
+   856→                            {maskRecipient(verifyResult.recipient)}
+   857→                          </span>
+   858→                        </p>
+   859→                      )}
+   860→                      {verifyResult.purpose && (
+   861→                        <p>
+   862→                          <span className="opacity-70">Purpose:</span>{" "}
+   863→                          {verifyResult.purpose}
+   864→                        </p>
+   865→                      )}
+   866→                      {verifyResult.verifiedAt && (
+   867→                        <p>
+   868→                          <span className="opacity-70">At:</span>{" "}
+   869→                          {formatTime(verifyResult.verifiedAt)}
+   870→                        </p>
+   871→                      )}
+   872→                    </div>
+   873→                  </div>
+   874→                </div>
+   875→              </div>
+   876→            )}
+   877→
+   878→            {verifyResult && !verifyResult.ok && (
+   879→              <div className="rounded-xl border-2 border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/20 p-4">
+   880→                <div className="flex items-start gap-2.5">
+   881→                  <div className="rounded-full bg-rose-100 dark:bg-rose-900/50 p-1.5">
+   882→                    <XCircle className="h-5 w-5 text-rose-600 dark:text-rose-300" />
+   883→                  </div>
+   884→                  <div className="flex-1 min-w-0">
+   885→                    <p className="font-semibold text-rose-800 dark:text-rose-200">
+   886→                      Verification failed · যাচাই ব্যর্থ
+   887→                    </p>
+   888→                    <p className="text-xs text-rose-700 dark:text-rose-300 mt-1">
+   889→                      {verifyResult.error ?? "Unknown error"}
+   890→                    </p>
+   891→                    {typeof verifyResult.attemptsRemaining === "number" && (
+   892→                      <div className="mt-2 flex items-center gap-2">
+   893→                        <Badge
+   894→                          variant="outline"
+   895→                          className="bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 border-0 text-[10px]"
+   896→                        >
+   897→                          <AlertTriangle className="h-3 w-3 mr-1" />
+   898→                          {verifyResult.attemptsRemaining} attempts remaining ·
+   899→                          বাকি প্রচেষ্টা
+   900→                        </Badge>
+   901→                      </div>
+   902→                    )}
+   903→                  </div>
+   904→                </div>
+   905→              </div>
+   906→            )}
+   907→          </div>
+   908→        </Card>
+   909→      </div>
+   910→
+   911→      {/* ============ RECENT REQUESTS TABLE ============ */}
+   912→      <Card className="p-6 border-0 shadow-sm">
+   913→        <div className="flex items-center justify-between mb-4">
+   914→          <div className="flex items-center gap-2.5">
+   915→            <div className="rounded-xl bg-amber-100 dark:bg-amber-900/30 p-2 text-amber-700 dark:text-amber-300">
+   916→              <ListChecks className="h-4 w-4" />
+   917→            </div>
+   918→            <div>
+   919→              <h2 className="font-semibold leading-tight">
+   920→                Recent OTP Requests{" "}
+   921→                <span className="text-muted-foreground font-normal text-sm">
+   922→                  / সাম্প্রতিক অনুরোধ
+   923→                </span>
+   924→              </h2>
+   925→              <p className="text-[11px] text-muted-foreground">
+   926→                Last {requests.length} OTP dispatches · codes masked for security.
+   927→              </p>
+   928→            </div>
+   929→          </div>
+   930→          <Badge variant="outline" className="text-[10px]">
+   931→            {requests.length} records
+   932→          </Badge>
+   933→        </div>
+   934→
+   935→        {requests.length === 0 ? (
+   936→          <div className="text-center py-10 text-muted-foreground text-sm">
+   937→            <KeyRound className="h-10 w-10 mx-auto mb-3 opacity-25" />
+   938→            <p>No OTP requests yet. Send one to begin.</p>
+   939→            <p className="text-[11px] mt-1">
+   940→              এখনো কোনো ওটিপি অনুরোধ নেই। উপরের ফর্ম থেকে একটি পাঠান।
+   941→            </p>
+   942→          </div>
+   943→        ) : (
+   944→          <div className="max-h-96 overflow-y-auto alo-scrollbar rounded-lg border border-border/40">
+   945→            <Table>
+   946→              <TableHeader className="sticky top-0 bg-muted/60 backdrop-blur z-10">
+   947→                <TableRow className="hover:bg-transparent">
+   948→                  <TableHead className="text-[11px] uppercase tracking-wide">
+   949→                    Recipient
+   950→                  </TableHead>
+   951→                  <TableHead className="text-[11px] uppercase tracking-wide">
+   952→                    Channel
+   953→                  </TableHead>
+   954→                  <TableHead className="text-[11px] uppercase tracking-wide">
+   955→                    Purpose
+   956→                  </TableHead>
+   957→                  <TableHead className="text-[11px] uppercase tracking-wide">
+   958→                    Status
+   959→                  </TableHead>
+   960→                  <TableHead className="text-[11px] uppercase tracking-wide text-right">
+   961→                    Attempts
+   962→                  </TableHead>
+   963→                  <TableHead className="text-[11px] uppercase tracking-wide">
+   964→                    Created
+   965→                  </TableHead>
+   966→                  <TableHead className="text-[11px] uppercase tracking-wide">
+   967→                    Expires
+   968→                  </TableHead>
+   969→                </TableRow>
+   970→              </TableHeader>
+   971→              <TableBody>
+   972→                {requests.map((r) => {
+   973→                  const chMeta =
+   974→                    CHANNEL_META[r.channel as Channel] ?? CHANNEL_META.sms;
+   975→                  const pMeta =
+   976→                    PURPOSE_META[r.purpose as Purpose] ?? PURPOSE_META.verification;
+   977→                  const sMeta =
+   978→                    STATUS_META[r.status as OtpStatus] ?? STATUS_META.pending;
+   979→                  return (
+   980→                    <TableRow
+   981→                      key={r.id}
+   982→                      className="text-xs hover:bg-muted/40 transition-colors"
+   983→                    >
+   984→                      <TableCell className="font-mono py-2.5">
+   985→                        {maskRecipient(r.recipient)}
+   986→                      </TableCell>
+   987→                      <TableCell className="py-2.5">
+   988→                        <Badge
+   989→                          variant="outline"
+   990→                          className={`border-0 text-[10px] gap-1 ${chMeta.tint}`}
+   991→                        >
+   992→                          {chMeta.icon}
+   993→                          {chMeta.label}
+   994→                        </Badge>
+   995→                      </TableCell>
+   996→                      <TableCell className="py-2.5">
+   997→                        <span className="text-foreground">{pMeta.label}</span>
+   998→                        <span className="text-muted-foreground ml-1 text-[10px]">
+   999→                          · {pMeta.bn}
+  1000→                        </span>
+  1001→                      </TableCell>
+  1002→                      <TableCell className="py-2.5">
+  1003→                        <Badge
+  1004→                          variant="outline"
+  1005→                          className={`border-0 text-[10px] gap-1 ${sMeta.className}`}
+  1006→                        >
+  1007→                          <span className="h-1.5 w-1.5 rounded-full bg-current alo-pulse" />
+  1008→                          {sMeta.label}
+  1009→                        </Badge>
+  1010→                      </TableCell>
+  1011→                      <TableCell className="py-2.5 text-right font-mono tabular-nums">
+  1012→                        <span
+  1013→                          className={
+  1014→                            r.attempts >= r.maxAttempts
+  1015→                              ? "text-rose-600 font-semibold"
+  1016→                              : r.attempts > 0
+  1017→                              ? "text-amber-600 font-semibold"
+  1018→                              : "text-muted-foreground"
+  1019→                          }
+  1020→                        >
+  1021→                          {r.attempts}
+  1022→                        </span>
+  1023→                        <span className="text-muted-foreground">
+  1024→                          /{r.maxAttempts}
+  1025→                        </span>
+  1026→                      </TableCell>
+  1027→                      <TableCell className="py-2.5 text-muted-foreground">
+  1028→                        {formatTime(r.createdAt)}
+  1029→                      </TableCell>
+  1030→                      <TableCell className="py-2.5 text-muted-foreground">
+  1031→                        {formatTime(r.expiresAt)}
+  1032→                      </TableCell>
+  1033→                    </TableRow>
+  1034→                  );
+  1035→                })}
+  1036→              </TableBody>
+  1037→            </Table>
+  1038→          </div>
+  1039→        )}
+  1040→      </Card>
+  1041→    </div>
+  1042→  );
+  1043→}
+  1044→

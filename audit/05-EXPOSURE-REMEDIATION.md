@@ -1,5 +1,14 @@
 # 05 — Public-repo data exposure: remediation plan
 
+> **Historical snapshot — not current production evidence.** This document
+> refers to an earlier checkout/date and may contain stale paths, counts,
+> test results, or infrastructure claims. Use the current repository
+> baseline at `../COMPLETE-AUDIT-REPORT.md`, deployment blockers at
+> `../DEPLOYMENT.md`, and migration procedure at
+> `../MIGRATION-RECOVERY-PLAN.md`. Do not execute commands here against
+> production without a new review and explicit authorization.
+
+
 You chose **all three, in this order**: (1) make the repo private,
 (2) verify whether live OAuth tokens need rotating, (3) purge Git history.
 

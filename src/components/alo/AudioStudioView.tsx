@@ -42,6 +42,15 @@ const MOODS = [
   { value: "reflective", label: "ভাবুক · Reflective" },
 ];
 
+/** Mureka-inspired starter templates ("Need inspiration? Explore templates") — each fills theme/mood/length. */
+const SONG_TEMPLATES = [
+  { id: "morning-learning", label: "🌅 শেখার সকাল · Morning learning", topic: "একসাথে বই পড়া ও শেখার সকাল", mood: "hopeful", durationSeconds: 45 },
+  { id: "journey-anthem", label: "✈️ যাত্রার গান · Journey anthem", topic: "স্বপ্ন নিয়ে নতুন দেশে পড়াশোনার যাত্রা", mood: "hopeful", durationSeconds: 60 },
+  { id: "playground", label: "⚽ খেলার মাঠ · Playground", topic: "বন্ধুদের সাথে খেলার মাঠে আনন্দ", mood: "playful", durationSeconds: 30 },
+  { id: "lullaby", label: "🌙 ঘুমের লোরি · Lullaby", topic: "রাতের নরম আলোয় ঘুমের লোরি", mood: "reflective", durationSeconds: 60 },
+  { id: "celebration", label: "🎉 উৎসব · Celebration", topic: "পরিবার নিয়ে উৎসবের আনন্দ", mood: "playful", durationSeconds: 45 },
+] as const;
+
 export default function AudioStudioView() {
   const { toast } = useToast();
   const [status, setStatus] = useState<Status | null>(null);
@@ -59,6 +68,8 @@ export default function AudioStudioView() {
   const [songTopic, setSongTopic] = useState("");
   const [mood, setMood] = useState("hopeful");
   const [songDuration, setSongDuration] = useState(45);
+  const [vocalPerspective, setVocalPerspective] = useState<"neutral" | "female" | "male">("neutral");
+  const [songBpm, setSongBpm] = useState(88);
   const [songBusy, setSongBusy] = useState(false);
   const [songResult, setSongResult] = useState<Song | null>(null);
   const [songError, setSongError] = useState("");
@@ -90,7 +101,7 @@ export default function AudioStudioView() {
       setScriptPipeline(data.qualityPipeline ?? []);
       setScriptUsedFallback(Boolean(data.usedFallback));
       toast({
-        title: data.usedFallback ? "Template script ready; local model unavailable" : "Narration draft reviewed by local agents",
+        title: data.usedFallback ? "Template script ready; local model unavailable" : "Narration draft revised through local model prompts",
         description: "Edit and fact-check the script before generating speech. No audio was created yet.",
       });
     } catch (error) {
@@ -128,7 +139,12 @@ export default function AudioStudioView() {
       const response = await fetch("/api/music/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: songTopic, mood, durationSeconds: songDuration }),
+        body: JSON.stringify({
+          topic: vocalPerspective === "neutral" ? songTopic : `${songTopic} (narrator voice: ${vocalPerspective})`,
+          mood,
+          durationSeconds: songDuration,
+          bpm: songBpm,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Local song generation failed");
@@ -191,11 +207,11 @@ export default function AudioStudioView() {
           <div className="mb-4 flex items-center gap-2"><Mic2 className="h-4 w-4 text-violet-600" /><div><h2 className="font-semibold">Local voice-over</h2><p className="text-xs text-muted-foreground">Piper voice model if configured, otherwise eSpeak. This is speech, not singing.</p></div></div>
           <div className="space-y-3">
             <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
-              <div><h3 className="text-xs font-semibold">Draft narration with three local agents</h3><p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">Writer → independent critic → finalist. This creates editable spoken copy only; it does not synthesize or sing.</p></div>
+              <div><h3 className="text-xs font-semibold">Draft narration with local model prompts</h3><p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">A writer prompt → critique prompt → revision prompt to the same local model. This is not an independent or factual/safety review; it creates editable spoken copy only.</p></div>
               <div className="grid gap-2 sm:grid-cols-2"><div><Label htmlFor="voice-script-topic" className="text-[10px]">Topic</Label><Input id="voice-script-topic" value={scriptTopic} onChange={(event) => setScriptTopic(event.target.value)} disabled={scriptBusy || voiceBusy} maxLength={240} placeholder="শিশুর সাথে গল্প পড়া" /></div><div><Label htmlFor="voice-script-audience" className="text-[10px]">Audience</Label><Input id="voice-script-audience" value={scriptAudience} onChange={(event) => setScriptAudience(event.target.value)} disabled={scriptBusy || voiceBusy} maxLength={300} /></div></div>
-              <Button type="button" size="sm" variant="outline" disabled={scriptBusy || voiceBusy || !scriptTopic.trim()} onClick={draftVoiceScript}>{scriptBusy ? <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />Writing and reviewing…</> : <><RefreshCw className="mr-2 h-3.5 w-3.5" />Draft / refresh narration</>}</Button>
+              <Button type="button" size="sm" variant="outline" disabled={scriptBusy || voiceBusy || !scriptTopic.trim()} onClick={draftVoiceScript}>{scriptBusy ? <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />Drafting…</> : <><RefreshCw className="mr-2 h-3.5 w-3.5" />Draft / refresh narration</>}</Button>
             </div>
-            {scriptPipeline.length > 0 && <div className="space-y-2"><Badge variant="outline" className={scriptUsedFallback ? "border-amber-300 text-amber-700" : "border-emerald-300 text-emerald-700"}>{scriptUsedFallback ? "Template fallback · human review required" : "Local sequential script review · still needs human review"}</Badge><QualityPipelineSummary passes={scriptPipeline} /></div>}
+            {scriptPipeline.length > 0 && <div className="space-y-2"><Badge variant="outline" className={scriptUsedFallback ? "border-amber-300 text-amber-700" : "border-emerald-300 text-emerald-700"}>{scriptUsedFallback ? "Template fallback · human review required" : "Same-model prompt revision · human review required"}</Badge><QualityPipelineSummary passes={scriptPipeline} /></div>}
             <div><Label htmlFor="voice-text" className="text-xs">Text to speak</Label><Textarea id="voice-text" value={voiceText} onChange={(event) => handleVoiceTextChange(event.target.value)} disabled={scriptBusy || voiceBusy} rows={5} maxLength={5_000} placeholder="বাংলা বা ইংরেজি narration লিখুন…" /></div>
             <div><Label htmlFor="voice-id" className="text-xs">Installed voice ID</Label><Input id="voice-id" value={voiceId} onChange={(event) => setVoiceId(event.target.value)} maxLength={24} placeholder="bn" /></div>
             <Button type="button" onClick={generateVoice} disabled={voiceBusy || !voiceText.trim()} className="w-full bg-violet-600 text-white hover:bg-violet-700">{voiceBusy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Local voice generating…</> : <><Mic2 className="mr-2 h-4 w-4" />Generate spoken audio</>}</Button>
@@ -208,11 +224,43 @@ export default function AudioStudioView() {
           <div className="mb-4 flex items-center gap-2"><Music2 className="h-4 w-4 text-amber-600" /><div><h2 className="font-semibold">Songwriter + instrumental composer</h2><p className="text-xs text-muted-foreground">Lyrics use local Ollama or an honest fallback; the audio is a locally synthesized instrumental.</p></div></div>
           <div className="space-y-3">
             <div><Label htmlFor="song-topic" className="text-xs">Song theme</Label><Input id="song-topic" value={songTopic} onChange={(event) => setSongTopic(event.target.value)} maxLength={240} placeholder="যেমন: একসাথে বই পড়া ও শেখা" /></div>
+            <div>
+              <Label className="text-xs">Inspiration templates</Label>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {SONG_TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => { setSongTopic(t.topic); setMood(t.mood); setSongDuration(t.durationSeconds); }}
+                    className="rounded-full border border-border/70 px-2.5 py-1 text-[10px] transition-colors hover:bg-amber-500/10 hover:border-amber-400"
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="vocal-perspective" className="text-xs">Vocal perspective (lyrics voice)</Label>
+              <select id="vocal-perspective" value={vocalPerspective} onChange={(event) => setVocalPerspective(event.target.value as "neutral" | "female" | "male")} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="neutral">Neutral / narrator</option>
+                <option value="female">Female narrator</option>
+                <option value="male">Male narrator</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="song-bpm" className="text-xs">Tempo (BPM)</Label>
+              <select id="song-bpm" value={songBpm} onChange={(event) => setSongBpm(Number(event.target.value))} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value={72}>72 — slow & gentle</option>
+                <option value={88}>88 — default</option>
+                <option value={104}>104 — upbeat</option>
+                <option value={120}>120 — lively</option>
+              </select>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div><Label htmlFor="song-mood" className="text-xs">Mood</Label><select id="song-mood" value={mood} onChange={(event) => setMood(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{MOODS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div>
               <div><Label htmlFor="song-duration" className="text-xs">Instrumental length</Label><select id="song-duration" value={songDuration} onChange={(event) => setSongDuration(Number(event.target.value))} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value={30}>30 seconds</option><option value={45}>45 seconds</option><option value={60}>60 seconds</option><option value={90}>90 seconds</option></select></div>
             </div>
-            <Button type="button" onClick={generateSong} disabled={songBusy || !songTopic.trim()} className="w-full bg-gradient-to-r from-amber-500 to-rose-500 text-white hover:from-amber-600 hover:to-rose-600">{songBusy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Local song agents working…</> : <><Music2 className="mr-2 h-4 w-4" />Write lyrics + make instrumental</>}</Button>
+            <Button type="button" onClick={generateSong} disabled={songBusy || !songTopic.trim()} className="w-full bg-gradient-to-r from-amber-500 to-rose-500 text-white hover:from-amber-600 hover:to-rose-600">{songBusy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Drafting lyrics + synthesizing instrumental…</> : <><Music2 className="mr-2 h-4 w-4" />Write lyrics + make instrumental</>}</Button>
             {songError && <p role="alert" className="text-xs text-rose-600">{songError}</p>}
             {songResult && <div className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-3">
               <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-semibold">{songResult.lyrics.title}</h3><p className="text-[11px] text-muted-foreground">Lyrics: {songResult.lyricsProvider}{songResult.lyricsUsedFallback ? " · local template fallback" : ""} · {songResult.mood} · {songResult.bpm} BPM</p></div><a className="inline-flex items-center gap-1 text-xs text-amber-700 hover:underline" href={songResult.audioUrl} download><Download className="h-3.5 w-3.5" />WAV</a></div>

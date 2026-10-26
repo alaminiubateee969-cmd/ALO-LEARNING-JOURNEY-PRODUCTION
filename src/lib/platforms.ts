@@ -20,7 +20,7 @@ export const PLATFORMS: PlatformDef[] = [
     icon: "📘",
     color: "text-blue-600",
     bgColor: "bg-blue-50",
-    connected: false,
+    connected: true,
     scopes: ["pages_manage_posts", "pages_read_engagement"],
     mediaSizes: [
       { label: "Profile", w: 1080, h: 1080 },
@@ -35,7 +35,7 @@ export const PLATFORMS: PlatformDef[] = [
     icon: "📸",
     color: "text-pink-600",
     bgColor: "bg-pink-50",
-    connected: false,
+    connected: true,
     scopes: ["instagram_content_publish"],
     mediaSizes: [
       { label: "Profile", w: 1080, h: 1080 },
@@ -52,7 +52,7 @@ export const PLATFORMS: PlatformDef[] = [
     icon: "▶️",
     color: "text-red-600",
     bgColor: "bg-red-50",
-    connected: false,
+    connected: true,
     scopes: ["youtube.upload"],
     mediaSizes: [
       { label: "Profile", w: 800, h: 800 },
@@ -111,7 +111,7 @@ export const PLATFORMS: PlatformDef[] = [
     icon: "💬",
     color: "text-green-600",
     bgColor: "bg-green-50",
-    connected: false,
+    connected: true,
     scopes: ["whatsapp_business_messaging"],
     mediaSizes: [
       { label: "Profile", w: 1080, h: 1080 },
@@ -125,7 +125,7 @@ export const PLATFORMS: PlatformDef[] = [
     icon: "✈️",
     color: "text-cyan-600",
     bgColor: "bg-cyan-50",
-    connected: false,
+    connected: true,
     scopes: ["bot.messages"],
     mediaSizes: [{ label: "Post", w: 1280, h: 720 }],
   },
@@ -174,26 +174,24 @@ export const TOPIC_PRESETS: { topic: string; audience: string }[] = [
   { topic: "মায়ের মানসিক স্বাস্থ্য ও সংবেদনশীল প্যারেন্টিং", audience: "মায়েরা" },
 ];
 
-export const TELEGRAM_COMMANDS = [
-  { cmd: "/start", desc: "বট শুরু ও পরিচিতি", admin: false },
-  { cmd: "/help", desc: "সব কমান্ডের তালিকা", admin: false },
-  { cmd: "/ideas", desc: "নতুন কনটেন্ট আইডিয়া", admin: true },
-  { cmd: "/create <topic>", desc: "নতুন কনটেন্ট প্যাকেজ তৈরি", admin: true },
-  { cmd: "/status", desc: "পাইপলাইন স্ট্যাটাস", admin: true },
-  { cmd: "/review", desc: "অনুমোদনের অপেক্ষায় আইটেম", admin: true },
-  { cmd: "/approve <ID>", desc: "একটি আইটেম অনুমোদন", admin: true },
-  { cmd: "/reject <ID>", desc: "একটি আইটেম প্রত্যাখ্যান", admin: true },
-  { cmd: "/edit <ID>", desc: "আইটেম সম্পাদনার অনুরোধ", admin: true },
-  { cmd: "/publish <ID>", desc: "অনুমোদিত আইটেম প্রকাশ", admin: true },
-  { cmd: "/schedule <ID>", desc: "প্রকাশনা নির্ধারণ", admin: true },
-  { cmd: "/analytics", desc: "সাম্প্রতিক অ্যানালিটিক্স", admin: true },
-  { cmd: "/connections", desc: "সোশ্যাল সংযোগ স্ট্যাটাস", admin: true },
-  { cmd: "/failures", desc: "ব্যর্থ জব তালিকা", admin: true },
-  { cmd: "/comments", desc: "সংবেদনশীল মন্তব্য তালিকা", admin: true },
-  { cmd: "/backups", desc: "ব্যাকআপ তালিকা", admin: true },
-  { cmd: "/emergency_stop", desc: "জরুরি বন্ধ", admin: true },
-  { cmd: "/resume", desc: "পুনরায় চালু", admin: true },
+export const ADMIN_COMMANDS = [
+  { cmd: "/start", desc: "Show the admin-console status", admin: false },
+  { cmd: "/help", desc: "List supported admin-console commands", admin: false },
+  { cmd: "/ideas", desc: "Draft and save content ideas; outputs require review", admin: true },
+  { cmd: "/status", desc: "Count pending approvals and queued posts", admin: true },
+  { cmd: "/review", desc: "List items awaiting approval", admin: true },
+  { cmd: "/approve <ID>", desc: "Approve one stored item", admin: true },
+  { cmd: "/reject <ID>", desc: "Reject one stored item", admin: true },
+  { cmd: "/publish <ID>", desc: "Check publishing setup; does not publish externally", admin: true },
+  { cmd: "/analytics", desc: "Show counts of recent recorded analytics", admin: true },
+  { cmd: "/connections", desc: "Show platform connection states stored in ALO", admin: true },
+  { cmd: "/failures", desc: "Count recorded failed agent runs", admin: true },
+  { cmd: "/comments", desc: "Count sensitive comments awaiting review", admin: true },
 ];
+
+// Historical route name; these commands are in-app admin-console commands,
+// not proof of a connected Telegram bot.
+export const TELEGRAM_COMMANDS = ADMIN_COMMANDS;
 
 export const SAFETY_CHECKS = [
   "Child safety",

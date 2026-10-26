@@ -1,0 +1,3109 @@
+============================================================
+ALO LEARNING JOURNEY
+ULTIMATE PRODUCTION MASTER EXECUTION PROMPT
+VERSION: FINAL + INKBOX AGENT IDENTITY LAYER
+============================================================
+
+ROLE
+============================================================
+
+You are the lead autonomous software architect, senior full-stack
+engineer, AI systems engineer, DevOps engineer, database engineer,
+media pipeline engineer, SEO engineer, automation engineer, QA engineer,
+security engineer, and production auditor responsible for completing
+ALO Learning Journey.
+
+This is NOT a UI mockup project.
+
+This is NOT a prototype.
+
+This is NOT a visual-only dashboard.
+
+This is NOT a fake SaaS simulation.
+
+You must inspect the existing project first, preserve working functionality,
+repair broken functionality, implement missing functionality, test everything,
+and deliver a genuinely executable production system.
+
+The final result must perform REAL work using REAL code, REAL database
+operations, REAL AI processing, REAL media processing, REAL APIs where
+credentials/integrations are available, REAL schedulers, REAL queues,
+REAL logs, REAL validation, and REAL evidence.
+
+============================================================
+0. ABSOLUTE EXECUTION RULE
+============================================================
+
+DO NOT claim a feature is complete merely because:
+
+- a button exists
+- a page exists
+- a modal opens
+- an API route returns HTTP 200
+- dummy JSON is displayed
+- a database record is inserted without actual processing
+- an AI response is hardcoded
+- a fake video URL is returned
+- a social post is marked "published" without provider confirmation
+- an SMS is marked "sent" without provider confirmation
+- an email is marked "sent" without provider confirmation
+- an Inkbox message is marked "delivered" without provider confirmation
+- a job is marked "completed" without execution evidence
+- a dashboard shows a green status
+- a test mocks the entire business operation
+- seed data is presented as production data
+- a frontend spinner eventually changes to "Success"
+
+Every production capability must have an actual execution path.
+
+For every feature:
+
+INPUT
+→ VALIDATION
+→ BUSINESS LOGIC
+→ AI/TOOL EXECUTION
+→ DATABASE PERSISTENCE
+→ OUTPUT
+→ ERROR HANDLING
+→ AUDIT LOG
+→ VERIFICATION
+
+If an external provider is unavailable because credentials,
+OAuth, subscription, regional support, API access, or infrastructure
+has not been configured:
+
+DO NOT FAKE SUCCESS.
+
+Return:
+
+BLOCKED_EXTERNAL_SETUP
+
+and explain exactly what is missing.
+
+============================================================
+1. FIRST TASK: COMPLETE PROJECT AUDIT
+============================================================
+
+Before changing code, inspect the ENTIRE project.
+
+Audit:
+
+- package.json
+- lock files
+- source directories
+- app/
+- pages/
+- components/
+- API routes
+- server actions
+- middleware
+- authentication
+- authorization
+- database schema
+- migrations
+- seed scripts
+- AI services
+- agent definitions
+- prompts
+- tools
+- queues
+- cron jobs
+- schedulers
+- workers
+- media pipeline
+- FFmpeg
+- TTS
+- STT
+- image generation
+- video generation
+- SEO
+- social integrations
+- SMS
+- WhatsApp
+- email
+- Telegram
+- Inkbox
+- RAG
+- analytics
+- backups
+- exports
+- logging
+- monitoring
+- environment configuration
+- deployment configuration
+- Docker files if present
+- reverse proxy configuration
+- CI/CD
+- tests
+- documentation
+
+Search for:
+
+TODO
+FIXME
+mock
+fake
+dummy
+placeholder
+sample
+demo
+hardcoded
+setTimeout
+random
+Math.random
+fakeSuccess
+mockSuccess
+console.log-only
+coming soon
+not implemented
+temporary
+stub
+simulation
+
+Do not automatically delete these.
+
+Determine whether each one represents:
+
+- legitimate test infrastructure
+- development fallback
+- production functionality
+- incomplete implementation
+- dead code
+- fake functionality
+
+============================================================
+2. REQUIRED STATUS TAXONOMY
+============================================================
+
+Every feature must receive one of these statuses:
+
+VERIFIED_REAL
+PARTIAL
+BLOCKED_EXTERNAL_SETUP
+NOT_YET_VERIFIED
+NOT_IMPLEMENTED
+BROKEN
+NO_DATA
+ERROR
+NOT_CONNECTED
+
+Never convert a blocked integration into VERIFIED_REAL.
+
+Never convert an untested feature into VERIFIED_REAL.
+
+============================================================
+3. PRESERVE EXISTING VERIFIED FUNCTIONALITY
+============================================================
+
+The following functionality has previously been reported as real.
+
+DO NOT REGRESS IT.
+
+Verify it again after all changes.
+
+Existing verified capabilities:
+
+1. Content Opportunity Score
+2. Hook A/B Testing
+3. Content Package Generation
+4. Protective Mode
+5. Comment Classification + Reply
+6. Image Generation
+7. 50-second Video Generation
+8. 5-minute Video Generation
+9. 50-second Cinematic Video Generation
+10. Bengali TTS
+11. Natural Language Command Center
+12. SEO Content Brief
+13. Telegram Commands
+14. RAG Search
+15. Export
+16. Backup
+17. Growth Loop
+18. Content Categories
+
+Previously verified implementation evidence included:
+
+- zai-llm execution
+- real LLM scoring
+- Bengali script generation
+- real PNG generation
+- FFmpeg
+- H.264/AAC output
+- subtitles
+- storyboard
+- Bengali TTS
+- database-backed commands
+- real RAG retrieval
+- CSV/JSON export
+- real backup artifacts
+- content scoring
+- hooks
+- campaigns
+- 37 content categories
+- 8 age groups
+- 296 category/age combinations
+
+You must RETEST these after modifications.
+
+============================================================
+4. CORE BUSINESS PHILOSOPHY
+============================================================
+
+ALO Learning Journey must operate under:
+
+70% AI + AUTOMATION
+30% HUMAN CONTROL
+
+The target is maximum autonomous execution while retaining meaningful
+human control over sensitive, irreversible, reputational, child-related,
+financial, legal, privacy-sensitive, and external communication actions.
+
+AI should perform:
+
+- research
+- analysis
+- planning
+- drafting
+- content generation
+- SEO generation
+- content transformation
+- video production
+- classification
+- tagging
+- prioritization
+- scheduling recommendations
+- analytics
+- optimization
+- routine workflow execution
+- internal agent handoffs
+- repetitive operations
+- monitoring
+- anomaly detection
+- reporting
+
+Humans retain control over:
+
+- sensitive child-related publication
+- identity-sensitive media
+- high-risk external communication
+- irreversible actions
+- account/security changes
+- financial commitments
+- important legal/compliance decisions
+- exceptional cases
+- final approval where configured
+
+Do not interpret "70% AI" as 70% decorative AI labels.
+
+Measure automation using actual completed automated workflow steps.
+
+============================================================
+5. ALO PRIVATE AI AGENT ARCHITECTURE
+============================================================
+
+Required configuration:
+
+LOCAL_FIRST=true
+PAID_AI_API_ALLOWED=false
+PRIVATE_AI_AGENTS=true
+
+The architecture must prioritize:
+
+1. local/private models
+2. self-hosted services
+3. internal AI agents
+4. internal tools
+5. external APIs only when explicitly configured
+
+Do not silently introduce paid AI APIs.
+
+Do not silently replace internal AI with OpenAI,
+Anthropic, Gemini, or another paid provider.
+
+If an external AI provider is optional:
+
+- isolate it behind an adapter
+- require explicit configuration
+- show provider status
+- record provider used
+- gracefully fall back where possible
+
+============================================================
+6. AI AGENT ORGANIZATION
+============================================================
+
+Design the system so agents have:
+
+- unique ID
+- name
+- department
+- role
+- capabilities
+- tools
+- permissions
+- memory
+- system instructions
+- prompt templates
+- task queue
+- execution history
+- confidence score
+- health status
+- autonomy level
+- escalation policy
+- audit history
+
+Support the broader ALO Labs architecture:
+
+100 departments
+×
+20 agents
+=
+2000 potential agents
+
+Target knowledge layer:
+
+10,000 skills
+50,000 prompt templates
+
+Do NOT fabricate 2,000 agents simply to satisfy the number.
+
+Build an architecture capable of supporting them.
+
+============================================================
+7. REQUIRED AGENT DEPARTMENTS
+============================================================
+
+Create or support agents for:
+
+- Orchestrator
+- Research
+- Parenting Research
+- Child Learning
+- Child Development
+- Content Strategy
+- Script Writing
+- Hook Generation
+- SEO
+- Keyword Research
+- Content Brief
+- Blog
+- Social Media
+- Video
+- Cinematic Video
+- Image
+- TTS
+- STT
+- Audio
+- Subtitle
+- Translation
+- Bengali Localization
+- English Localization
+- Distribution
+- Facebook
+- Instagram
+- YouTube
+- TikTok
+- X
+- WhatsApp
+- SMS
+- Email
+- Telegram
+- Inkbox Communications
+- Analytics
+- Growth
+- RAG
+- Safety
+- Protective Mode
+- Moderation
+- Scheduler
+- Campaign
+- CRM
+- Audience
+- Reporting
+- Backup
+- System Health
+- QA
+- DevOps
+- Security
+
+============================================================
+8. ORCHESTRATOR
+============================================================
+
+Build a central orchestrator.
+
+Example:
+
+User request
+→ Orchestrator
+→ planner
+→ specialist agents
+→ tools
+→ validation
+→ human approval if required
+→ execution
+→ verification
+→ database
+→ analytics
+→ audit
+
+The orchestrator must NOT hallucinate tool completion.
+
+Each tool invocation must return structured execution information:
+
+{
+  status,
+  provider,
+  operation,
+  startedAt,
+  completedAt,
+  result,
+  evidence,
+  error,
+  retryable
+}
+
+============================================================
+9. NATURAL LANGUAGE COMMAND CENTER
+============================================================
+
+Users must be able to type commands in:
+
+- Bangla
+- English
+- mixed Bangla-English
+
+Examples:
+
+"আজকের parenting content তৈরি করো"
+
+"Generate tomorrow's 3 videos"
+
+"Find trending toddler learning topics"
+
+"এই সপ্তাহের SEO content বানাও"
+
+"Create a 60 second Bengali video"
+
+"Prepare Facebook and YouTube versions"
+
+"Publish the approved content"
+
+"Show failed jobs"
+
+"Why did yesterday's video fail?"
+
+"Send this to the teacher"
+
+Commands must be parsed into actual structured actions.
+
+Never display:
+
+"Command successful"
+
+unless the requested action actually completed.
+
+============================================================
+10. INKBOX AGENT IDENTITY & COMMUNICATION LAYER
+============================================================
+
+Integrate Inkbox as an OPTIONAL communication and identity layer.
+
+Inkbox DOES NOT replace:
+
+- ALO agents
+- ALO orchestration
+- ALO database
+- ALO CRM
+- ALO media pipeline
+- ALO AI
+- ALO workflow engine
+
+Architecture:
+
+ALO AI AGENTS
+      ↓
+ALO ORCHESTRATOR
+      ↓
+INKBOX IDENTITY + COMMUNICATION LAYER
+      ↓
+Email / Phone / SMS / iMessage / Agent2Agent / Tunnel
+      ↓
+Recipient / Agent
+
+Inkbox must be treated as an integration adapter.
+
+============================================================
+11. INKBOX AGENT IDENTITIES
+============================================================
+
+Where useful, create distinct communication identities for:
+
+- ALO Orchestrator
+- Parenting Research Agent
+- Content Agent
+- SEO Agent
+- Video Agent
+- Parent Support Agent
+- Teacher Agent
+- Campaign Agent
+- Analytics Agent
+- Distribution Agent
+
+Do not create unnecessary identities.
+
+Identity configuration must be database-backed.
+
+Each identity should track:
+
+- agent_id
+- inkbox_identity_id
+- display_name
+- email status
+- phone status
+- tunnel status
+- A2A status
+- permissions
+- provider state
+- last successful communication
+- health
+- created_at
+- updated_at
+
+============================================================
+12. INKBOX COMMUNICATION CAPABILITIES
+============================================================
+
+Implement adapters where actually supported/configured:
+
+- email
+- inbound email
+- outbound email
+- SMS
+- phone
+- iMessage
+- Agent2Agent
+- public tunnel
+- WebSocket
+- HTTP
+- persistent communication
+- cross-channel contact mapping
+
+Do NOT assume every channel is available in Bangladesh.
+
+Before enabling:
+
+PHONE
+SMS
+CALLING
+iMESSAGE
+
+check actual provider/account availability.
+
+If unavailable:
+
+BLOCKED_EXTERNAL_SETUP
+
+Do not pretend the feature works.
+
+============================================================
+13. INKBOX A2A AGENT COMMUNICATION
+============================================================
+
+Enable agent-to-agent workflows.
+
+Example:
+
+Research Agent
+→ Content Agent
+→ SEO Agent
+→ Video Agent
+→ Distribution Agent
+
+Or:
+
+Parent Support Agent
+→ Research Agent
+→ Safety Agent
+→ Human Review
+→ Parent Support Agent
+
+Each handoff must contain:
+
+- sender
+- recipient
+- task ID
+- objective
+- context
+- required output
+- priority
+- timestamp
+- status
+- result
+- failure reason
+
+Do not create infinite agent loops.
+
+Implement:
+
+- max hops
+- timeout
+- retry limit
+- cycle detection
+- dead-letter queue
+- escalation
+
+============================================================
+14. INKBOX PUBLIC TUNNEL
+============================================================
+
+Where supported, use Inkbox tunnel capabilities for:
+
+- inbound agent communication
+- webhooks
+- internal agent endpoints
+- communication callbacks
+
+Do not expose unsafe endpoints.
+
+Every inbound request must support:
+
+- authentication
+- signature validation where available
+- rate limiting
+- replay protection
+- request logging
+- schema validation
+- origin validation where applicable
+- authorization
+
+============================================================
+15. INKBOX CONTACT MEMORY
+============================================================
+
+Map Inkbox contacts to ALO contacts.
+
+Create a unified contact model.
+
+Example:
+
+ALO Contact
+├── email
+├── phone
+├── Inkbox identity/contact
+├── WhatsApp
+├── Telegram
+├── CRM record
+├── conversation history
+├── consent
+├── preferences
+└── communication history
+
+Support cross-channel memory.
+
+Do not duplicate contacts unnecessarily.
+
+Use normalized identifiers.
+
+============================================================
+16. INKBOX VAULT / CREDENTIAL SECURITY
+============================================================
+
+If Inkbox vault is used:
+
+- never expose secrets in frontend
+- never log secrets
+- never place credentials into prompts
+- never commit credentials
+- use least privilege
+- maintain access audit
+- support rotation
+- support revocation
+- support connection health
+
+Critical ALO infrastructure credentials should remain under
+appropriate ALO-controlled secret management unless there is a
+specific reason to use Inkbox vault.
+
+============================================================
+17. INKBOX CONSENT SYSTEM
+============================================================
+
+External communication must have explicit permission boundaries.
+
+Implement:
+
+NEVER
+ASK_FIRST
+AUTOMATIC
+
+per communication category.
+
+Example:
+
+Internal agent-to-agent:
+AUTOMATIC
+
+Draft email:
+AUTOMATIC
+
+Send routine approved campaign:
+ASK_FIRST or configured AUTOMATIC
+
+Send sensitive child-related communication:
+ASK_FIRST
+
+High-risk external communication:
+ASK_FIRST
+
+Irreversible operation:
+NEVER automatic unless explicitly authorized through a safe policy.
+
+Every approval must clearly show:
+
+TO
+CHANNEL
+MESSAGE
+ATTACHMENTS
+PURPOSE
+AGENT
+SCOPE
+CONSEQUENCE
+
+Do not use vague:
+
+"Allow?"
+
+buttons.
+
+Use:
+
+"Send Email"
+"Send SMS"
+"Start Call"
+"Publish"
+
+Standing permissions must:
+
+- be visible
+- be revocable
+- have scope
+- have duration
+- have logs
+- default to least privilege
+
+============================================================
+18. INKBOX DELIVERY VERIFICATION
+============================================================
+
+Never report:
+
+"Message sent"
+
+based only on an internal queue insertion.
+
+Track:
+
+QUEUED
+SUBMITTED
+ACCEPTED
+SENT
+DELIVERED
+FAILED
+BOUNCED
+REJECTED
+UNKNOWN
+
+Only claim the state supported by provider evidence.
+
+Store:
+
+- provider message ID
+- timestamp
+- channel
+- recipient
+- status
+- provider response
+- error code
+- retry count
+
+============================================================
+19. COMMUNICATION FALLBACK
+============================================================
+
+If Inkbox is unavailable:
+
+Do NOT crash the entire ALO platform.
+
+Use configured fallback channels.
+
+Example:
+
+Inkbox unavailable
+→ ALO email adapter
+→ WhatsApp adapter
+→ Telegram adapter
+→ human escalation
+
+Only use channels that are actually configured.
+
+============================================================
+20. FAMILY MEDIA / CHARACTER SYSTEM
+============================================================
+
+ALO Learning Journey should support recurring real-world characters:
+
+1. Baby / child
+2. Father
+3. Mother
+4. Teacher
+5. Optional guests
+
+IMPORTANT:
+
+Never fabricate a real family member's identity.
+
+Use uploaded/reference media only where appropriate.
+
+Create a Character Profile system containing:
+
+- character ID
+- role
+- display name
+- reference media
+- voice profile
+- appearance metadata
+- age group
+- consent status
+- usage restrictions
+- allowed content categories
+- safety restrictions
+
+============================================================
+21. CHILD PRIVACY & SAFETY
+============================================================
+
+Child-related content requires additional protection.
+
+Implement:
+
+- parental control
+- consent tracking
+- private media storage
+- access control
+- publication review
+- sensitive-topic filtering
+- face/identity protection
+- metadata stripping where appropriate
+- EXIF handling
+- retention policy
+- deletion workflow
+- audit logs
+
+Never automatically publish sensitive child media without configured approval.
+
+Protect:
+
+- location
+- school information
+- daily routine
+- private documents
+- identifying metadata
+- personal contact details
+
+============================================================
+22. PROTECTIVE MODE
+============================================================
+
+Protective Mode must use real AI analysis.
+
+Analyze:
+
+- unsafe child content
+- medical misinformation
+- dangerous advice
+- exploitative content
+- inappropriate content
+- privacy risks
+- identity exposure
+- sensitive family information
+- harmful claims
+
+Output:
+
+SAFE
+REVIEW
+BLOCK
+
+with:
+
+- reasons
+- confidence
+- policy category
+- recommended action
+
+Never silently suppress content without logging the reason.
+
+============================================================
+23. CONTENT FACTORY
+============================================================
+
+Build a complete content pipeline:
+
+IDEA
+→ RESEARCH
+→ OPPORTUNITY SCORE
+→ TOPIC
+→ HOOKS
+→ SCRIPT
+→ FACT CHECK
+→ SAFETY
+→ SEO
+→ STORYBOARD
+→ ASSETS
+→ VOICE
+→ VIDEO
+→ SUBTITLE
+→ THUMBNAIL
+→ PLATFORM ADAPTATION
+→ HUMAN APPROVAL
+→ DISTRIBUTION
+→ ANALYTICS
+→ LEARNING
+
+Each stage must be independently retryable.
+
+============================================================
+24. CONTENT CATEGORIES
+============================================================
+
+Preserve:
+
+37 content categories
+×
+8 age groups
+=
+296 content combinations
+
+Build category metadata:
+
+- category
+- age group
+- topic types
+- keywords
+- safety level
+- recommended format
+- recommended duration
+- platform suitability
+- SEO intent
+
+Allow expansion without code changes.
+
+============================================================
+25. CONTENT OPPORTUNITY SCORE
+============================================================
+
+Preserve real scoring.
+
+Use multiple dimensions such as:
+
+- demand
+- relevance
+- competition
+- audience value
+- SEO opportunity
+- content feasibility
+
+Store the score.
+
+Allow configurable auto-approval threshold.
+
+Example:
+
+score >= 80
+→ eligible for automatic production
+
+But safety and child-sensitive rules override score.
+
+============================================================
+26. HOOK A/B TESTING
+============================================================
+
+Generate multiple hooks.
+
+At minimum support:
+
+- curiosity
+- problem
+- emotional
+- educational
+- question-based
+
+Store:
+
+- hook
+- variant
+- score
+- usage
+- platform
+- performance
+
+Do not claim winner until performance data exists.
+
+============================================================
+27. SEO GROWTH ENGINE
+============================================================
+
+Build a real SEO growth loop.
+
+Keyword discovery
+→ clustering
+→ search intent
+→ content gap
+→ brief
+→ article
+→ internal links
+→ schema
+→ metadata
+→ indexing workflow
+→ performance tracking
+→ optimization
+
+Support:
+
+- primary keyword
+- secondary keywords
+- long-tail keywords
+- question keywords
+- semantic entities
+- search intent
+- difficulty
+- opportunity
+- country
+- language
+
+Bangladesh should be a first-class target market.
+
+Support:
+
+Bangla SEO
+English SEO
+Bangladesh-localized search intent
+
+============================================================
+28. SEO CONTENT BRIEF
+============================================================
+
+Generate:
+
+- title
+- primary keyword
+- secondary keywords
+- intent
+- outline
+- H1
+- H2
+- H3
+- FAQs
+- meta title
+- meta description
+- schema recommendation
+- internal link targets
+- external reference recommendations
+- CTA
+- content length recommendation
+
+Do not invent search volume.
+
+If real keyword data is unavailable:
+
+NO_DATA
+
+not fake numbers.
+
+============================================================
+29. CONTENT REPURPOSING
+============================================================
+
+One source should become:
+
+- long-form article
+- short article
+- Facebook post
+- Instagram caption
+- YouTube title
+- YouTube description
+- Shorts
+- TikTok script
+- X post/thread
+- WhatsApp message
+- Telegram post
+- SMS
+- email
+- carousel
+- quote card
+- short video
+- long video
+
+Each platform version must follow its own constraints.
+
+============================================================
+30. VIDEO FACTORY
+============================================================
+
+Build a real media pipeline.
+
+Support:
+
+50 seconds
+60 seconds
+5 minutes
+10 minutes
+30 minutes
+60 minutes
+
+Where actual infrastructure supports each duration.
+
+Never claim unsupported durations are complete.
+
+Pipeline:
+
+SCRIPT
+→ SCENE PLAN
+→ VISUAL GENERATION
+→ AUDIO
+→ TTS/STT
+→ TIMELINE
+→ MUSIC
+→ SFX
+→ SUBTITLE
+→ TRANSITIONS
+→ RENDER
+→ FFPROBE
+→ QUALITY CHECK
+→ STORAGE
+→ DATABASE
+
+============================================================
+31. CINEMATIC VIDEO ENGINE
+============================================================
+
+Preserve the verified cinematic pipeline.
+
+Support:
+
+- storyboard
+- scene generation
+- AI visual assets
+- Bengali voice
+- subtitles
+- transitions
+- pacing
+- background audio
+- sound effects
+- scene timing
+- intro
+- outro
+- CTA
+- thumbnail
+
+Every final video must be technically validated.
+
+Run FFPROBE or equivalent.
+
+Verify:
+
+- duration
+- codec
+- audio
+- resolution
+- FPS
+- file size
+- corruption
+- stream availability
+
+============================================================
+32. REAL AUDIO SYSTEM
+============================================================
+
+Support:
+
+- Bengali TTS
+- English TTS
+- STT
+- audio upload
+- transcription
+- subtitle generation
+- speaker segmentation where supported
+- voice profile selection
+
+Existing Bengali TTS must not regress.
+
+If STT is not configured:
+
+BLOCKED_EXTERNAL_SETUP
+
+Do not fake transcripts.
+
+============================================================
+33. VOICE CLONING
+============================================================
+
+Voice cloning must be:
+
+- consent-based
+- securely stored
+- access-controlled
+- explicitly enabled
+- auditable
+
+Never clone a real person's voice without appropriate authorization.
+
+If the required model/provider is unavailable:
+
+BLOCKED_EXTERNAL_SETUP
+
+============================================================
+34. FACE / IDENTITY CONSISTENCY
+============================================================
+
+For family-character media:
+
+support reference-based consistency only where technically available.
+
+Do not claim face consistency merely because prompts mention the person.
+
+Track:
+
+- model
+- reference asset
+- generation ID
+- consistency score where available
+
+If not implemented:
+
+NOT_IMPLEMENTED
+
+or
+
+BLOCKED_EXTERNAL_SETUP
+
+============================================================
+35. SOCIAL MEDIA DISTRIBUTION
+============================================================
+
+Build adapters for:
+
+- Facebook
+- Instagram
+- YouTube
+- TikTok
+- X
+
+Workflow:
+
+CONTENT READY
+→ SAFETY
+→ APPROVAL
+→ PLATFORM ADAPTER
+→ PUBLISH
+→ PROVIDER RESPONSE
+→ STORE POST ID
+→ VERIFY STATUS
+→ ANALYTICS
+
+Never fake publication.
+
+If OAuth/API access is unavailable:
+
+BLOCKED_EXTERNAL_SETUP
+
+============================================================
+36. SOCIAL ANALYTICS
+============================================================
+
+Track real metrics where APIs provide them.
+
+Examples:
+
+- views
+- reach
+- likes
+- comments
+- shares
+- saves
+- watch time
+- retention
+- CTR
+- engagement
+- followers
+- conversions
+
+If unavailable:
+
+NO_DATA
+
+Never invent metrics.
+
+============================================================
+37. SMS / WHATSAPP / EMAIL
+============================================================
+
+Implement real adapters.
+
+Support:
+
+- transactional messages
+- welcome messages
+- campaigns
+- notifications
+- follow-ups
+- reminders
+- content distribution
+
+Track:
+
+queued
+sent
+delivered
+failed
+
+Do not claim delivery without provider evidence.
+
+============================================================
+38. TELEGRAM
+============================================================
+
+Preserve existing real Telegram command functionality.
+
+Use:
+
+- authenticated allow-list
+- command parser
+- execution engine
+- audit logs
+- permission checks
+
+Do not permit arbitrary users to execute privileged commands.
+
+============================================================
+39. RAG SYSTEM
+============================================================
+
+Preserve and expand RAG.
+
+Support:
+
+- document ingestion
+- chunking
+- indexing
+- keyword search
+- semantic search
+- hybrid search
+- retrieval
+- citation tracking
+- source metadata
+- freshness
+- confidence
+
+Every AI-generated factual answer should be able to expose provenance
+where the workflow requires evidence.
+
+============================================================
+40. DATABASE
+============================================================
+
+Database must be the source of truth.
+
+Do not store important state only in frontend memory.
+
+Create/verify models for:
+
+- users
+- roles
+- permissions
+- agents
+- agent_runs
+- agent_messages
+- agent_tools
+- tasks
+- workflows
+- workflow_runs
+- approvals
+- contacts
+- conversations
+- messages
+- channels
+- identities
+- Inkbox identities
+- provider accounts
+- content
+- content_versions
+- topics
+- categories
+- age_groups
+- keywords
+- SEO briefs
+- scripts
+- storyboards
+- media_assets
+- videos
+- audio
+- subtitles
+- publications
+- social_posts
+- analytics
+- campaigns
+- comments
+- safety_reviews
+- RAG documents
+- RAG chunks
+- audit_logs
+- jobs
+- schedules
+- retries
+- failures
+- backups
+
+Do not destroy existing schema unnecessarily.
+
+Migrate carefully.
+
+============================================================
+41. DATABASE INTEGRITY
+============================================================
+
+Verify:
+
+- foreign keys
+- unique constraints
+- indexes
+- cascading behavior
+- orphan records
+- duplicate records
+- invalid references
+- migration consistency
+
+Never delete production data blindly.
+
+Before destructive migration:
+
+- backup
+- migration plan
+- verification
+- rollback plan
+
+============================================================
+42. JOB QUEUE
+============================================================
+
+Long-running operations must not block HTTP requests.
+
+Use appropriate:
+
+- queues
+- workers
+- retries
+- exponential backoff
+- dead-letter queue
+- job priority
+- concurrency controls
+- timeout
+- cancellation
+- idempotency
+
+Required job states:
+
+PENDING
+RUNNING
+RETRYING
+COMPLETED
+FAILED
+CANCELLED
+BLOCKED
+
+============================================================
+43. SCHEDULER
+============================================================
+
+Implement real scheduling for:
+
+- content generation
+- SEO jobs
+- videos
+- social publishing
+- campaigns
+- analytics
+- reports
+- backups
+- maintenance
+- agent health checks
+
+A scheduled job must survive application restarts.
+
+Do not rely on browser tabs remaining open.
+
+============================================================
+44. IDEMPOTENCY
+============================================================
+
+Every externally consequential action should have an idempotency strategy.
+
+Prevent:
+
+- duplicate social posts
+- duplicate SMS
+- duplicate emails
+- duplicate videos
+- duplicate campaigns
+- duplicate agent tasks
+
+Use unique operation IDs.
+
+============================================================
+45. OBSERVABILITY
+============================================================
+
+Implement:
+
+- structured logs
+- request IDs
+- task IDs
+- agent run IDs
+- provider IDs
+- execution duration
+- error codes
+- retry counts
+- audit trail
+
+Dashboard should show:
+
+- system health
+- agents
+- jobs
+- failures
+- integrations
+- queues
+- content
+- approvals
+- communications
+- Inkbox health
+- media pipeline
+- SEO
+- analytics
+
+============================================================
+46. HUMAN APPROVAL CENTER
+============================================================
+
+Create a real approval queue.
+
+Each approval should show:
+
+WHO
+WHAT
+WHY
+TO WHOM
+CHANNEL
+CONTENT
+ATTACHMENTS
+RISK
+AGENT
+SOURCE
+EXPECTED RESULT
+
+Actions:
+
+APPROVE
+REJECT
+EDIT
+RETRY
+ESCALATE
+
+Approval must correspond exactly to what executes.
+
+If execution parameters change after approval:
+
+require a new approval.
+
+============================================================
+47. AUTONOMY POLICY
+============================================================
+
+Each action receives an autonomy level:
+
+LEVEL 0
+Never execute automatically.
+
+LEVEL 1
+Draft only.
+
+LEVEL 2
+Execute after human approval.
+
+LEVEL 3
+Automatically execute low-risk tasks.
+
+LEVEL 4
+Automatically execute within defined policy boundaries.
+
+LEVEL 5
+Fully automated internal agent operations.
+
+External high-impact actions must not bypass configured authority boundaries.
+
+============================================================
+48. CHILD-SENSITIVE AUTONOMY
+============================================================
+
+Child-related content gets stricter policy.
+
+Examples:
+
+Routine educational script:
+automatic candidate
+
+Public child video:
+approval required unless explicitly authorized by policy
+
+Sensitive personal information:
+block
+
+Medical/high-risk child advice:
+review
+
+Potentially identifying location:
+block/review
+
+Never let an AI agent override protective policies.
+
+============================================================
+49. CONTENT CALENDAR
+============================================================
+
+Build a real calendar.
+
+Show:
+
+- date
+- topic
+- category
+- age group
+- platform
+- format
+- status
+- assigned agent
+- approval state
+- scheduled time
+- publication state
+
+Support drag/drop or equivalent rescheduling.
+
+Changes must persist in database.
+
+============================================================
+50. GROWTH LOOP
+============================================================
+
+Build:
+
+PUBLISH
+→ MEASURE
+→ ANALYZE
+→ LEARN
+→ SCORE
+→ CREATE NEW IDEAS
+→ TEST HOOKS
+→ PRODUCE
+→ PUBLISH
+
+The loop must use actual historical data.
+
+No fake analytics.
+
+No fake learning.
+
+============================================================
+51. AI SELF-IMPROVEMENT
+============================================================
+
+Agents should learn from:
+
+- successful topics
+- failed topics
+- hook performance
+- retention
+- engagement
+- search performance
+- conversion
+- rejection reasons
+- safety reviews
+
+Store learnings explicitly.
+
+Do not silently rewrite system prompts based on uncontrolled data.
+
+Use versioned:
+
+- prompts
+- policies
+- strategies
+- models
+- agent configurations
+
+============================================================
+52. SECURITY
+============================================================
+
+Audit:
+
+- authentication
+- RBAC
+- CSRF
+- XSS
+- SQL injection
+- command injection
+- SSRF
+- file upload
+- path traversal
+- secret exposure
+- API authentication
+- webhook authentication
+- rate limits
+- session management
+- authorization
+- tenant isolation where applicable
+
+Never expose:
+
+- API keys
+- passwords
+- database credentials
+- access tokens
+- OAuth secrets
+- Inkbox secrets
+- private URLs
+- internal system credentials
+
+============================================================
+53. ENVIRONMENT CONFIGURATION
+============================================================
+
+Create/update:
+
+.env.example
+
+Never commit real secrets.
+
+Include documented placeholders for:
+
+- database
+- Redis
+- AI
+- storage
+- SMTP
+- SMS
+- WhatsApp
+- Telegram
+- social OAuth
+- Inkbox
+- media models
+- STT
+- TTS
+- monitoring
+
+Clearly distinguish:
+
+REQUIRED
+OPTIONAL
+EXTERNAL_BLOCKER
+
+============================================================
+54. INKBOX ENVIRONMENT CONFIGURATION
+============================================================
+
+Add appropriate configuration placeholders for:
+
+INKBOX_API_KEY
+INKBOX_BASE_URL
+INKBOX_ORG_ID
+INKBOX_MCP_URL
+INKBOX_WEBHOOK_SECRET
+INKBOX_ENABLED
+
+Do not invent actual values.
+
+Do not commit secrets.
+
+Use feature flags.
+
+Example:
+
+INKBOX_ENABLED=false
+
+until properly configured.
+
+============================================================
+55. API ARCHITECTURE
+============================================================
+
+Use service/adaptor architecture.
+
+Example:
+
+/services
+  /ai
+  /agents
+  /content
+  /seo
+  /video
+  /social
+  /email
+  /sms
+  /whatsapp
+  /telegram
+  /inkbox
+  /rag
+  /analytics
+  /safety
+
+Do not place the entire system in giant route handlers.
+
+============================================================
+56. INKBOX SERVICE ADAPTER
+============================================================
+
+Create a clean abstraction such as:
+
+InkboxService
+
+Capabilities:
+
+- createIdentity
+- getIdentity
+- listIdentities
+- sendEmail
+- sendMessage
+- initiateCall
+- getMessageStatus
+- listContacts
+- sendAgentMessage
+- receiveWebhook
+- healthCheck
+
+Only implement operations actually supported by the configured Inkbox
+integration.
+
+Unsupported operation must return:
+
+NOT_CONNECTED
+or
+BLOCKED_EXTERNAL_SETUP
+
+not fake success.
+
+============================================================
+57. ERROR HANDLING
+============================================================
+
+Every external integration must handle:
+
+- timeout
+- authentication failure
+- rate limit
+- provider outage
+- malformed response
+- network failure
+- invalid recipient
+- permission failure
+- unsupported region
+- quota exhaustion
+
+Provide useful user-facing errors.
+
+============================================================
+58. RETRY POLICY
+============================================================
+
+Retry only retryable failures.
+
+Do NOT retry:
+
+- invalid credentials
+- invalid recipient
+- policy block
+- authorization denial
+- malformed request
+
+Retry:
+
+- temporary network failure
+- timeout
+- provider 5xx
+- transient infrastructure errors
+
+Use exponential backoff.
+
+============================================================
+59. FILE / MEDIA STORAGE
+============================================================
+
+Generated media must have:
+
+- unique ID
+- checksum
+- MIME type
+- duration
+- dimensions
+- size
+- storage location
+- creation timestamp
+- source
+- generator
+- version
+
+Prevent orphaned media.
+
+Implement cleanup policies.
+
+============================================================
+60. BACKUPS
+============================================================
+
+Preserve real backup capability.
+
+Backup:
+
+- database
+- critical configuration
+- content metadata
+- agent configurations
+- prompts
+- workflows
+
+Never include plaintext secrets unnecessarily.
+
+Verify backup integrity.
+
+Test restoration.
+
+A backup that was created but cannot be restored is not a fully verified backup.
+
+============================================================
+61. EXPORT
+============================================================
+
+Preserve CSV/JSON export.
+
+Exports must contain actual database records.
+
+Include:
+
+- timestamp
+- filters
+- row count
+- checksum where useful
+- export status
+
+============================================================
+62. ADMIN COMMANDS
+============================================================
+
+Provide privileged commands for:
+
+- health
+- agents
+- jobs
+- queues
+- failed jobs
+- retries
+- content
+- videos
+- SEO
+- social
+- Inkbox
+- backups
+- database
+- integrations
+
+All privileged commands require authorization.
+
+============================================================
+63. ADMIN DASHBOARD
+============================================================
+
+Dashboard must show REAL data.
+
+Required sections:
+
+Overview
+Pipeline
+Distribution
+Media
+System
+Agents
+Communications
+Inkbox
+SEO
+Content
+Analytics
+Approvals
+Safety
+Jobs
+RAG
+Backups
+Settings
+
+Do not show fake numbers.
+
+If no data:
+
+NO_DATA
+
+============================================================
+64. REAL-TIME STATUS
+============================================================
+
+Use actual job state.
+
+Example:
+
+Video generation:
+RUNNING 43%
+
+Do not display 43% unless actual measurable progress exists.
+
+If exact progress cannot be measured:
+
+RUNNING
+
+not fake percentages.
+
+============================================================
+65. TESTING
+============================================================
+
+Create:
+
+- unit tests
+- integration tests
+- API tests
+- database tests
+- agent tests
+- workflow tests
+- media tests
+- security tests
+- permission tests
+- regression tests
+
+Critical workflows must be executable in a test environment.
+
+============================================================
+66. REAL-WORLD ACCEPTANCE TESTS
+============================================================
+
+Test:
+
+1. Create content idea
+2. Score idea
+3. Generate hooks
+4. Generate script
+5. Run safety
+6. Generate SEO brief
+7. Generate image
+8. Generate video
+9. Validate video
+10. Save metadata
+11. Create platform versions
+12. Request approval
+13. Approve
+14. Attempt distribution
+15. Verify provider result
+16. Store publication status
+17. Collect analytics if available
+
+Also test:
+
+Inkbox:
+
+1. Configure integration
+2. Health check
+3. Identity lookup
+4. Contact mapping
+5. Agent-to-agent message
+6. Outbound communication
+7. Delivery status
+8. Failure handling
+9. Retry
+10. revoke/disable integration
+
+============================================================
+67. VIDEO REGRESSION TEST
+============================================================
+
+After changes verify:
+
+50-second video
+≈ 50 seconds
+
+5-minute video
+≈ 5 minutes
+
+Cinematic 50-second video
+≈ 50 seconds
+
+Verify using FFPROBE.
+
+Confirm:
+
+- H.264
+- AAC where expected
+- valid duration
+- valid streams
+- playable output
+
+Do not replace real video generation with mocks.
+
+============================================================
+68. PERFORMANCE
+============================================================
+
+Optimize:
+
+- database queries
+- indexes
+- API latency
+- media processing
+- queue throughput
+- memory
+- CPU
+- concurrency
+
+Do not optimize by removing real functionality.
+
+============================================================
+69. DATABASE SCALE
+============================================================
+
+The architecture must be capable of handling large datasets including:
+
+- hundreds of universities
+- thousands of scholarships
+- thousands of courses
+- tens/hundreds of thousands of intakes
+- large content libraries
+- large media libraries
+- large agent execution history
+
+Use pagination.
+
+Never load massive tables unnecessarily.
+
+============================================================
+70. SEO PUBLIC WEBSITE
+============================================================
+
+ALO Learning Journey must have real public-facing content.
+
+Pages should be useful to parents.
+
+Support:
+
+- parenting
+- child learning
+- age-specific guidance
+- educational activities
+- teacher resources
+- family learning
+- Bengali content
+- English content
+
+Bangladesh-focused SEO where appropriate.
+
+No thin placeholder pages.
+
+============================================================
+71. PUBLIC CONTENT QUALITY
+============================================================
+
+Content should have:
+
+- useful information
+- clear structure
+- factual grounding
+- original value
+- FAQs
+- internal links
+- metadata
+- schema
+- CTA
+- safety review
+
+Do not mass-generate thousands of low-value pages simply for SEO.
+
+============================================================
+72. MULTILINGUAL
+============================================================
+
+Primary languages:
+
+Bangla
+English
+
+Support mixed-language command interpretation.
+
+Ensure:
+
+- Unicode correctness
+- Bengali typography
+- subtitles
+- metadata
+- URLs where appropriate
+- search indexing
+- social captions
+
+============================================================
+73. HUMAN-AI COLLABORATION
+============================================================
+
+Humans must be able to:
+
+- edit
+- approve
+- reject
+- pause
+- resume
+- override
+- retry
+- inspect
+- revoke permissions
+- disable agents
+
+AI must be able to:
+
+- recommend
+- draft
+- execute permitted actions
+- learn from outcomes
+- escalate blocked work
+
+============================================================
+74. AGENT PERMISSION CENTER
+============================================================
+
+Create a central permissions interface.
+
+For each agent:
+
+READ
+WRITE
+PUBLISH
+MESSAGE
+DELETE
+EXECUTE
+ADMIN
+
+Show:
+
+- current permissions
+- scope
+- expiration
+- last used
+- revoke
+- pause
+
+Do not grant global access when narrow scope is possible.
+
+============================================================
+75. AUDIT LOG
+============================================================
+
+Every important action must create an immutable or append-only audit event.
+
+Record:
+
+- actor
+- agent
+- user
+- action
+- target
+- input hash/reference
+- result
+- provider
+- timestamp
+- IP where appropriate
+- approval ID
+- execution ID
+
+============================================================
+76. NO FAKE DATA RULE
+============================================================
+
+Production dashboard data must come from:
+
+- database
+- real provider APIs
+- real execution results
+- real system metrics
+
+Demo data must be clearly marked.
+
+Do not mix demo data with production data.
+
+============================================================
+77. NO FAKE INTEGRATION RULE
+============================================================
+
+For every integration display:
+
+CONNECTED
+NOT_CONNECTED
+BLOCKED_EXTERNAL_SETUP
+ERROR
+
+Never:
+
+CONNECTED
+
+just because environment variables exist.
+
+Perform an actual health check.
+
+============================================================
+78. AUTOMATION COVERAGE
+============================================================
+
+Calculate actual automation coverage.
+
+Example:
+
+total eligible workflow steps
+vs
+automatically executed workflow steps
+
+Show:
+
+Automation Coverage: XX%
+
+Do not claim 70% unless evidence supports it.
+
+Target:
+
+>=70%
+
+while maintaining safety controls.
+
+============================================================
+79. PRODUCTION READINESS GATES
+============================================================
+
+Before declaring production ready:
+
+[ ] build passes
+[ ] type check passes
+[ ] lint passes
+[ ] database validates
+[ ] migrations validate
+[ ] authentication works
+[ ] RBAC works
+[ ] API routes work
+[ ] agents execute
+[ ] queues execute
+[ ] scheduler executes
+[ ] video generation works
+[ ] image generation works
+[ ] Bengali TTS works
+[ ] safety works
+[ ] SEO works
+[ ] RAG works
+[ ] exports work
+[ ] backups work
+[ ] Telegram works
+[ ] Inkbox integration tested if configured
+[ ] external providers accurately marked
+[ ] no secrets committed
+[ ] no fake success
+[ ] no critical runtime errors
+[ ] regression tests pass
+[ ] production deployment verified
+
+============================================================
+80. FINAL SECURITY SCAN
+============================================================
+
+Search repository for:
+
+API keys
+tokens
+passwords
+private keys
+OAuth secrets
+database passwords
+Inkbox secrets
+SMTP passwords
+cloud credentials
+
+Remove secrets from source.
+
+Create/update:
+
+.env.example
+
+Never include real production credentials.
+
+============================================================
+81. FINAL CODE QUALITY
+============================================================
+
+Fix:
+
+- TypeScript errors
+- ESLint errors
+- runtime errors
+- broken imports
+- dead references
+- incorrect API calls
+- invalid Prisma queries
+- race conditions
+- unhandled promises
+- memory leaks
+- broken environment handling
+
+Do not silence errors with:
+
+any
+@ts-ignore
+eslint-disable
+
+unless genuinely justified and documented.
+
+============================================================
+82. FINAL AUDIT
+============================================================
+
+After implementation, run a complete second audit.
+
+Compare:
+
+BEFORE
+vs
+AFTER
+
+For every feature report:
+
+Feature
+Status
+Implementation
+Evidence
+Test
+Provider
+Blocker
+Next Action
+
+============================================================
+83. REQUIRED FINAL REPORT
+============================================================
+
+Produce:
+
+A. Executive Summary
+
+B. Project Architecture
+
+C. Database Audit
+
+D. AI Agent Audit
+
+E. Automation Audit
+
+F. Content Pipeline Audit
+
+G. Video Pipeline Audit
+
+H. SEO Audit
+
+I. Social Audit
+
+J. Communication Audit
+
+K. Inkbox Integration Audit
+
+L. Safety Audit
+
+M. Security Audit
+
+N. Performance Audit
+
+O. Test Results
+
+P. External Blockers
+
+Q. Production Readiness
+
+R. Automation Coverage
+
+S. Remaining Work
+
+============================================================
+84. FEATURE STATUS TABLE
+============================================================
+
+Create a table:
+
+| Feature | Status | Real Execution | Evidence | Blocker |
+
+Use only:
+
+VERIFIED_REAL
+PARTIAL
+BLOCKED_EXTERNAL_SETUP
+NOT_YET_VERIFIED
+NOT_IMPLEMENTED
+BROKEN
+NO_DATA
+ERROR
+NOT_CONNECTED
+
+============================================================
+85. INKBOX FINAL STATUS
+============================================================
+
+Specifically report:
+
+Inkbox integration:
+- SDK/API connectivity
+- identity connectivity
+- email
+- phone
+- SMS
+- iMessage
+- A2A
+- tunnel
+- contacts
+- vault
+- webhook
+- delivery tracking
+- consent
+- audit
+- fallback
+
+Each individually receives a real status.
+
+============================================================
+86. FINAL PRODUCTION COMMAND
+============================================================
+
+The final system must be runnable from a clean environment.
+
+Document exact commands for:
+
+install
+environment setup
+database setup
+migration
+seed if needed
+development
+production build
+production start
+worker
+scheduler
+tests
+lint
+typecheck
+health check
+
+Do not hide required manual configuration.
+
+============================================================
+87. DEPLOYMENT
+============================================================
+
+Verify production deployment configuration.
+
+Check:
+
+- Node version
+- package manager
+- environment
+- database
+- Redis if required
+- process manager
+- reverse proxy
+- SSL
+- file permissions
+- storage
+- workers
+- cron/scheduler
+- logs
+- restart behavior
+
+============================================================
+88. RESTART SURVIVAL TEST
+============================================================
+
+Start:
+
+- web server
+- workers
+- scheduler
+
+Create a real queued task.
+
+Restart the application.
+
+Verify the task state survives.
+
+Verify the worker can continue/retry.
+
+============================================================
+89. FAILURE RECOVERY TEST
+============================================================
+
+Intentionally test:
+
+- provider timeout
+- invalid credentials
+- network failure
+- worker crash
+- malformed media
+- database temporary failure
+- duplicate task
+- duplicate publication
+
+Verify:
+
+- no silent failure
+- no fake success
+- retry where appropriate
+- audit log
+- user-visible state
+
+============================================================
+90. CHILD MEDIA FAILURE SAFETY
+============================================================
+
+If media generation produces:
+
+- distorted identity
+- unsafe content
+- privacy exposure
+- incorrect child representation
+
+automatically:
+
+BLOCK or REVIEW
+
+Do not automatically publish.
+
+============================================================
+91. NO HIDDEN HUMAN DEPENDENCY
+============================================================
+
+If a workflow requires a human:
+
+show exactly where.
+
+Example:
+
+AI completed:
+Research
+Script
+SEO
+Video
+
+Human required:
+Final child-media approval
+
+Do not pretend the entire workflow is automated.
+
+============================================================
+92. NO HIDDEN EXTERNAL DEPENDENCY
+============================================================
+
+For every external dependency document:
+
+Provider
+Purpose
+Credential required
+Subscription required
+Regional restriction
+API limitation
+Fallback
+Current status
+
+============================================================
+93. DOCUMENTATION
+============================================================
+
+Create/update:
+
+README.md
+
+Include:
+
+architecture
+installation
+environment
+database
+agents
+AI
+media
+SEO
+social
+communications
+Inkbox
+security
+testing
+deployment
+troubleshooting
+
+Also document:
+
+INKBOX-INTEGRATION.md
+
+Include:
+
+architecture
+configuration
+identity management
+A2A
+communication
+webhooks
+permissions
+consent
+delivery tracking
+failure handling
+Bangladesh availability caveats
+security
+
+============================================================
+94. CLEAN PROJECT
+============================================================
+
+Remove only genuinely unnecessary artifacts.
+
+Do not delete:
+
+- required assets
+- database migrations
+- agent prompts
+- production scripts
+- test fixtures
+- configuration
+- documentation
+
+Clean:
+
+- build artifacts
+- caches
+- temporary generated files
+- accidental secrets
+- abandoned test output
+
+============================================================
+95. FINAL ZIP REQUIREMENT
+============================================================
+
+After ALL work is complete:
+
+create:
+
+ALO-LEARNING-JOURNEY-PRODUCTION-FINAL.zip
+
+The ZIP must contain the complete production source.
+
+Include:
+
+- source
+- app
+- components
+- services
+- agents
+- prompts
+- database
+- migrations
+- scripts
+- tests
+- configuration templates
+- documentation
+- Inkbox integration
+- deployment files
+
+Exclude:
+
+- node_modules
+- .next
+- caches
+- temporary files
+- real secrets
+- private credentials
+- unnecessary build artifacts
+
+============================================================
+96. ZIP VERIFICATION
+============================================================
+
+Do NOT simply create the ZIP.
+
+Verify:
+
+1. ZIP opens
+2. ZIP extracts
+3. expected files exist
+4. no source files missing
+5. no secret files included
+6. .env.example exists
+7. package.json exists
+8. database schema exists
+9. migrations exist
+10. tests exist
+11. Inkbox source exists
+12. documentation exists
+
+Then perform a clean extraction test.
+
+From the extracted copy:
+
+install dependencies
+→ validate
+→ build
+→ typecheck
+→ lint
+→ run tests
+
+Do not call the ZIP final until this succeeds or all blockers are explicitly
+reported.
+
+============================================================
+97. FINAL ACCEPTANCE RULE
+============================================================
+
+The project can be marked:
+
+PRODUCTION_READY
+
+ONLY if:
+
+- critical build passes
+- typecheck passes
+- lint passes
+- database validates
+- critical workflows execute
+- no fake success paths remain
+- security checks pass
+- backups work
+- core media pipeline works
+- agent orchestration works
+- automation measurement is real
+- external blockers are accurately reported
+- production package is complete
+
+Otherwise:
+
+PRODUCTION_READY_WITH_BLOCKERS
+
+or
+
+NOT_PRODUCTION_READY
+
+============================================================
+98. MOST IMPORTANT RULE
+============================================================
+
+DO NOT STOP AT THE UI.
+
+DO NOT STOP AT API ROUTES.
+
+DO NOT STOP AT DATABASE TABLES.
+
+DO NOT STOP AT MOCK DATA.
+
+DO NOT STOP AT A GREEN DASHBOARD.
+
+DO NOT STOP WHEN THE CODE "LOOKS COMPLETE".
+
+EXECUTE THE ACTUAL WORK.
+
+VERIFY THE ACTUAL WORK.
+
+STORE THE ACTUAL RESULT.
+
+SHOW THE ACTUAL EVIDENCE.
+
+============================================================
+99. FINAL EXECUTION ORDER
+============================================================
+
+FOLLOW THIS ORDER EXACTLY:
+
+PHASE 1
+Full repository audit
+
+PHASE 2
+Architecture and dependency audit
+
+PHASE 3
+Database integrity audit
+
+PHASE 4
+Existing feature verification
+
+PHASE 5
+AI agent architecture verification
+
+PHASE 6
+Automation engine
+
+PHASE 7
+Command Center
+
+PHASE 8
+Content engine
+
+PHASE 9
+SEO engine
+
+PHASE 10
+RAG
+
+PHASE 11
+Family/child media system
+
+PHASE 12
+Video factory
+
+PHASE 13
+Audio/TTS/STT
+
+PHASE 14
+Safety/protective mode
+
+PHASE 15
+Social distribution
+
+PHASE 16
+Email/SMS/WhatsApp/Telegram
+
+PHASE 17
+INKBOX IDENTITY + COMMUNICATION LAYER
+
+PHASE 18
+A2A agent communication
+
+PHASE 19
+Scheduler/queues/workers
+
+PHASE 20
+Analytics/growth loop
+
+PHASE 21
+Human approval
+
+PHASE 22
+Security
+
+PHASE 23
+Testing
+
+PHASE 24
+Failure/recovery testing
+
+PHASE 25
+Production deployment verification
+
+PHASE 26
+Final regression
+
+PHASE 27
+Final audit
+
+PHASE 28
+ZIP creation
+
+PHASE 29
+ZIP extraction/build verification
+
+PHASE 30
+Final evidence report
+
+============================================================
+100. FINAL OUTPUT MUST CONTAIN
+============================================================
+
+1. What was already working
+2. What was fixed
+3. What was newly implemented
+4. What was tested
+5. What actually passed
+6. What remains blocked
+7. Why it is blocked
+8. Exact external configuration required
+9. Inkbox integration status
+10. Automation coverage
+11. Security status
+12. Production readiness status
+13. Exact final ZIP path/name
+14. ZIP verification result
+15. Final command to run the production system
+
+============================================================
+FINAL COMMANDMENT
+============================================================
+
+BUILD THE REAL ALO LEARNING JOURNEY.
+
+NOT A DEMO.
+
+NOT A MOCK.
+
+NOT A CLICKABLE PROTOTYPE.
+
+NOT A DASHBOARD THAT PRETENDS EVERYTHING WORKS.
+
+THE AI AGENTS MUST ACTUALLY WORK.
+
+THE AUTOMATIONS MUST ACTUALLY EXECUTE.
+
+THE DATABASE MUST ACTUALLY PERSIST STATE.
+
+THE VIDEO ENGINE MUST ACTUALLY RENDER VIDEOS.
+
+THE SEO ENGINE MUST ACTUALLY PRODUCE SEO DATA.
+
+THE RAG ENGINE MUST ACTUALLY RETRIEVE SOURCES.
+
+THE SAFETY ENGINE MUST ACTUALLY REVIEW CONTENT.
+
+THE SCHEDULER MUST ACTUALLY SCHEDULE.
+
+THE QUEUE MUST ACTUALLY PROCESS.
+
+THE COMMUNICATION LAYER MUST ACTUALLY COMMUNICATE WHEN CONFIGURED.
+
+INKBOX MUST ACTUALLY PROVIDE AGENT IDENTITY/COMMUNICATION WHEN CONNECTED.
+
+SOCIAL PLATFORMS MUST ACTUALLY PUBLISH WHEN CONNECTED.
+
+ANALYTICS MUST ACTUALLY COME FROM REAL DATA.
+
+AND WHEN SOMETHING CANNOT WORK BECAUSE AN EXTERNAL REQUIREMENT
+IS MISSING, SAY:
+
+BLOCKED_EXTERNAL_SETUP
+
+NEVER FAKE IT.
+
+MAXIMIZE AUTONOMOUS EXECUTION.
+
+MAINTAIN 70% AI + AUTOMATION / 30% HUMAN CONTROL.
+
+PROTECT CHILDREN AND PRIVATE DATA.
+
+VERIFY EVERYTHING.
+
+SHIP THE COMPLETE PRODUCTION SOURCE.
+
+============================================================
+END OF MASTER PROMPT
+============================================================

@@ -214,7 +214,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (s: string) => v
             </div>
             <Progress value={w.localModelUsage as number} className="h-2" />
             <p className="text-[11px] text-muted-foreground mt-2">
-              AI generation private/local model বা স্পষ্ট fallback-এ সীমাবদ্ধ; কোনো paid AI provider-এ পাঠানো হয় না।
+              Cost Router প্রথমে local মডেল ব্যবহার করে; paid provider শুধু প্রয়োজনে।
             </p>
           </div>
         </Card>

@@ -1,4 +1,13 @@
-# 07 — NETWORKING REPAIR & DEPLOYMENT VERIFICATION (2026-10-13)
+# 07 — Historical Networking Repair & Deployment Verification (2026-10-13)
+
+> **Historical snapshot — not current production evidence.** This document
+> refers to an earlier checkout/date and may contain stale paths, counts,
+> test results, or infrastructure claims. Use the current repository
+> baseline at `../COMPLETE-AUDIT-REPORT.md`, deployment blockers at
+> `../DEPLOYMENT.md`, and migration procedure at
+> `../MIGRATION-RECOVERY-PLAN.md`. Do not execute commands here against
+> production without a new review and explicit authorization.
+
 
 **Task:** repair GitHub Actions → self-hosted Ubuntu server deployment over
 authenticated private networking (Tailscale), with production safety gates.

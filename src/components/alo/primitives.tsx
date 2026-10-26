@@ -75,9 +75,11 @@ export function StatusPill({ status }: { status: string }) {
     approved: { c: "bg-emerald-100 text-emerald-700", label: "Approved" },
     rejected: { c: "bg-rose-100 text-rose-700", label: "Rejected" },
     revised: { c: "bg-sky-100 text-sky-700", label: "Revised" },
-    published: { c: "bg-emerald-100 text-emerald-700", label: "Published" },
+    published: { c: "bg-emerald-100 text-emerald-700", label: "Marked published" },
     queued: { c: "bg-amber-100 text-amber-700", label: "Queued" },
     active: { c: "bg-emerald-100 text-emerald-700", label: "Active" },
+    configured: { c: "bg-slate-100 text-slate-600", label: "Catalog entry" },
+    unverified: { c: "bg-amber-100 text-amber-700", label: "Unverified" },
     idle: { c: "bg-slate-100 text-slate-600", label: "Idle" },
     running: { c: "bg-sky-100 text-sky-700", label: "Running" },
     blocked_external_setup: { c: "bg-amber-100 text-amber-700", label: "Blocked · external" },
@@ -131,151 +133,49 @@ export function ProviderTag({ provider, fallback }: { provider: string; fallback
         "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium",
         fallback ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
       )}
-      title={fallback ? "Deterministic local fallback used; no model response was returned" : `Configured local provider: ${provider}`}
+      title={fallback ? "Local fallback used — no paid model ran" : "Configured model response; no quality certification implied"}
     >
       {fallback ? "fallback" : provider}
     </span>
   );
 }
 
-/**
- * Archify "Evidence Console" Toolbar Button & Semantic Beacon
- * Inspired by tt-a1i/archify DESIGN.md (canvas #020617, mask #0F172A, semantic beacons).
- */
-export function ArchifyToolbarButton({
-  label,
-  beacon,
-  role = "frontend",
-  active = false,
-  onClick,
-  icon,
-}: {
+type SegmentOption<T extends string> = {
+  id: T;
   label: string;
-  beacon?: string;
-  role?: "frontend" | "backend" | "database" | "cloud" | "security";
-  active?: boolean;
-  onClick?: () => void;
+  count?: number;
   icon?: React.ReactNode;
-}) {
-  const roleColors: Record<string, string> = {
-    frontend: "text-[#22D3EE] border-[#22D3EE]/40",
-    backend: "text-[#34D399] border-[#34D399]/40",
-    database: "text-[#A78BFA] border-[#A78BFA]/40",
-    cloud: "text-[#FBBF24] border-[#FBBF24]/40",
-    security: "text-[#FB7185] border-[#FB7185]/40",
-  };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "inline-flex h-9 items-center gap-2 rounded-lg border px-3.5 py-1.5 font-mono text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400",
-        active
-          ? "border-[#22D3EE] bg-[#0F172A] text-white shadow-sm"
-          : "border-[#1E293B] bg-[#0F172A]/95 text-[#F8FAFC] hover:border-[#334155]"
-      )}
-    >
-      {icon}
-      <span>{label}</span>
-      {beacon && (
-        <span
-          className={cn(
-            "inline-flex items-center rounded-full border bg-[#020617] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
-            roleColors[role]
-          )}
-        >
-          {beacon}
-        </span>
-      )}
-    </button>
-  );
-}
+};
 
-/**
- * Editorial Tactile Button (cathrynlavery/diagram-design style-guide.md)
- * Uses paper #f5f5f5, ink #2d3142, and WCAG-verified burnt-tangerine #bf4520 (4.71:1).
- */
-export function EditorialButton({
-  children,
-  variant = "accent",
-  tag,
-  onClick,
-  disabled,
-}: {
-  children: React.ReactNode;
-  variant?: "accent" | "paper" | "link";
-  tag?: string;
-  onClick?: () => void;
-  disabled?: boolean;
-}) {
-  const styles: Record<string, string> = {
-    accent: "border-[#bf4520] bg-[#bf4520] text-white hover:bg-[#a63b1b]",
-    paper: "border-[#2d3142] bg-[#f5f5f5] text-[#2d3142] hover:bg-[#ececec]",
-    link: "border-[#2e5aa8] bg-[#f5f5f5] text-[#2e5aa8] hover:bg-[#e8eef8]",
-  };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "inline-flex h-9 items-center gap-2 rounded-[6px] border px-3.5 text-xs font-semibold transition-colors disabled:opacity-50",
-        styles[variant]
-      )}
-    >
-      {tag && (
-        <span className="rounded-[2px] border border-current/40 px-1 py-0.5 font-mono text-[9px] uppercase leading-none">
-          {tag}
-        </span>
-      )}
-      {children}
-    </button>
-  );
-}
-
-/**
- * Segmented View Switcher (inspired by Twenty CRM, Frappe CRM, NextStep-Abroad & Bricks)
- */
 export function SegmentedControl<T extends string>({
   value,
   onChange,
   options,
-  ariaLabel = "View switcher",
+  ariaLabel = "Choose view",
 }: {
   value: T;
-  onChange: (next: T) => void;
-  options: Array<{ id: T; label: string; icon?: React.ReactNode; count?: number }>;
+  onChange: (value: T) => void;
+  options: SegmentOption<T>[];
   ariaLabel?: string;
 }) {
   return (
-    <div
-      role="group"
-      aria-label={ariaLabel}
-      className="inline-flex items-center gap-1 rounded-lg border border-border/70 bg-muted/40 p-1"
-    >
-      {options.map((opt) => {
-        const active = opt.id === value;
+    <div role="group" aria-label={ariaLabel} className="inline-flex flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
+      {options.map((option) => {
+        const selected = option.id === value;
         return (
           <button
-            key={opt.id}
+            key={option.id}
             type="button"
-            aria-pressed={active}
-            onClick={() => onChange(opt.id)}
+            aria-pressed={selected}
+            onClick={() => onChange(option.id)}
             className={cn(
-              "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-all",
-              active
-                ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
-                : "text-muted-foreground hover:text-foreground"
+              "inline-flex min-h-8 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+              selected ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
             )}
           >
-            {opt.icon}
-            <span>{opt.label}</span>
-            {typeof opt.count === "number" && (
-              <span className="rounded-full bg-muted px-1.5 py-0.2 text-[10px] tabular-nums">
-                {opt.count}
-              </span>
-            )}
+            {option.icon}
+            <span>{option.label}</span>
+            {typeof option.count === "number" && <span className="text-[10px] opacity-70">{option.count}</span>}
           </button>
         );
       })}
@@ -283,31 +183,84 @@ export function SegmentedControl<T extends string>({
   );
 }
 
-/**
- * Omarchy / Command-First Hotkey Button
- */
+const beaconColors: Record<string, string> = {
+  frontend: "bg-cyan-300 text-slate-950",
+  backend: "bg-emerald-300 text-slate-950",
+  database: "bg-violet-300 text-slate-950",
+  cloud: "bg-amber-300 text-slate-950",
+  security: "bg-rose-300 text-slate-950",
+};
+
+export function ArchifyToolbarButton({
+  label,
+  beacon,
+  role,
+  active = false,
+  onClick,
+}: {
+  label: string;
+  beacon: string;
+  role: keyof typeof beaconColors;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-1.5 font-mono text-xs transition-colors",
+        active ? "border-slate-500 bg-slate-800 text-white" : "border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
+      )}
+    >
+      <span className={cn("rounded px-1.5 py-0.5 text-[9px] font-bold", beaconColors[role])}>{beacon}</span>
+      {label}
+    </button>
+  );
+}
+
+export function EditorialButton({
+  children,
+  variant = "paper",
+  tag,
+  onClick,
+}: {
+  children: React.ReactNode;
+  variant?: "accent" | "paper" | "link";
+  tag?: string;
+  onClick?: () => void;
+}) {
+  const variantClass = {
+    accent: "border-[#bf4520] bg-[#bf4520] text-white hover:bg-[#a83b1c]",
+    paper: "border-[#2d3142]/40 bg-white text-[#2d3142] hover:bg-[#f5f5f5]",
+    link: "border-transparent bg-transparent text-[#2d3142] underline underline-offset-4 hover:bg-black/5",
+  }[variant];
+  return (
+    <button type="button" onClick={onClick} className={cn("inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold", variantClass)}>
+      {tag && <span className="rounded-sm border border-current/30 px-1 py-0.5 font-mono text-[9px] uppercase tracking-wide">{tag}</span>}
+      {children}
+    </button>
+  );
+}
+
 export function HotkeyButton({
   label,
   hotkey,
   onClick,
-  icon,
 }: {
   label: string;
   hotkey: string;
   onClick?: () => void;
-  icon?: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-8 items-center gap-2 rounded-md border border-border/80 bg-card px-3 text-xs font-medium text-foreground shadow-2xs transition-colors hover:border-amber-500/60 hover:bg-amber-500/5"
+      className="inline-flex min-h-9 items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:bg-muted"
     >
-      {icon}
       <span>{label}</span>
-      <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-        {hotkey}
-      </kbd>
+      <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{hotkey}</kbd>
     </button>
   );
 }

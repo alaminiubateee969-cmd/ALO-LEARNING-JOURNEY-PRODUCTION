@@ -1,0 +1,36 @@
+# Node
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Next.js build
+.next
+out
+
+# Misc
+.git
+.gitignore
+.idea
+.vscode
+*.log
+.DS_Store
+
+# Project artifacts
+download
+storage
+db
+public/generated
+agent-ctx
+skills
+examples
+dev.log
+server.log
+
+# Env (NEVER include in image)
+.env
+.env.local
+.env.*.local
+
+# Docs don't need to ship
+ALO_HUMAN_AVATAR_PRODUCTION_RELEASE
+deploy/docs

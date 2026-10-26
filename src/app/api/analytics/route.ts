@@ -4,21 +4,43 @@ import { ensureSeeded } from "@/lib/seed";
 
 export async function GET() {
   await ensureSeeded();
-  const snaps = await db.analyticsSnapshot.findMany();
-  // group by platform -> metric -> series
-  const byPlatform: Record<string, Record<string, { day: string; value: number }[]>> = {};
-  for (const s of snaps) {
-    if (!byPlatform[s.platform]) byPlatform[s.platform] = {};
-    if (!byPlatform[s.platform][s.metric]) byPlatform[s.platform][s.metric] = [];
-    byPlatform[s.platform][s.metric].push({
-      day: s.capturedAt.toISOString().slice(5, 10),
-      value: s.value,
-    });
-  }
-  // totals
-  const totals: Record<string, number> = {};
-  for (const s of snaps) totals[s.metric] = (totals[s.metric] ?? 0) + s.value;
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const snapshots = await db.analyticsSnapshot.findMany({
+    where: { capturedAt: { gte: sevenDaysAgo } },
+    orderBy: { capturedAt: "asc" },
+  });
 
-  const published = await db.publishedPost.findMany();
-  return NextResponse.json({ byPlatform, totals, publishedPosts: published });
+  const byPlatform: Record<string, Record<string, { day: string; value: number }[]>> = {};
+  const valuesByMetric: Record<string, number[]> = {};
+  for (const snapshot of snapshots) {
+    if (!byPlatform[snapshot.platform]) byPlatform[snapshot.platform] = {};
+    if (!byPlatform[snapshot.platform][snapshot.metric]) byPlatform[snapshot.platform][snapshot.metric] = [];
+    byPlatform[snapshot.platform][snapshot.metric].push({
+      day: snapshot.capturedAt.toISOString().slice(0, 10),
+      value: snapshot.value,
+    });
+    (valuesByMetric[snapshot.metric] ??= []).push(snapshot.value);
+  }
+
+  const totals: Record<string, number> = {};
+  for (const [metric, values] of Object.entries(valuesByMetric)) {
+    totals[metric] = metric === "retention"
+      ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+      : values.reduce((sum, value) => sum + value, 0);
+  }
+
+  const publishedPosts = await db.publishedPost.findMany({
+    where: { status: "published" },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return NextResponse.json({
+    byPlatform,
+    totals,
+    publishedPosts,
+    generatedAt: new Date().toISOString(),
+    providerAnalyticsFetched: false,
+    deliveryVerified: false,
+    message: "Metrics are sums/averages of stored snapshot values from the last seven days; source, completeness, and provider origin are not independently verified. Published posts are database records, not verified provider deliveries.",
+  });
 }

@@ -118,6 +118,19 @@ export const DIAGRAM_SKINS: Record<DiagramSkinId, DiagramSkinTokens> = {
   },
 };
 
+/**
+ * Semantic node treatments from diagram-design style-guide.md § "Node type → treatment".
+ * Role combinations decide fill/stroke — never raw hex per node.
+ */
+export type DiagramNodeTreatment =
+  | "focal" // accent-tint fill, accent stroke (1–2 max per diagram)
+  | "backend" // white fill, ink stroke
+  | "store" // ink @ 0.05 fill, muted stroke
+  | "external" // ink @ 0.03 fill, ink @ 0.30 stroke
+  | "input" // muted @ 0.10 fill, soft stroke
+  | "optional" // ink @ 0.02 fill, ink @ 0.20 stroke, dashed 4,3
+  | "security"; // accent @ 0.05 fill, accent @ 0.50 stroke, dashed 4,4
+
 export interface DiagramNodeSpec {
   id: string;
   tag: string;
@@ -126,6 +139,69 @@ export interface DiagramNodeSpec {
   col: number; // 0..3
   row: number; // 0..3
   focal?: boolean;
+  treatment?: DiagramNodeTreatment;
+}
+
+/**
+ * SVG size presets from output-spec.md §2 — viewBox, PNG scale targets, and type ramp.
+ * `print-a3-landscape` is the v2.6 print preset (1584×1120 ≈ A3 landscape at 96dpi with ~10mm margins).
+ */
+export interface DiagramSizePreset {
+  id: string;
+  label: string;
+  viewBox: { width: number; height: number };
+  aspect: string;
+  pngScale: number;
+  typeRamp: "standard" | "presentation" | "print";
+  use: string;
+}
+
+export const DIAGRAM_SIZE_PRESETS: DiagramSizePreset[] = [
+  { id: "doc-inline", label: "Doc Inline (default)", viewBox: { width: 960, height: 600 }, aspect: "8:5", pngScale: 2, typeRamp: "standard", use: "Body-width diagram in a post or README" },
+  { id: "doc-wide", label: "Doc Wide", viewBox: { width: 1280, height: 720 }, aspect: "16:9", pngScale: 2, typeRamp: "standard", use: "Full-width docs, wiki pages" },
+  { id: "slide-16x9", label: "Slide 16:9", viewBox: { width: 1280, height: 720 }, aspect: "16:9", pngScale: 2, typeRamp: "presentation", use: "Deck slide, projected" },
+  { id: "slide-4x3", label: "Slide 4:3", viewBox: { width: 1024, height: 768 }, aspect: "4:3", pngScale: 2, typeRamp: "presentation", use: "Legacy deck templates" },
+  { id: "social-og", label: "Social OG Card", viewBox: { width: 1200, height: 632 }, aspect: "~1.9:1", pngScale: 2, typeRamp: "presentation", use: "Link preview card" },
+  { id: "social-square", label: "Social Square", viewBox: { width: 1080, height: 1080 }, aspect: "1:1", pngScale: 2, typeRamp: "presentation", use: "Feed post, carousel" },
+  { id: "print-a4-landscape", label: "Print A4 Landscape", viewBox: { width: 1120, height: 792 }, aspect: "~1.41:1", pngScale: 3, typeRamp: "print", use: "A4 landscape handout / PDF deck" },
+  { id: "print-a3-landscape", label: "Print A3 Landscape", viewBox: { width: 1584, height: 1120 }, aspect: "~1.41:1", pngScale: 3, typeRamp: "print", use: "A3 landscape, ~10mm margins at 96dpi" },
+  { id: "print-letter-landscape", label: "Print Letter Landscape", viewBox: { width: 1056, height: 816 }, aspect: "~1.29:1", pngScale: 3, typeRamp: "print", use: "US Letter landscape" },
+  { id: "fit", label: "Fit Content", viewBox: { width: 980, height: 560 }, aspect: "any", pngScale: 2, typeRamp: "standard", use: "Vector hand-off; no fixed frame" },
+];
+
+/** Resolve the effective treatment: explicit `treatment` wins; `focal` is shorthand for "focal". */
+export function resolveNodeTreatment(spec: DiagramNodeSpec): DiagramNodeTreatment {
+  return spec.treatment ?? (spec.focal ? "focal" : "backend");
+}
+
+/** Hex + alpha → rgba() string, used to composite role tokens per the contrast contract. */
+function hexToRgba(hex: string, alpha: number): string {
+  const rgb = parseHexToRgb(hex) ?? [45, 49, 66];
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+}
+
+/** Map a semantic treatment to fill/stroke/stroke-dash per style-guide.md § "Node type → treatment". */
+export function nodeTreatmentPaint(
+  treatment: DiagramNodeTreatment,
+  skin: DiagramSkinTokens
+): { fill: string; stroke: string; strokeWidth: string; dash?: string } {
+  switch (treatment) {
+    case "focal":
+      return { fill: skin.accentTint, stroke: skin.accent, strokeWidth: "1.5" };
+    case "store":
+      return { fill: hexToRgba(skin.ink, 0.05), stroke: skin.muted, strokeWidth: "1" };
+    case "external":
+      return { fill: hexToRgba(skin.ink, 0.03), stroke: hexToRgba(skin.ink, 0.3), strokeWidth: "1" };
+    case "input":
+      return { fill: hexToRgba(skin.muted, 0.1), stroke: skin.soft, strokeWidth: "1" };
+    case "optional":
+      return { fill: hexToRgba(skin.ink, 0.02), stroke: hexToRgba(skin.ink, 0.2), strokeWidth: "1", dash: "4,3" };
+    case "security":
+      return { fill: hexToRgba(skin.accent, 0.05), stroke: hexToRgba(skin.accent, 0.5), strokeWidth: "1", dash: "4,4" };
+    case "backend":
+    default:
+      return { fill: skin.id === "editorial-dark" || skin.id === "archify-console" ? skin.paper2 : "#ffffff", stroke: skin.ink, strokeWidth: "1" };
+  }
 }
 
 export interface DiagramEdgeSpec {
@@ -162,7 +238,7 @@ export const DIAGRAM_PRESETS: DiagramPreset[] = [
       { id: "gate", tag: "GATE", label: "3-Agent Quality Council", sublabel: "Writer → Critic → Finalist", col: 2, row: 0, focal: true },
       { id: "crm", tag: "CRM", label: "Admissions & Quotations", sublabel: "Leads · Activities · BDT Quotes", col: 0, row: 1 },
       { id: "ai", tag: "AI", label: "Private LAN AI Engine", sublabel: "Ollama · ComfyUI · Local Synth", col: 2, row: 1, focal: true },
-      { id: "db", tag: "DB", label: "Prisma MySQL + JSON Store", sublabel: "31 models · AES-256-GCM backup", col: 1, row: 2 },
+      { id: "db", tag: "DB", label: "Prisma MySQL + JSON Store", sublabel: "32 models · partial AES-256-GCM snapshot", col: 1, row: 2 },
       { id: "media", tag: "AV", label: "FFmpeg + Speech + Sharp", sublabel: "1080x1920 MP4 · WAV · SRT", col: 2, row: 2 },
     ],
     edges: [
@@ -324,7 +400,7 @@ export const DIAGRAM_TYPES_45: DiagramTypeCatalogItem[] = [
   { id: "dependency-graph", name: "Dependency Graph", category: "Systems & Data", whenToUse: "Module and package dependency directed graph" },
   { id: "uml-class", name: "UML Class Diagram", category: "Systems & Data", whenToUse: "Domain types, methods, and composition boundaries" },
   { id: "story-map", name: "User Story Map", category: "Strategy & Product", whenToUse: "Backbone activities across horizontal release slices" },
-  { id: "db-schema", name: "Database Schema", category: "Systems & Data", whenToUse: "31 Prisma tables, primary/foreign keys, and index constraints" },
+  { id: "db-schema", name: "Database Schema", category: "Systems & Data", whenToUse: "32 Prisma models, primary/foreign keys, and index constraints" },
 ];
 
 function escapeXml(text: string): string {
@@ -510,10 +586,27 @@ function buildOrthogonalPath(x1: number, y1: number, x2: number, y2: number, por
   };
 }
 
-export function renderEditorialDiagramSvg(preset: DiagramPreset, skinId: DiagramSkinId, dottedPaper = false): string {
+export function resolveSizePreset(sizeId?: string): DiagramSizePreset {
+  return DIAGRAM_SIZE_PRESETS.find((s) => s.id === sizeId) ?? DIAGRAM_SIZE_PRESETS[DIAGRAM_SIZE_PRESETS.length - 1];
+}
+
+export function renderEditorialDiagramSvg(
+  preset: DiagramPreset,
+  skinId: DiagramSkinId,
+  dottedPaper = false,
+  sizeId?: string
+): string {
   const skin = DIAGRAM_SKINS[skinId] ?? DIAGRAM_SKINS["editorial-light"];
-  const width = 980;
-  const height = 560;
+  const baseW = 980;
+  const baseH = 560;
+  const size = sizeId ? resolveSizePreset(sizeId) : null;
+  const width = size ? size.viewBox.width : baseW;
+  const height = size ? size.viewBox.height : baseH;
+  const fitScale = size ? Math.min(width / baseW, height / baseH) : 1;
+  const fitTx = size ? (width - baseW * fitScale) / 2 : 0;
+  const fitTy = size ? (height - baseH * fitScale) / 2 : 0;
+  const wrapOpen = size ? `  <g transform="translate(${fitTx},${fitTy}) scale(${fitScale})">` : "";
+  const wrapClose = size ? "  </g>" : "";
   const nodeW = 240;
   const nodeH = 74;
   const startX = 64;
@@ -594,17 +687,20 @@ export function renderEditorialDiagramSvg(preset: DiagramPreset, skinId: Diagram
 
   const nodeBoxes: string[] = [];
   for (const [, { x, y, spec }] of nodeCoords) {
-    const isFocal = Boolean(spec.focal);
-    const fill = isFocal ? skin.accentTint : skin.paper2;
-    const stroke = isFocal ? skin.accent : skin.ink;
-    const strokeWidth = isFocal ? "1.5" : "1";
+    const treatment = resolveNodeTreatment(spec);
+    const paint = nodeTreatmentPaint(treatment, skin);
+    const isFocal = treatment === "focal";
+    const fill = paint.fill;
+    const stroke = paint.stroke;
+    const strokeWidth = paint.strokeWidth;
     const tagStroke = isFocal ? skin.accent : skin.muted;
     const tagWidth = Math.max(28, spec.tag.length * 6.5 + 10);
+    const dashAttr = paint.dash ? ` stroke-dasharray=\"${paint.dash}\"` : "";
 
     nodeBoxes.push(
-      `  <!-- Node: ${escapeXml(spec.id)} -->`,
+      `  <!-- Node: ${escapeXml(spec.id)} [${treatment}] -->`,
       `  <rect x="${x}" y="${y}" width="${nodeW}" height="${nodeH}" rx="6" fill="${skin.paper}"/>`,
-      `  <rect x="${x}" y="${y}" width="${nodeW}" height="${nodeH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`,
+      `  <rect x="${x}" y="${y}" width="${nodeW}" height="${nodeH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"${dashAttr}/>`,
       `  <rect x="${x + 10}" y="${y + 8}" width="${Math.round(tagWidth)}" height="13" rx="2" fill="transparent" stroke="${tagStroke}" stroke-width="0.85"/>`,
       `  <text x="${x + 10 + Math.round(tagWidth / 2)}" y="${y + 17.5}" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="8.5" font-weight="600" fill="${
         isFocal ? skin.accent : skin.muted
@@ -642,6 +738,7 @@ ${dotsDefs}
 
   <!-- 0. Clean paper ground (no shadows, no Mermaid slop) -->
   <rect width="100%" height="100%" fill="${skin.paper}"/>
+${wrapOpen}
 ${dotsRect}
 
   <!-- Editorial Header -->
@@ -654,7 +751,7 @@ ${dotsRect}
   <text x="64" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="11.5" fill="${skin.muted}">${escapeXml(
     preset.subtitle
   )}</text>
-  <line x1="64" y1="102" x2="${width - 64}" y2="102" stroke="${skin.ruleSolid}" stroke-width="0.8"/>
+  <line x1="64" y1="102" x2="${baseW - 64}" y2="102" stroke="${skin.ruleSolid}" stroke-width="0.8"/>
 
   <!-- 1. Orthogonal Connectors (drawn BEFORE node boxes for clean z-order) -->
 ${arrowLines.join("\n")}
@@ -666,25 +763,34 @@ ${arrowLabels.join("\n")}
 ${nodeBoxes.join("\n")}
 
   <!-- 4. Editorial Footer Callout & Legend -->
-  <line x1="64" y1="${height - 46}" x2="${width - 64}" y2="${height - 46}" stroke="${skin.ruleSolid}" stroke-width="0.8"/>
+  <line x1="64" y1="${baseH - 46}" x2="${baseW - 64}" y2="${baseH - 46}" stroke="${skin.ruleSolid}" stroke-width="0.8"/>
   <text x="64" y="${height - 24}" font-family="Georgia, serif" font-style="italic" font-size="11" fill="${skin.muted}">${escapeXml(
     preset.callout
   )}</text>
-  <text x="${width - 64}" y="${height - 24}" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="9" fill="${skin.soft}">skin:${escapeXml(
+  <text x="${baseW - 64}" y="${baseH - 24}" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="9" fill="${skin.soft}">skin:${escapeXml(
     skin.id
   )} · type:${escapeXml(preset.visualType)}</text>
+${wrapClose}
 </svg>`;
 }
 
-export function renderSelfContainedDiagramHtml(preset: DiagramPreset, skinId: DiagramSkinId, dottedPaper = false): string {
+export function renderSelfContainedDiagramHtml(
+  preset: DiagramPreset,
+  skinId: DiagramSkinId,
+  dottedPaper = false,
+  sizeId?: string,
+  offlineFonts = false
+): string {
   const skin = DIAGRAM_SKINS[skinId] ?? DIAGRAM_SKINS["editorial-light"];
-  const svg = renderEditorialDiagramSvg(preset, skinId, dottedPaper);
+  const svg = renderEditorialDiagramSvg(preset, skinId, dottedPaper, sizeId);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeXml(preset.title)} — Editorial Diagram</title>
+  <title>${escapeXml(preset.title)} — Editorial Diagram</title>${offlineFonts
+    ? ""
+    : `\n  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />`}
   <style>
     :root {
       --paper: ${skin.paper};

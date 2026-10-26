@@ -41,11 +41,11 @@ export default function NotificationPanel() {
   };
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(load);
-    const timer = window.setInterval(load, 30000);
+    const initialLoad = window.setTimeout(load, 0);
+    const interval = window.setInterval(load, 30000);
     return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearInterval(timer);
+      window.clearTimeout(initialLoad);
+      window.clearInterval(interval);
     };
   }, []);
 

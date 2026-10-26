@@ -66,6 +66,7 @@ interface GrowthData {
   campaigns: Campaign[];
   stats: {
     totalOpportunities: number;
+    evaluatedOpportunities: number;
     approvedOpportunities: number;
     avgScore: number;
     activeHookTests: number;
@@ -116,14 +117,42 @@ export default function GrowthLoopView() {
         body: JSON.stringify({ action: "score_topic", topic: topicInput }),
       });
       const d = await res.json();
-      toast({
-        title: d.score.approved ? `অনুমোদিত ✅ (${d.score.finalScore}/100)` : `স্কোর: ${d.score.finalScore}/100`,
-        description: d.score.rationale?.slice(0, 80) ?? "",
-        variant: d.score.approved ? "default" : "destructive",
-      });
+      if (!res.ok || !d.score) throw new Error(d.error || "Topic scoring failed");
+      if (d.usedFallback || d.agentStatus !== "success") {
+        toast({
+          title: "Model unavailable — no topic score was evaluated",
+          description: "A zero-valued placeholder was saved for review; no production approval was granted.",
+        });
+      } else {
+        toast({
+          title: `Model estimate: ${d.score.finalScore}/100 — administrator review required`,
+          description: d.score.rationale?.slice(0, 100) ?? "",
+        });
+      }
       setTopicInput("");
       load();
+    } catch (error) {
+      toast({ title: error instanceof Error ? error.message : "Topic scoring failed", variant: "destructive" });
     } finally { setBusy(null); }
+  };
+
+  const approveOpportunity = async (id: string) => {
+    setBusy(`approve-${id}`);
+    try {
+      const res = await fetch("/api/growth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve_opportunity", id }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Approval failed");
+      toast({ title: "Manually approved after review", description: "The admin approval was recorded in the audit log." });
+      await load();
+    } catch (error) {
+      toast({ title: error instanceof Error ? error.message : "Approval failed", variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
   };
 
   const generateHooks = async () => {
@@ -136,7 +165,11 @@ export default function GrowthLoopView() {
         body: JSON.stringify({ action: "generate_hooks", topic: hookTopic }),
       });
       const d = await res.json();
-      toast({ title: `${d.hooks.length} হুক ভ্যারিয়েন্ট তৈরি ✨`, description: `A/B/C/D/E — ${d.provider}` });
+      if (!res.ok || !Array.isArray(d.hooks)) throw new Error(d.error || "Hook generation failed");
+      toast({
+        title: d.usedFallback || d.agentStatus !== "success" ? "Fallback hook drafts created — review before use" : `${d.hooks.length} hook drafts created`,
+        description: d.usedFallback ? "Configured local model unavailable; no retention estimate or test result was generated." : `Provider: ${d.provider}. No A/B performance is measured until real data is entered.`,
+      });
       load();
     } finally { setBusy(null); }
   };
@@ -178,7 +211,7 @@ export default function GrowthLoopView() {
 
       {/* Growth stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        <StatCard label="অপার্চুনিটি স্কোর" value={s.avgScore} sub={`${s.approvedOpportunities}/${s.totalOpportunities} approved`} icon={<Target className="h-4 w-4" />} tone="amber" />
+        <StatCard label="অপার্চুনিটি স্কোর" value={s.evaluatedOpportunities ? s.avgScore : "—"} sub={`${s.evaluatedOpportunities} model-evaluated · ${s.approvedOpportunities} manually approved`} icon={<Target className="h-4 w-4" />} tone="amber" />
         <StatCard label="হুক টেস্ট" value={s.activeHookTests} sub={`${s.hookWinners} winners`} icon={<FlaskConical className="h-4 w-4" />} tone="violet" />
         <StatCard label="সক্রিয় ক্যাম্পেইন" value={s.activeCampaigns} sub={`${s.measuredCampaigns} measured`} icon={<FolderPlus className="h-4 w-4" />} tone="emerald" />
         <StatCard label="মোট ভিউ" value={s.totalViews.toLocaleString()} sub="campaigns" icon={<BarChart3 className="h-4 w-4" />} tone="sky" />
@@ -226,7 +259,7 @@ export default function GrowthLoopView() {
                 স্কোর করুন
               </Button>
             </div>
-            <p className="text-[10px] text-muted-foreground mt-2">৮০+ স্কোর = প্রোডাকশনে অনুমোদিত। ৬ ডাইমেনশনে LLM স্কোরিং।</p>
+            <p className="text-[10px] text-muted-foreground mt-2">Scores are local-model estimates, not live search analytics. A score never grants approval; an administrator must review each opportunity manually.</p>
           </Card>
 
           {data.opportunities.length === 0 ? (
@@ -236,40 +269,49 @@ export default function GrowthLoopView() {
             </Card>
           ) : (
             <div className="space-y-2">
-              {data.opportunities.map((o, i) => (
-                <Card key={o.id} className="p-4 alo-stagger alo-glow-hover" style={{ animationDelay: `${i * 30}ms` }}>
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-semibold text-sm truncate">{o.topic}</p>
-                        {o.approved && <Badge className="bg-emerald-100 text-emerald-700 text-[9px]">✓ Approved</Badge>}
-                        <ProviderTag provider={o.provider} fallback={o.provider === "local-fallback"} />
+              {data.opportunities.map((o, i) => {
+                const evaluated = o.provider !== "local-fallback";
+                return (
+                  <Card key={o.id} className="p-4 alo-stagger alo-glow-hover" style={{ animationDelay: `${i * 30}ms` }}>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <p className="font-semibold text-sm truncate">{o.topic}</p>
+                          {o.approved && <Badge className="bg-emerald-100 text-emerald-700 text-[9px]">✓ Admin approved</Badge>}
+                          <ProviderTag provider={o.provider} fallback={o.provider === "local-fallback"} />
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">{o.rationale ?? "—"}</p>
+                        {!o.approved && (
+                          <Button size="sm" variant="outline" className="h-6 mt-2 text-[10px]" onClick={() => approveOpportunity(o.id)} disabled={busy === `approve-${o.id}`}>
+                            {busy === `approve-${o.id}` && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                            Approve after manual review
+                          </Button>
+                        )}
                       </div>
-                      <p className="text-[11px] text-muted-foreground">{o.rationale ?? "—"}</p>
-                    </div>
-                    <div className="text-center shrink-0">
-                      <p className={`text-2xl font-bold ${scoreColor(o.finalScore)}`}>{o.finalScore}</p>
-                      <p className="text-[9px] text-muted-foreground">/100</p>
-                    </div>
-                  </div>
-                  {/* Score breakdown */}
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mt-2">
-                    {[
-                      { label: "Search", value: o.searchDemand },
-                      { label: "Parent", value: o.parentRelevance },
-                      { label: "BD", value: o.bangladeshRelevance },
-                      { label: "Comp.", value: o.competition },
-                      { label: "Video", value: o.videoPotential },
-                      { label: "Brand", value: o.brandFit },
-                    ].map((d) => (
-                      <div key={d.label} className="text-center">
-                        <p className="text-[8px] text-muted-foreground">{d.label}</p>
-                        <p className={`text-xs font-bold ${scoreColor(d.value)}`}>{d.value}</p>
+                      <div className="text-center shrink-0">
+                        <p className={`text-2xl font-bold ${evaluated ? scoreColor(o.finalScore) : "text-muted-foreground"}`}>{evaluated ? o.finalScore : "—"}</p>
+                        <p className="text-[9px] text-muted-foreground">{evaluated ? "/100 estimate" : "not evaluated"}</p>
                       </div>
-                    ))}
-                  </div>
-                </Card>
-              ))}
+                    </div>
+                    {/* Model-only estimates; a local fallback is shown as unevaluated. */}
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mt-2">
+                      {[
+                        { label: "Search", value: o.searchDemand },
+                        { label: "Parent", value: o.parentRelevance },
+                        { label: "BD", value: o.bangladeshRelevance },
+                        { label: "Comp.", value: o.competition },
+                        { label: "Video", value: o.videoPotential },
+                        { label: "Brand", value: o.brandFit },
+                      ].map((d) => (
+                        <div key={d.label} className="text-center">
+                          <p className="text-[8px] text-muted-foreground">{d.label}</p>
+                          <p className={`text-xs font-bold ${evaluated ? scoreColor(d.value) : "text-muted-foreground"}`}>{evaluated ? d.value : "—"}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>

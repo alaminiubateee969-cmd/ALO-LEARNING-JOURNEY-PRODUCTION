@@ -122,7 +122,7 @@ export const openApiSpec = {
       get: {
         tags: ["Local AI"],
         summary: "Check private local model and media-engine readiness",
-        description: "Probes the configured private Ollama and ComfyUI services and local speech/FFmpeg binaries. Public AI endpoints are rejected. This reports availability only; it does not validate output quality or model licensing.",
+        description: "Probes the configured private Ollama and ComfyUI services and local speech/FFmpeg binaries, and reports the optional direct external providers (Groq/LLM7/OpenCode Zen/OpenRouter, plus owner gateways such as a self-hosted OmniRoute or custom OpenAI-compatible providers) status without exposing any API key. Local endpoints reject public hosts. This reports availability only; it does not validate output quality or model licensing.",
         responses: { "200": { description: "Local-only service status", content: { "application/json": { schema: { $ref: "#/components/schemas/LocalAIStatus" } } } }, "401": { $ref: "#/components/responses/Unauthorized" } },
       },
     },
@@ -256,6 +256,7 @@ export const openApiSpec = {
           paidApiCalls: { type: "boolean", const: false },
           text: { type: "object", properties: { available: { type: "boolean" }, serviceAvailable: { type: "boolean" }, model: { type: "string" }, installedModels: { type: "array", items: { type: "string" } }, error: { type: ["string", "null"] } }, required: ["available", "serviceAvailable", "model", "installedModels"] },
           images: { type: "object", properties: { available: { type: "boolean" }, checkpoint: { type: ["string", "null"] }, error: { type: ["string", "null"] } }, required: ["available", "checkpoint"] },
+          external: { type: "object", properties: { enabled: { type: "boolean" }, configured: { type: "boolean" }, order: { type: "array", items: { type: "string" } }, providers: { type: "array", items: { type: "object", properties: { provider: { type: "string" }, kind: { type: "string", enum: ["free-tier", "owner-gateway"] }, configured: { type: "boolean" }, model: { type: "string" }, reason: { type: "string", enum: ["ready", "disabled", "missing_api_key", "invalid_model", "non_free_model", "invalid_endpoint"] } }, required: ["provider", "kind", "configured", "model", "reason"] } }, dataPolicy: { type: "string", const: "non-personal-content-drafts-only" } }, required: ["enabled", "configured", "order", "providers", "dataPolicy"] },
           media: { type: "object" },
         },
         required: ["mode", "paidApiCalls", "text", "images", "media"],

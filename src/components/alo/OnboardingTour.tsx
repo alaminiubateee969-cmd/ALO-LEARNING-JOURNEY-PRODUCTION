@@ -32,22 +32,6 @@ const TOUR_STEPS: TourStep[] = [
     section: "dashboard",
   },
   {
-    id: "crm",
-    title: "Admissions CRM",
-    bn: "Enquiries & quotations",
-    desc: "Enquiry records, a visual admissions pipeline, follow-up dates, consent preferences, activity timeline, and printable service quotations. Messages are never sent automatically.",
-    icon: "🧾",
-    section: "crm",
-  },
-  {
-    id: "marketing-kits",
-    title: "Marketing Kits",
-    bn: "Campaign library",
-    desc: "Reusable email, WhatsApp, social, and event starting points with editable placeholders and a review checklist for dates, claims, and contact preferences.",
-    icon: "📣",
-    section: "marketing-kits",
-  },
-  {
     id: "studio",
     title: "কনটেন্ট স্টুডিও",
     bn: "Content Studio",
@@ -78,14 +62,6 @@ const TOUR_STEPS: TourStep[] = [
     desc: "১০-ধাপের পাইপলাইন ফ্লো ডায়াগ্রাম — Trend Research থেকে Analytics & Learning পর্যন্ত কীভাবে এজেন্টগুলো সংযুক্ত।",
     icon: "🔄",
     section: "workflow",
-  },
-  {
-    id: "api-reference",
-    title: "API Reference",
-    bn: "OpenAPI 3.1",
-    desc: "Browse the documented admissions CRM and quotation endpoints, request schemas, session requirements, and workspace header. The same specification is available as JSON.",
-    icon: "⌘",
-    section: "api-reference",
   },
   {
     id: "palette",

@@ -17,7 +17,9 @@ export const metadata: Metadata = {
     "aloeducation",
   ],
   authors: [{ name: "ALO Education" }],
-  icons: { icon: "/logo.svg" },
+  icons: {
+    icon: "/logo.svg",
+  },
 };
 
 export default function RootLayout({

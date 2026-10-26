@@ -2,11 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // cPanel Note: standalone output is required for cPanel Node.js app.
+  // The build copies .next/static + public into .next/standalone so
+  // `node .next/standalone/server.js` works both locally and in cPanel containers.
   reactStrictMode: false,
-  // Sharp is a native module loaded lazily (src/lib/image-processing.ts).
-  // Keeping it external prevents Next from bundling/tracing the prebuilt
-  // binary into server chunks and loading it during build/page-data
-  // collection, which crashes on x86-64-v1 CPUs (no SSE4.2).
   serverExternalPackages: ["sharp"],
 };
 

@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { PLATFORMS } from "@/lib/platforms";
-import { MessageSquare, ShieldAlert, Send, Loader2, CheckCircle2, AlertTriangle, Bot, User } from "lucide-react";
+import { MessageSquare, ShieldAlert, Save, Loader2, CheckCircle2, AlertTriangle, Bot, User } from "lucide-react";
 
 interface Comment {
   id: string;
@@ -37,11 +37,14 @@ const CATEGORY_META: Record<string, { label: string; tone: "safe" | "warn" | "da
   emergency: { label: "Emergency", tone: "danger" },
   spam: { label: "Spam", tone: "warn" },
   toxic: { label: "Toxic", tone: "danger" },
-  review_required: { label: "Review required", tone: "danger" },
 };
 
 const toneClass = (t: "safe" | "warn" | "danger") =>
   t === "safe" ? "bg-emerald-100 text-emerald-700" : t === "warn" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700";
+
+const REVIEW_REQUIRED_CATEGORIES = new Set(["medical_sensitive", "development_sensitive", "abuse_risk", "emergency", "toxic", "review_required"]);
+const needsHumanReview = (comment: Pick<Comment, "category" | "riskLevel">) =>
+  comment.riskLevel === "high" || REVIEW_REQUIRED_CATEGORIES.has(comment.category);
 
 export default function CommentsView() {
   const { toast } = useToast();
@@ -82,41 +85,64 @@ export default function CommentsView() {
         body: JSON.stringify({ id: id ?? selected?.id, action }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Comment action failed.");
       if (action === "classify" && selected) {
         setMeta({ provider: data.provider, usedFallback: data.usedFallback });
-        toast({ title: "শ্রেণীবদ্ধ হয়েছে", description: `${data.comment.category} · ${data.rationale?.slice(0, 60)}` });
+        setSelected(data.comment);
+        toast({
+          title: data.usedFallback ? "Classifier unavailable · human review required" : "Classification recorded · review before use",
+          description: `${data.comment.category} · ${data.provider}; this is not an independent safety check.`,
+          variant: data.usedFallback ? "destructive" : "default",
+        });
       } else if (action === "draft" && selected) {
         setMeta({ provider: data.provider, usedFallback: data.usedFallback });
-        setDraft(data.comment.draftReply);
-        toast({ title: "ড্রাফট উত্তর তৈরি", description: `tone: ${data.tone}` });
-      } else if (action === "send") {
-        toast({ title: "উত্তর পাঠানো হয়েছে ✅" });
-        setSelected(null);
+        setSelected(data.comment);
+        setDraft(data.comment.draftReply ?? "");
+        toast({
+          title: data.usedFallback ? "Fallback draft · human review required" : "Reply draft created · review required",
+          description: `tone: ${data.tone} · ${data.provider}; not sent to a platform.`,
+          variant: data.usedFallback ? "destructive" : "default",
+        });
       } else if (action === "escalate") {
-        toast({ title: "এসকেলেটেড ⚠️", description: "মানব পর্যালোচনায় পাঠানো হয়েছে", variant: "destructive" });
+        toast({ title: "Marked for human review", description: "The stored comment status was updated.", variant: "destructive" });
         setSelected(null);
       } else if (action === "ignore") {
-        toast({ title: "উপেক্ষা করা হয়েছে" });
+        toast({ title: "Comment record marked ignored" });
         setSelected(null);
       }
       load();
+    } catch (error) {
+      toast({
+        title: "Comment action failed",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
     } finally {
       setBusy(null);
     }
   };
 
-  const sendEdited = async () => {
+  const saveDraft = async () => {
     if (!selected || !draft.trim()) return;
-    setBusy("send");
+    setBusy("save_draft");
     try {
-      // persist edited draft first
-      await fetch("/api/comments", {
+      const res = await fetch("/api/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: selected.id, action: "draft" }),
+        body: JSON.stringify({ id: selected.id, action: "save_draft", draftReply: draft }),
       });
-      // then send
-      await call("send");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not save the reply draft.");
+      setSelected(data.comment);
+      setDraft(data.comment.draftReply ?? "");
+      toast({ title: "Unsent draft saved locally", description: "No message was sent to a social platform." });
+      load();
+    } catch (error) {
+      toast({
+        title: "Draft not saved",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
     } finally {
       setBusy(null);
     }
@@ -124,7 +150,7 @@ export default function CommentsView() {
 
   const filtered = comments.filter((c) => {
     if (filter === "new" && !(c.status === "new" || c.status === "classified")) return false;
-    if (filter === "sensitive" && !["medical_sensitive", "development_sensitive", "abuse_risk", "emergency", "review_required"].includes(c.category)) return false;
+    if (filter === "sensitive" && !["medical_sensitive", "development_sensitive", "abuse_risk", "emergency", "toxic", "review_required"].includes(c.category)) return false;
     if (platformFilter !== "all" && c.platform !== platformFilter) return false;
     if (categoryFilter !== "all" && c.category !== categoryFilter) return false;
     if (searchQuery) {
@@ -142,13 +168,13 @@ export default function CommentsView() {
       <SectionHeader
         title="Comments Inbox"
         bn="মন্তব্য ইনবক্স"
-        desc="CommentModerationAgent শ্রেণীবদ্ধ করে, CommunityReplyAgent শুধু safe মন্তব্যের জন্য উত্তর ড্রাফট করে। সংবেদনশীল মন্তব্য মানব পর্যালোচনায় যায়।"
+        desc="Stored comments can be classified and drafted on demand with a local model or labelled fallback. No external social inbox or reply delivery is configured; classifications are not independent safety checks, and every draft needs human review."
         icon={<MessageSquare className="h-5 w-5" />}
         action={
           <div className="flex gap-2">
             <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-100">{stats.new} new</Badge>
             <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">{stats.sensitive} sensitive</Badge>
-            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">{stats.replied} replied</Badge>
+            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">{stats.replied} marked replied</Badge>
           </div>
         }
       />
@@ -234,7 +260,11 @@ export default function CommentsView() {
                 <p className="text-xs mt-2 line-clamp-2">{c.text}</p>
                 {c.postTopic && <p className="text-[10px] text-muted-foreground mt-1.5 truncate">📌 {c.postTopic}</p>}
                 <div className="mt-2 pt-2 border-t border-border/50 flex items-center justify-between">
-                  <StatusPill status={c.status === "new" ? "pending" : c.status === "replied" ? "approved" : c.status === "escalated" ? "blocked" : c.status} />
+                  {c.status === "replied" ? (
+                    <Badge variant="outline" className="border-emerald-300 text-emerald-800">Marked replied</Badge>
+                  ) : (
+                    <StatusPill status={c.status === "new" ? "pending" : c.status === "escalated" ? "blocked" : c.status} />
+                  )}
                   <span className="text-[10px] text-amber-600 font-medium">খুলুন →</span>
                 </div>
               </Card>
@@ -256,7 +286,7 @@ export default function CommentsView() {
               {selected && PLATFORMS.find((x) => x.id === selected.platform)?.icon} মন্তব্য পর্যালোচনা
             </DialogTitle>
             <DialogDescription>
-              {selected?.authorName} · {selected?.platform} · {selected?.postTopic}
+              {selected?.authorName} · {selected?.platform} · {selected?.postTopic} · stored record only; no external social sync
             </DialogDescription>
           </DialogHeader>
           {selected && (
@@ -278,7 +308,7 @@ export default function CommentsView() {
                 <div className="rounded-lg border border-border/60 p-3">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-semibold flex items-center gap-1">
-                      <Bot className="h-3 w-3 text-violet-600" /> CommentModerationAgent
+                      <Bot className="h-3 w-3 text-violet-600" /> Local classification draft
                     </p>
                     <div className="flex items-center gap-2">
                       {(() => {
@@ -287,10 +317,11 @@ export default function CommentsView() {
                       })()}
                       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => call("classify")} disabled={busy === "classify"}>
                         {busy === "classify" ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <ShieldAlert className="h-3 w-3 mr-1" />}
-                        শ্রেণীবদ্ধ করুন
+                        Classify stored record
                       </Button>
                     </div>
                   </div>
+                  <p className="text-[10px] text-muted-foreground">Classification is not an independent safety check; review the original comment before acting.</p>
                   {meta && (
                     <div className="flex items-center gap-2 text-[10px]">
                       <ProviderTag provider={meta.provider} fallback={meta.usedFallback} />
@@ -309,9 +340,9 @@ export default function CommentsView() {
                 <div className="rounded-lg border border-border/60 p-3">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-semibold flex items-center gap-1">
-                      <User className="h-3 w-3 text-amber-600" /> CommunityReplyAgent ড্রাফট
+                      <User className="h-3 w-3 text-amber-600" /> Reply draft (unsent)
                     </p>
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => call("draft")} disabled={busy === "draft" || selected.riskLevel === "high"}>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => call("draft")} disabled={busy === "draft" || needsHumanReview(selected)}>
                       {busy === "draft" ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
                       ড্রাফট তৈরি
                     </Button>
@@ -321,7 +352,7 @@ export default function CommentsView() {
                     onChange={(e) => setDraft(e.target.value)}
                     rows={3}
                     placeholder="ড্রাফট উত্তর এখানে দেখা যাবে... সম্পাদনা করতে পারেন।"
-                    disabled={selected.riskLevel === "high"}
+                    disabled={needsHumanReview(selected)}
                   />
                 </div>
               </div>
@@ -331,15 +362,15 @@ export default function CommentsView() {
             <Button variant="outline" onClick={() => call("ignore")} disabled={!!busy}>
               উপেক্ষা
             </Button>
-            {selected?.riskLevel === "high" ? (
+            {selected && needsHumanReview(selected) ? (
               <Button variant="destructive" onClick={() => call("escalate")} disabled={!!busy}>
                 {busy === "escalate" ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ShieldAlert className="h-4 w-4 mr-1" />}
                 মানব পর্যালোচনায় পাঠান
               </Button>
             ) : (
-              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={sendEdited} disabled={!draft.trim() || !!busy}>
-                {busy === "send" ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
-                উত্তর পাঠান
+              <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={saveDraft} disabled={!draft.trim() || !!busy}>
+                {busy === "save_draft" ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                Save unsent draft
               </Button>
             )}
           </DialogFooter>

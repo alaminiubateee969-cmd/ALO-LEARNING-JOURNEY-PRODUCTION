@@ -1,5 +1,14 @@
 # 03 — Staged deployment & rollback runbook
 
+> **Historical snapshot — not current production evidence.** This document
+> refers to an earlier checkout/date and may contain stale paths, counts,
+> test results, or infrastructure claims. Use the current repository
+> baseline at `../COMPLETE-AUDIT-REPORT.md`, deployment blockers at
+> `../DEPLOYMENT.md`, and migration procedure at
+> `../MIGRATION-RECOVERY-PLAN.md`. Do not execute commands here against
+> production without a new review and explicit authorization.
+
+
 **Status: NOT EXECUTED.** Nothing here has been run against your VPS. This is the
 plan to execute once (a) the canonical source is unambiguous, (b) the build
 blocker F2 is approved and merged, and (c) the audit confirms the live document
