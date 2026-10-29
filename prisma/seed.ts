@@ -3,11 +3,21 @@ import { hashPassword, createToken } from '../src/lib/auth';
 
 const prisma = new PrismaClient();
 
+function getAdminSeedPassword(): string {
+  const fromEnv = process.env.ADMIN_SEED_PASSWORD;
+  if (fromEnv && fromEnv.length >= 8) return fromEnv;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('ADMIN_SEED_PASSWORD env var required in production');
+  }
+  console.warn('⚠️ ADMIN_SEED_PASSWORD not set — using dev fallback "admin123"');
+  return 'admin123';
+}
+
 async function seed() {
   console.log('Seeding database...');
 
   // Create super admin user
-  const passwordHash = await hashPassword(seedPassword);
+  const passwordHash = await hashPassword(getAdminSeedPassword());
   const admin = await prisma.user.upsert({
     where: { email: 'admin@marketingos.com' },
     update: {},
@@ -81,7 +91,7 @@ async function seed() {
     const user = await prisma.user.create({
       data: {
         email: member.email,
-        passwordHash: await hashPassword(seedPassword),
+        passwordHash: await hashPassword(getAdminSeedPassword()),
         name: member.name,
         isActive: true,
       },
