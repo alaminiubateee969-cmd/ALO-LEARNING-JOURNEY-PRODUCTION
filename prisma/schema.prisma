@@ -56,6 +56,10 @@ model Company {
   integrations    Integration[]
   oauthStates     OAuthState[]
   integrationManifests IntegrationManifest[]
+  agentModelAssignments AgentModelAssignment[]
+  agentUsageDailies AgentUsageDaily[]
+  agentExecutionLogs  AgentExecutionLog[]
+  afterHoursRule  AfterHoursRule[]
 }
 
 // ==================== USER & ROLES ====================
@@ -90,6 +94,9 @@ model User {
   confirmedManifests  IntegrationManifest[] @relation("ManifestConfirmer")
   createdAiProviders  AiModelProvider[] @relation("AiModelProviderCreator")
   updatedAiProviders  AiModelProvider[] @relation("AiModelProviderUpdater")
+  createdAgentAssignments  AgentModelAssignment[] @relation("AgentAssignmentCreator")
+  updatedAgentAssignments  AgentModelAssignment[] @relation("AgentAssignmentUpdater")
+  agentExecutionLogs  AgentExecutionLog[] @relation("AgentExecutionActor")
 }
 
 model CompanyUser {
@@ -1256,6 +1263,8 @@ model AiModelProvider {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   models          AiModelEntry[]
+  agentAssignments AgentModelAssignment[]
+  circuitBreaker  CircuitBreakerState?
 
   @@index([isEnabled, priority])
 }
@@ -1284,7 +1293,156 @@ model AiModelEntry {
   createdBy       String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  agentAssignments AgentModelAssignment[]
 
   @@unique([providerId, modelId])
   @@index([providerId, isEnabled])
+}
+
+// ==================== AGENT MODEL ASSIGNMENT + BUDGET + CIRCUIT BREAKER =====
+// Per-agent model selection + budget tracking + circuit breaker state +
+// execution log (model, latency, tokens, cost, errors) for the entire
+// AI agent loop. All fields are tenant-scoped via companyId.
+
+// Maps an agent type (seo, content, whatsapp, sms, lead_qualifier, crm,
+// etc.) to a specific provider+model. When the agent runs, the chain
+// uses this assignment FIRST before falling through to the default chain.
+model AgentModelAssignment {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Agent type slug — matches AiAgent.type from existing schema
+  agentType       String
+  // FK to provider + model entry (both required)
+  providerId      String
+  provider        AiModelProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  modelId         String
+  model           AiModelEntry   @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  // Whether this assignment is active
+  isEnabled       Boolean  @default(true)
+  // Daily token budget cap for this agent (across all runs)
+  dailyTokenBudget Int     @default(100000)
+  // Daily request cap
+  dailyRequestBudget Int    @default(100)
+  // Audit
+  createdBy       String?
+  creator         User?    @relation("AgentAssignmentCreator", fields: [createdBy], references: [id])
+  updatedBy       String?
+  updater         User?    @relation("AgentAssignmentUpdater", fields: [updatedBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, agentType])
+  @@index([companyId, isEnabled])
+}
+
+// Per-provider circuit breaker state. When consecutive failures exceed
+// `failureThreshold`, the breaker opens and short-circuits all calls to
+// this provider for `cooldownSeconds`. After cooldown, a single probe
+// request is allowed (half-open); on success the breaker closes, on
+// failure it re-opens.
+model CircuitBreakerState {
+  id              String   @id @default(cuid())
+  providerId      String   @unique
+  provider        AiModelProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  state           String   @default("closed")  // closed | open | half_open
+  consecutiveFailures Int  @default(0)
+  consecutiveSuccesses Int @default(0)
+  lastFailureAt   DateTime?
+  lastFailureReason String?
+  lastSuccessAt   DateTime?
+  trippedAt       DateTime?
+  // Number of times the breaker has tripped to "open" — for monitoring
+  tripCount       Int      @default(0)
+  updatedAt       DateTime @updatedAt
+}
+
+// Per-agent per-day usage tracking. Rolled up from AgentExecutionLog
+// rows. Used to enforce dailyTokenBudget / dailyRequestBudget caps.
+model AgentUsageDaily {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agentType       String
+  // YYYY-MM-DD (UTC) — daily bucket
+  day             String
+  // Aggregated usage
+  requestCount    Int      @default(0)
+  promptTokens    Int      @default(0)
+  completionTokens Int     @default(0)
+  totalTokens     Int      @default(0)
+  // Estimated cost in USD (provider billing rate × tokens)
+  estimatedCostUsd Float   @default(0)
+  // Number of failures + fallbacks
+  failureCount    Int      @default(0)
+  fallbackCount   Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, agentType, day])
+  @@index([companyId, day])
+}
+
+// Per-execution audit log. One row per AI call. Records model, latency,
+// tokens, cost, errors, and whether the result was used or discarded.
+model AgentExecutionLog {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agentType       String
+  // Which provider+model actually served the request
+  providerSlug    String
+  modelName       String
+  // Input shape
+  promptCharCount Int      @default(0)
+  // Output shape
+  responseCharCount Int    @default(0)
+  // Token usage (when reported by provider)
+  promptTokens    Int?
+  completionTokens Int?
+  totalTokens     Int?
+  // Estimated cost in USD
+  estimatedCostUsd Float?
+  // Performance
+  latencyMs       Int
+  // Outcome
+  success         Boolean
+  errorMessage    String?
+  // Whether the response was discarded (filtered, PII scrub, schema fail)
+  discardedReason String?
+  // Whether a fallback provider served this request
+  usedFallback    Boolean  @default(false)
+  // User who triggered the run (if applicable)
+  actorUserId     String?
+  actor           User?    @relation("AgentExecutionActor", fields: [actorUserId], references: [id])
+  // PII scrub log — how many PII entities were redacted before the call
+  piiRedactionCount Int    @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([companyId, agentType, createdAt])
+  @@index([providerSlug, createdAt])
+}
+
+// After-hours routing rules per company. Defines when inquiries are
+// queued for the next business hour vs. handled live.
+model AfterHoursRule {
+  id              String   @id @default(cuid())
+  companyId       String   @unique
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // IANA timezone — defaults to Asia/Dhaka per master directive
+  timezone        String   @default("Asia/Dhaka")
+  // JSON array of weekday numbers that are working days
+  // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+  workingDays     String   @default("[1,2,3,4,5]")  // Mon-Fri default
+  // HH:MM in the configured timezone
+  workingStart    String   @default("09:00")
+  workingEnd      String   @default("18:00")
+  // JSON array of {date: "YYYY-MM-DD", name: "..."} for public holidays
+  holidays        String   @default("[]")
+  // What to do with inbound messages outside working hours
+  // queue | auto_reply_with_disclaimer | emergency_only
+  afterHoursPolicy String  @default("auto_reply_with_disclaimer")
+  // Disclaimer text appended to auto-replies during off-hours
+  afterHoursDisclaimer String?
+  updatedAt       DateTime @updatedAt
 }

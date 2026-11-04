@@ -112,7 +112,7 @@ const PROVIDERS: ProviderSeed[] = [
   },
   {
     slug: 'ollama',
-    label: 'Ollama (Self-Hosted)',
+    label: 'Ollama (Self-Hosted Local)',
     category: 'self-hosted',
     baseUrl: 'http://localhost:11434',
     openAiCompatible: false,
@@ -121,7 +121,7 @@ const PROVIDERS: ProviderSeed[] = [
     docsUrl: 'https://ollama.com',
     rateLimitNote: 'No rate limit — bound by local hardware',
     priority: 50,
-    notes: 'Self-hosted. No API key required unless fronted by an authenticated proxy. Models must be pulled first: `ollama pull llama3.2`',
+    notes: 'Self-hosted local Ollama. No API key required unless fronted by an authenticated proxy. Models must be pulled first: `ollama pull llama3.2`. Distinct from Ollama Cloud (which is a separate metered cloud service at https://ollama.com/api).',
     models: [
       { modelId: 'llama3.2', displayName: 'Llama 3.2 (3B)', contextWindow: 128000, capabilities: ['chat'], isDefault: true, maxOutputTokens: 4096, freeTierNote: 'Lightest — runs on CPU' },
       { modelId: 'llama3.3', displayName: 'Llama 3.3 (70B)', contextWindow: 128000, capabilities: ['chat', 'tools'], maxOutputTokens: 8192, freeTierNote: 'Requires 32GB+ RAM' },
@@ -129,6 +129,20 @@ const PROVIDERS: ProviderSeed[] = [
       { modelId: 'deepseek-r1', displayName: 'DeepSeek R1 (reasoning)', contextWindow: 64000, capabilities: ['chat'], maxOutputTokens: 8192, freeTierNote: 'Reasoning model' },
       { modelId: 'bge-m3', displayName: 'BGE-M3 (embeddings)', contextWindow: 8000, capabilities: ['embedding'], maxOutputTokens: 0, freeTierNote: 'For RAG embeddings' },
     ],
+  },
+  {
+    slug: 'ollama-cloud',
+    label: 'Ollama Cloud (Metered Cloud)',
+    category: 'hybrid',
+    baseUrl: 'https://ollama.com/api',
+    openAiCompatible: false,
+    apiKeyOptional: false,
+    apiKeyEnvName: 'OLLAMA_CLOUD_API_KEY',
+    docsUrl: 'https://ollama.com/cloud',
+    rateLimitNote: 'Metered cloud — paid per-token usage. Check plan limits and pricing at https://ollama.com/cloud/pricing before enabling.',
+    priority: 55,
+    notes: 'Ollama Cloud is a SEPARATE provider from local Ollama (slug "ollama"). Cloud is metered (paid per token); local is free on your hardware. Set OLLAMA_CLOUD_API_KEY in .env to enable. Models are DISCOVERED at runtime via /api/v1/admin/ai-models/providers/{id}/discover-models — do NOT assume any model is available without discovering it first. Local Ollama and Ollama Cloud can both be enabled simultaneously; the chain will try them in priority order.',
+    models: [],  // discovered at runtime — see /discover-models endpoint
   },
   {
     slug: 'opencode',
