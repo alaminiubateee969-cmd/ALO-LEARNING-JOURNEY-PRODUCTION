@@ -88,6 +88,8 @@ model User {
   integrationUpdated  Integration[] @relation("IntegrationUpdater")
   oauthStates         OAuthState[] @relation("OAuthStateUser")
   confirmedManifests  IntegrationManifest[] @relation("ManifestConfirmer")
+  createdAiProviders  AiModelProvider[] @relation("AiModelProviderCreator")
+  updatedAiProviders  AiModelProvider[] @relation("AiModelProviderUpdater")
 }
 
 model CompanyUser {
@@ -1200,4 +1202,89 @@ model IntegrationManifest {
   createdAt       DateTime @default(now())
 
   @@index([companyId])
+}
+
+// ==================== AI MODEL REGISTRY (Super Admin) ====================
+// Configurable free-model providers + model entries. Super admins add
+// providers (OpenCode, Ollama, OpenRouter, Groq, Gemini, Z.AI, etc.) and
+// per-provider model entries (model id, context window, capabilities).
+// The ai-chain.ts reads from this table at runtime so the chain is hot-
+// swappable without code changes or restarts.
+//
+// Security: only super_admin role can CRUD these rows. API keys are
+// encrypted via the vault (IntegrationSecret pattern) before storage.
+
+model AiModelProvider {
+  id              String   @id @default(cuid())
+  // Slug: opencode, ollama, openrouter, groq, gemini, zai, cloudflare, mistral, hf
+  slug            String   @unique
+  label           String
+  // Display category for the admin UI
+  category        String   @default("free")  // free | paid | self-hosted | hybrid
+  // Base URL the chain calls (e.g. https://api.groq.com/openai/v1)
+  baseUrl         String?
+  // Whether the provider speaks OpenAI-compatible /v1/chat/completions
+  openAiCompatible Boolean @default(true)
+  // Whether this provider can be used without an API key (local Ollama)
+  apiKeyOptional  Boolean @default(false)
+  // Where the API key lives when set: env var name (e.g. GROQ_API_KEY)
+  // — if null, the key is stored encrypted in AiModelProvider.secretCipher
+  apiKeyEnvName   String?
+  // AES-256-GCM envelope ciphertext of the API key (when not env-var-driven)
+  secretCipher    String?
+  secretKeyVersion Int     @default(1)
+  secretMasked    String?
+  // Whether the super admin has enabled this provider in the active chain
+  isEnabled       Boolean  @default(true)
+  // Sort priority — lower = earlier in the chain
+  priority        Int      @default(100)
+  // Health check
+  lastCheckedAt   DateTime?
+  lastStatus      String?  // ok | rate_limited | auth_failed | unreachable | unknown
+  lastError       String?
+  // Documentation link for the admin UI
+  docsUrl         String?
+  // Free-tier rate limit info (display only)
+  rateLimitNote   String?
+  // Notes for other admins
+  notes           String?
+  // Audit
+  createdBy       String?
+  creator         User?    @relation("AiModelProviderCreator", fields: [createdBy], references: [id])
+  updatedBy       String?
+  updater         User?    @relation("AiModelProviderUpdater", fields: [updatedBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  models          AiModelEntry[]
+
+  @@index([isEnabled, priority])
+}
+
+model AiModelEntry {
+  id              String   @id @default(cuid())
+  providerId      String
+  provider        AiModelProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  // Model id sent in the API request body (e.g. "llama-3.3-70b-versatile")
+  modelId         String
+  // Human-readable display name (e.g. "Llama 3.3 70B Versatile")
+  displayName     String
+  // Context window in tokens (helps the chain pick the right model)
+  contextWindow   Int      @default(8192)
+  // Capabilities: JSON array ["chat", "vision", "tools", "json_mode"]
+  capabilities    String   @default("[\"chat\"]")
+  // Whether this model is the default fallback for the provider
+  isDefault       Boolean  @default(false)
+  // Whether this model is enabled in the chain
+  isEnabled       Boolean  @default(true)
+  // Estimated throughput for admin display
+  maxOutputTokens Int      @default(4096)
+  // Free-tier notes (e.g. "6 requests/min on free tier")
+  freeTierNote    String?
+  // Audit
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([providerId, modelId])
+  @@index([providerId, isEnabled])
 }

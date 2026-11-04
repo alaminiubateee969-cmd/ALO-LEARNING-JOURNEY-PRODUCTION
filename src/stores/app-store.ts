@@ -18,7 +18,8 @@ export type ViewId =
   | 'audit-logs'
   | 'subscriptions'
   | 'settings'
-  | 'ai-agents';
+  | 'ai-agents'
+  | 'ai-models';
 
 export interface AuthUser {
   id: string;

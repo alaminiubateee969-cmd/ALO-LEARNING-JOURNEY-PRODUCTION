@@ -27,22 +27,8 @@ async function seed() {
   const adminEmail = getAdminSeedEmail();
   console.log('Seeding database...');
 
-  // Create super admin user (upsert keyed on email — change ADMIN_SEED_EMAIL
-  // between environments and you get a fresh admin row instead of mutating
-  // the previous environment's login).
-  const passwordHash = await hashPassword(getAdminSeedPassword());
-  const admin = await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: {},
-    create: {
-      email: adminEmail,
-      passwordHash,
-      name: 'Admin User',
-      isActive: true,
-    },
-  });
-
-  // Create demo company (idempotent via upsert on slug)
+  // Create demo company FIRST (idempotent via upsert on slug) so the admin
+  // link below can reference company.id.
   const company = await prisma.company.upsert({
     where: { slug: 'demo-agency' },
     update: {
@@ -64,18 +50,39 @@ async function seed() {
     },
   });
 
-  // Link admin to company (idempotent — find existing link first)
-  const existingLink = await prisma.companyUser.findFirst({
+  // Create super admin user (upsert keyed on email — change ADMIN_SEED_EMAIL
+  // between environments and you get a fresh admin row instead of mutating
+  // the previous environment's login).
+  const passwordHash = await hashPassword(getAdminSeedPassword());
+  const admin = await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: {},
+    create: {
+      email: adminEmail,
+      passwordHash,
+      name: 'Admin User',
+      isActive: true,
+    },
+  });
+
+  // Ensure the admin has a CompanyUser link with role=super_admin (so they
+  // can access the Super Admin AI Model Registry and other privileged routes).
+  const adminLink = await prisma.companyUser.findFirst({
     where: { userId: admin.id, companyId: company.id },
   });
-  if (!existingLink) {
+  if (!adminLink) {
     await prisma.companyUser.create({
       data: {
         userId: admin.id,
         companyId: company.id,
-        role: 'company_owner',
+        role: 'super_admin',
         permissions: JSON.stringify({ all: true }),
       },
+    });
+  } else if (adminLink.role !== 'super_admin') {
+    await prisma.companyUser.update({
+      where: { id: adminLink.id },
+      data: { role: 'super_admin', permissions: JSON.stringify({ all: true }) },
     });
   }
 

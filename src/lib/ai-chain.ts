@@ -77,6 +77,17 @@ export async function chainChat(
 
   const attempts: Array<{ provider: ChainCallResult['provider']; ok: boolean; error?: string }> = [];
 
+  // 0. Registry-driven path — if the Super Admin has configured providers
+  //    in the AiModelProvider table, try those first (in priority order).
+  //    This is the hot path once the admin has added their keys via the UI.
+  try {
+    const registryResult = await tryRegistryProviders(messages, options, maxTokens, temperature, start, attempts);
+    if (registryResult) return registryResult;
+  } catch (e: any) {
+    // Registry read failure — fall through to env-var path
+    attempts.push({ provider: 'rule-based', ok: false, error: `registry_error: ${e?.message?.slice(0, 80) || 'unknown'}` });
+  }
+
   // 1. Z.AI
   try {
     attempts.push({ provider: 'zai', ok: true });
@@ -303,4 +314,176 @@ function loadZai(): Promise<any | null> {
     })();
   }
   return _zaiPromise;
+}
+
+/**
+ * Registry-driven provider path.
+ *
+ * Reads enabled providers + their default models from the AiModelProvider
+ * table (priority ascending). For each provider, resolves the API key
+ * (encrypted DB row OR env var named in apiKeyEnvName) and tries the
+ * provider's chat-completion endpoint. Returns the first non-empty
+ * response, or null if no provider succeeded (caller falls through to
+ * the env-var-driven path).
+ *
+ * The Z.AI SDK is special — it's the only provider that doesn't speak
+ * OpenAI-compatible HTTP. It's handled via the loadZai() SDK loader
+ * regardless of the baseUrl configured in the registry.
+ */
+async function tryRegistryProviders(
+  messages: ChatMessage[],
+  options: ChainCallOptions,
+  maxTokens: number,
+  temperature: number,
+  start: number,
+  attempts: Array<{ provider: ChainCallResult['provider']; ok: boolean; error?: string }>
+): Promise<ChainCallResult | null> {
+  // Lazy-load Prisma so this file stays importable from non-Next contexts
+  // (e.g. tests). The dynamic import is cached by Node, so it's free.
+  let db: any;
+  try {
+    const mod = await import('./db');
+    db = mod.db;
+  } catch {
+    return null; // DB not available — skip registry path
+  }
+
+  let providers: any[];
+  try {
+    providers = await db.aiModelProvider.findMany({
+      where: { isEnabled: true },
+      include: { models: { where: { isEnabled: true }, orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }] } },
+      orderBy: [{ priority: 'asc' }, { label: 'asc' }],
+    });
+  } catch {
+    return null; // Table not migrated yet or DB error — skip silently
+  }
+
+  if (!providers || providers.length === 0) return null;
+
+  for (const provider of providers) {
+    const defaultModel = provider.models[0];
+    if (!defaultModel) continue;
+
+    // Resolve API key
+    let apiKey: string | null = null;
+    if (provider.secretCipher) {
+      try {
+        const { decryptSecret } = await import('./vault');
+        apiKey = decryptSecret(provider.secretCipher);
+      } catch {
+        continue; // bad key — skip
+      }
+    } else if (provider.apiKeyEnvName) {
+      apiKey = process.env[provider.apiKeyEnvName] || null;
+    }
+    if (!apiKey && !provider.apiKeyOptional) continue; // unconfigured — skip
+
+    const providerSlug = provider.slug as ChainCallResult['provider'];
+    try {
+      attempts.push({ provider: providerSlug, ok: true });
+      const text = await callRegistryProvider(provider, defaultModel, messages, maxTokens, temperature, apiKey);
+      if (text) {
+        return makeResult(text, providerSlug, defaultModel.modelId, attempts.length, start);
+      }
+      attempts[attempts.length - 1].ok = false;
+      attempts[attempts.length - 1].error = 'empty response';
+    } catch (e: any) {
+      attempts[attempts.length - 1].ok = false;
+      attempts[attempts.length - 1].error = e?.message?.slice(0, 120) || `${provider.slug} failed`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Calls one registry-configured provider. Routes by provider.slug to the
+ * right HTTP shape (OpenAI-compatible, Gemini contents, Ollama chat, etc).
+ * Mirrors the per-provider logic in chainChat but parameterized.
+ */
+async function callRegistryProvider(
+  provider: any,
+  model: any,
+  messages: ChatMessage[],
+  maxTokens: number,
+  temperature: number,
+  apiKey: string | null
+): Promise<string> {
+  const slug = provider.slug as string;
+  const baseUrl = (provider.baseUrl || '').replace('{account_id}', process.env.CLOUDFLARE_ACCOUNT_ID || '');
+  const modelId = model.modelId;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+  // Z.AI uses the SDK, not raw HTTP
+  if (slug === 'zai') {
+    const zai = await loadZai();
+    if (!zai) throw new Error('zai sdk not loaded');
+    const r: any = await zai.chat.completions.create({ messages, max_tokens: maxTokens, temperature });
+    return r?.choices?.[0]?.message?.content || '';
+  }
+
+  if (slug === 'gemini') {
+    const url = `${baseUrl}/models/${modelId}:generateContent?key=${apiKey}`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+        generationConfig: { maxOutputTokens: maxTokens, temperature },
+      }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data: any = await r.json();
+    return data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '';
+  }
+
+  if (slug === 'ollama' || slug === 'opencode') {
+    const r = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: modelId, messages, stream: false, options: { num_predict: maxTokens, temperature } }),
+      cache: 'no-store',
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data: any = await r.json();
+    return data?.message?.content || '';
+  }
+
+  if (slug === 'cloudflare') {
+    const r = await fetch(`${baseUrl}/models/${modelId}`, {
+      method: 'POST', headers, body: JSON.stringify({ prompt: messages.map((m) => m.content).join('\n') }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data: any = await r.json();
+    return data?.result?.response || data?.result || '';
+  }
+
+  if (slug === 'huggingface') {
+    const r = await fetch(`${baseUrl}/${modelId}`, {
+      method: 'POST', headers, body: JSON.stringify({ inputs: messages.map((m) => m.content).join('\n') }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data: any = await r.json();
+    return Array.isArray(data) ? data[0]?.generated_text || '' : data?.generated_text || '';
+  }
+
+  if (slug === 'pollinations') {
+    // Image-only — skip in chat path
+    return '';
+  }
+
+  // Default: OpenAI-compatible /v1/chat/completions (groq, openrouter, mistral, opencode-compatible)
+  if (provider.openAiCompatible) {
+    const r = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: modelId, messages, max_tokens: maxTokens, temperature }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data: any = await r.json();
+    return data?.choices?.[0]?.message?.content || '';
+  }
+
+  return '';
 }
