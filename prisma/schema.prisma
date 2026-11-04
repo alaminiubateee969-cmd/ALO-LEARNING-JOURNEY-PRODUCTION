@@ -53,6 +53,9 @@ model Company {
   keywordTrackers KeywordTracker[]
   workflows       Workflow[]
   workflowRuns    WorkflowRun[]
+  integrations    Integration[]
+  oauthStates     OAuthState[]
+  integrationManifests IntegrationManifest[]
 }
 
 // ==================== USER & ROLES ====================
@@ -81,6 +84,10 @@ model User {
   activities     Activity[] @relation("ActivityActor")
   sentSms        SmsMessage[] @relation("SmsSender")
   createdWorkflows Workflow[] @relation("WorkflowCreator")
+  integrationCreated  Integration[] @relation("IntegrationCreator")
+  integrationUpdated  Integration[] @relation("IntegrationUpdater")
+  oauthStates         OAuthState[] @relation("OAuthStateUser")
+  confirmedManifests  IntegrationManifest[] @relation("ManifestConfirmer")
 }
 
 model CompanyUser {
@@ -1028,4 +1035,169 @@ model WorkflowRun {
   companyId    String
   company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
+}
+
+// ==================== INTEGRATIONS (v1 API surface) ====================
+// Supports OAuth Authorization Code + PKCE flows and manual credential
+// storage. All secrets are encrypted with AES-256-GCM via the vault
+// (src/lib/vault.ts) and stored in IntegrationSecret. The plaintext is
+// never persisted and never returned by any API route.
+
+model Integration {
+  id              String   @id @default(cuid())
+  // Globally unique connection id surfaced in the API as {connection_id}
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Provider slug: google, youtube, meta, linkedin, x, tiktok, pinterest,
+  // wordpress, hubspot, stripe, shopify, google_search_console, ga4, gtm,
+  // google_ads, mailchimp, sendgrid, etc.
+  provider        String
+  // Connection method that produced this integration
+  authMethod      String   @default("oauth")  // oauth | manual
+  // Connection-level status (separate from credential_status)
+  status          String   @default("pending")  // pending | connected | action_required | expired | revoked | unavailable | error
+  // OAuth scopes granted by the user (JSON array — non-secret)
+  grantedScopes   String   @default("[]")
+  // Resources selected by the user (de-normalised copy for fast reads)
+  selectedResources String  @default("[]")  // JSON array of {type, id, name}
+  // OAuth state id (FK to OAuthState) used during the in-flight authorize flow
+  currentStateId  String?
+  // Token expiry (iso) — populated on callback; used by daily health check
+  tokenExpiresAt  DateTime?
+  // Refresh token rotation supported?
+  refreshSupported Boolean @default(false)
+  // Last successful validation (health check)
+  lastValidatedAt DateTime?
+  // User who created/last-modified this integration
+  createdBy       String?
+  creator         User?    @relation("IntegrationCreator", fields: [createdBy], references: [id])
+  updatedBy       String?
+  updater         User?    @relation("IntegrationUpdater", fields: [updatedBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  secrets         IntegrationSecret[]
+  resources       IntegrationResource[]
+  logs            IntegrationLog[]
+
+  @@index([companyId, provider])
+  @@unique([companyId, provider])  // one connection per provider per company
+}
+
+model IntegrationSecret {
+  id              String   @id @default(cuid())
+  integrationId   String
+  integration     Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  // Which secret this is: access_token, refresh_token, api_key, app_secret,
+  // developer_token, webhook_signing_secret, service_account_json, etc.
+  kind            String
+  // AES-256-GCM envelope: iv:ciphertext:authTag (all base64). Never plaintext.
+  ciphertext      String
+  // Key version of the master key that encrypted this (for rotation)
+  keyVersion      Int      @default(1)
+  // Masked value shown to the user, e.g. "****x7Kq" — never the secret itself
+  maskedValue     String?
+  // When this secret was last rotated/refreshed
+  rotatedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([integrationId, kind])
+  @@index([integrationId])
+}
+
+model IntegrationResource {
+  id              String   @id @default(cuid())
+  integrationId   String
+  integration     Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  // Resource type per provider vocabulary: youtube_channel, search_console_site,
+  // ga4_property, gtm_container, fb_page, ig_account, ad_account, pixel,
+  // wa_ba, wa_phone_number_id, linkedin_page, wp_site, etc.
+  type            String
+  // Provider's resource id (channel id, property id, page id, site url, etc.)
+  resourceId      String
+  // Human-readable name (channel title, page name, property name)
+  name            String?
+  // Permission level the user has on this resource (owner, admin, user, etc.)
+  permission      String?
+  // Whether the user explicitly selected this resource
+  selected        Boolean  @default(false)
+  // Whether the resource is reachable on the provider API right now
+  status          String   @default("valid")  // valid | action_required | expired | unavailable
+  // Raw metadata returned by discovery (non-secret)
+  metadata        String   @default("{}")  // JSON
+  discoveredAt    DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([integrationId, type, resourceId])
+  @@index([integrationId, type])
+}
+
+model IntegrationLog {
+  id              String   @id @default(cuid())
+  integrationId   String
+  integration     Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  // Action performed: authorize, callback, discover, select_resources,
+  // validate, refresh, revoke, disconnect, secret_rotate
+  action          String
+  // Outcome: success | failure | pending
+  outcome         String   @default("success")
+  // Non-secret message (error reason, scope delta, etc.)
+  message         String?
+  // Who initiated the action
+  actorUserId     String?
+  // Source: ui | api | agent | scheduler | webhook
+  source          String   @default("api")
+  createdAt       DateTime @default(now())
+
+  @@index([integrationId, createdAt])
+}
+
+// In-flight OAuth state — short-lived (10 min), unique per authorize call,
+// tied to the user + provider + PKCE verifier. Cleared on callback or expiry.
+model OAuthState {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation("OAuthStateUser", fields: [userId], references: [id], onDelete: Cascade)
+  provider        String
+  // High-entropy random — bound to the user's session, validated on callback
+  state           String   @unique
+  // PKCE code_verifier (S256 challenge). Never sent to the provider.
+  codeVerifier    String
+  // The redirect URI the provider should send the user back to
+  redirectUri     String
+  // Requested scopes (JSON array)
+  scopes          String   @default("[]")
+  // Auto-expire so abandoned authorizations don't accumulate
+  expiresAt       DateTime
+  // Set to true on successful callback so re-use is rejected
+  consumed        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([userId, provider])
+  @@index([expiresAt])
+}
+
+// Manifest produced at end of Phase 9 (client confirmation). Stored
+// permanently as the canonical integration summary — never contains
+// plaintext secrets.
+model IntegrationManifest {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Project / workspace grouping
+  projectId       String?
+  workspaceId     String?
+  // JSON: list of {provider, connection_id, credential_reference (vault://),
+  // resources[], status}
+  manifest        String   @default("{}")
+  // When the user confirmed the setup
+  confirmedAt     DateTime @default(now())
+  // Who confirmed
+  confirmedBy     String?
+  confirmer       User?    @relation("ManifestConfirmer", fields: [confirmedBy], references: [id])
+  createdAt       DateTime @default(now())
+
+  @@index([companyId])
 }
