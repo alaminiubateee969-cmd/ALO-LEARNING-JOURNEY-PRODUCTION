@@ -13,16 +13,29 @@ function getAdminSeedPassword(): string {
   return 'admin123';
 }
 
+function getAdminSeedEmail(): string {
+  const fromEnv = process.env.ADMIN_SEED_EMAIL;
+  if (fromEnv && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromEnv)) return fromEnv;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('ADMIN_SEED_EMAIL env var must be a valid email in production');
+  }
+  console.warn('⚠️ ADMIN_SEED_EMAIL not set — using dev fallback "admin@marketingos.com"');
+  return 'admin@marketingos.com';
+}
+
 async function seed() {
+  const adminEmail = getAdminSeedEmail();
   console.log('Seeding database...');
 
-  // Create super admin user
+  // Create super admin user (upsert keyed on email — change ADMIN_SEED_EMAIL
+  // between environments and you get a fresh admin row instead of mutating
+  // the previous environment's login).
   const passwordHash = await hashPassword(getAdminSeedPassword());
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@marketingos.com' },
+    where: { email: adminEmail },
     update: {},
     create: {
-      email: 'admin@marketingos.com',
+      email: adminEmail,
       passwordHash,
       name: 'Admin User',
       isActive: true,
@@ -318,7 +331,7 @@ async function seed() {
   });
 
   console.log('Seed completed successfully!');
-  console.log(`Admin email: admin@marketingos.com`);
+  console.log(`Admin email: ${adminEmail}`);
   console.log('Admin password: (set via ADMIN_SEED_PASSWORD env var)');
 }
 
