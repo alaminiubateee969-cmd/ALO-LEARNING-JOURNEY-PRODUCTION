@@ -18,12 +18,14 @@ export interface EventPayload {
   userId?: string | null;
   /** Event type — dot-namespaced, e.g. "lead.created", "deal.won", "ticket.assigned" */
   type: string;
-  /** Human-readable title for notifications */
-  title: string;
-  /** Longer description for activity feed + audit log */
-  description: string;
+  /** Human-readable title for notifications (defaults to `type` if omitted) */
+  title?: string;
+  /** Longer description for activity feed + audit log (defaults to `title`/`type`) */
+  description?: string;
   /** Resource type: lead | deal | contact | ticket | campaign | content | ... */
   resourceType?: string;
+  /** Alias for resourceType — accepted for backwards compatibility with adapters */
+  resource?: string;
   /** Resource ID for deep-linking */
   resourceId?: string;
   /** Frontend route to navigate to when notification is clicked */
@@ -49,14 +51,22 @@ export async function emitEvent(payload: EventPayload): Promise<void> {
       companyId,
       userId,
       type,
-      title,
-      description,
-      resourceType,
+      title: titleRaw,
+      description: descriptionRaw,
+      resourceType: resourceTypeRaw,
+      resource,
       resourceId,
       link,
       recipientIds,
       metadata = {},
     } = payload;
+
+    // Defaults: title/description fall back to the event type so callers that
+    // only specify `type` (e.g. telephony adapter, voice engine) still produce
+    // valid notifications + audit rows. `resource` is an alias for resourceType.
+    const title = titleRaw || type;
+    const description = descriptionRaw || title;
+    const resourceType = resourceTypeRaw || resource;
 
     // Determine recipients if not specified: all users in the company
     let recipients = recipientIds;

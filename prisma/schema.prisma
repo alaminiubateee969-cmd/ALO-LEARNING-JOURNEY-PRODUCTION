@@ -60,6 +60,32 @@ model Company {
   agentUsageDailies AgentUsageDaily[]
   agentExecutionLogs  AgentExecutionLog[]
   afterHoursRule  AfterHoursRule[]
+  // Phase 1-6 voice/contact-center relations
+  voiceAgents     VoiceAgent[]
+  consents        Consent[]
+  callUsageDailies CallUsageDaily[]
+  ttsUsageDailies TtsUsageDaily[]
+  asrUsageDailies AsrUsageDaily[]
+  phoneNumbers    PhoneNumber[]
+  calls           Call[]
+  ivrMenus        IvrMenu[]
+  ringGroups      RingGroup[]
+  callQueues      CallQueue[]
+  voicemails      Voicemail[]
+  voiceCloneAuthorizations VoiceCloneAuthorization[]
+  pronunciationDictionaries PronunciationDictionary[]
+  ttsJobs         TtsJob[]
+  outboundCampaigns OutboundCampaign[]
+  agentStatuses   AgentStatus[]
+  supervisorActions SupervisorAction[]
+  customers       Customer[]
+  sharedInboxMessages SharedInboxMessage[]
+  knowledgeBases  KnowledgeBase[]
+  subscription    TenantSubscription?
+  usageCredits    UsageCredit[]
+  invoices        Invoice[]
+  payments       Payment[]
+  billingAdjustments BillingAdjustment[]
 }
 
 // ==================== USER & ROLES ====================
@@ -97,6 +123,24 @@ model User {
   createdAgentAssignments  AgentModelAssignment[] @relation("AgentAssignmentCreator")
   updatedAgentAssignments  AgentModelAssignment[] @relation("AgentAssignmentUpdater")
   agentExecutionLogs  AgentExecutionLog[] @relation("AgentExecutionActor")
+  // Phase 1-6 voice/contact-center relations
+  mfaSecret       MfaSecret?   @relation("MfaSecretUser")
+  refreshTokens   RefreshToken[] @relation("RefreshTokenUser")
+  createdVoiceAgents VoiceAgent[] @relation("VoiceAgentCreator")
+  updatedVoiceAgents VoiceAgent[] @relation("VoiceAgentUpdater")
+  createdPhoneNumbers PhoneNumber[] @relation("PhoneNumberCreator")
+  createdCalls    Call[]  @relation("CallCreator")
+  createdIvrMenus IvrMenu[] @relation("IvrMenuCreator")
+  capturedVoiceCloneAuths VoiceCloneAuthorization[] @relation("VoiceCloneAuthCreator")
+  createdTtsJobs  TtsJob[] @relation("TtsJobCreator")
+  createdCampaigns OutboundCampaign[] @relation("CampaignCreator")
+  agentStatus     AgentStatus?  @relation("AgentStatusUser")
+  supervisorActions SupervisorAction[] @relation("SupervisorActor")
+  createdCustomers Customer[] @relation("CustomerCreator")
+  uploadedKnowledgeDocs KnowledgeDocument[] @relation("KnowledgeDocCreator")
+  createdPayments Payment[] @relation("PaymentCreator")
+  createdBillingAdjustments BillingAdjustment[] @relation("BillingAdjustmentCreator")
+  approvedBillingAdjustments BillingAdjustment[] @relation("BillingAdjustmentApprover")
 }
 
 model CompanyUser {
@@ -898,6 +942,12 @@ model ApiKey {
   lastUsedAt  DateTime?
   companyId   String
   company     Company  @relation(fields: [companyId], references: [id])
+  // Scopes (JSON array) — e.g. ["calls:read", "calls:write", "billing:read"]
+  scopes      String   @default("[]")
+  // Per-minute rate limit (null = use company default)
+  rateLimitPerMin Int?
+  // Optional expiry
+  expiresAt   DateTime?
   createdAt   DateTime @default(now())
 }
 
@@ -1445,4 +1495,980 @@ model AfterHoursRule {
   // Disclaimer text appended to auto-replies during off-hours
   afterHoursDisclaimer String?
   updatedAt       DateTime @updatedAt
+}
+
+// ==================== PHASE 1: PLATFORM FOUNDATION ====================
+// Voice/contact-center foundation: MFA, refresh tokens, voice agents,
+// consent, usage metering. All additive — no existing models touched.
+
+model MfaSecret {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation("MfaSecretUser", fields: [userId], references: [id], onDelete: Cascade)
+  // TOTP secret encrypted via vault (AES-256-GCM)
+  secretCipher    String
+  secretKeyVersion Int     @default(1)
+  // Backup codes (bcrypt-hashed, JSON array)
+  backupCodesHash String?
+  isEnabled       Boolean  @default(false)
+  enabledAt       DateTime?
+  lastUsedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model RefreshToken {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation("RefreshTokenUser", fields: [userId], references: [id], onDelete: Cascade)
+  // SHA-256 hash of the token (never store plaintext)
+  tokenHash       String   @unique
+  companyId       String
+  // JWT-style claims
+  expiresAt       DateTime
+  // Rotation: when used, this token's "rotatedTo" points to the new token
+  rotatedTo       String?
+  revokedAt       DateTime?
+  revokedReason   String?  // logout | rotation | breach | expired | admin
+  // Device info for audit
+  userAgent       String?
+  ipAddress       String?
+  createdAt       DateTime @default(now())
+
+  @@index([userId, expiresAt])
+  @@index([tokenHash])
+}
+
+model VoiceAgent {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  purpose         String?  // "inbound_receptionist" | "outbound_sales" | "support" | "survey"
+  language        String   @default("bn-BD")
+  // Voice configuration
+  voiceId          String?
+  speakingStyle   String?  // "formal" | "friendly" | "professional" | "casual"
+  personality     String?
+  // Conversation
+  systemPrompt    String   @default("")
+  greetingMessage String?
+  fallbackResponse String?
+  // Behavior
+  maxCallDurationSec Int   @default(300)
+  workingHoursStart String? // "09:00"
+  workingHoursEnd   String? // "18:00"
+  workingDays      String  @default("[1,2,3,4,5]")
+  // Knowledge
+  knowledgeBaseId String?
+  // CRM link
+  crmEnabled      Boolean  @default(true)
+  // Tools (JSON array of tool names from agent-tools.ts allowlist)
+  allowlistedTools String  @default("[\"crm_lookup_lead\",\"crm_create_lead\",\"content_save_artifact\"]")
+  // Sensitive-action approval gate
+  approvalMode    String  @default("suspend")  // suspend | auto_approve | auto_reject
+  // Deployment
+  status          String   @default("draft")  // draft | active | paused | archived
+  // Linked phone number (one agent ↔ one number)
+  phoneNumberId   String?
+  // Audit
+  createdBy       String?
+  creator         User?    @relation("VoiceAgentCreator", fields: [createdBy], references: [id])
+  updatedBy       String?
+  updater         User?    @relation("VoiceAgentUpdater", fields: [updatedBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@index([companyId, language])
+}
+
+model Consent {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Who consented (customer phone, email, or userId)
+  subjectType     String   // "caller" | "customer" | "lead" | "user"
+  subjectId       String   // phone number / email / userId
+  // What they consented to
+  kind            String   // "call_recording" | "marketing_sms" | "marketing_email" | "data_processing" | "voice_clone"
+  // How they consented
+  method          String   // "ivr_dtmf" | "ivr_voice" | "web_form" | "sms_reply" | "signed_form"
+  methodDetail    String?  // e.g. "pressed 1" / "signed PDF on 2026-01-01"
+  // Scope
+  scope           String   @default("this_call")  // this_call | ongoing | 12_months
+  expiresAt       DateTime?
+  // Revocation
+  revokedAt       DateTime?
+  revocationReason String?
+  // Reference (e.g. callId for call_recording consent)
+  referenceType   String?  // "call" | "campaign" | "voice_clone"
+  referenceId     String?
+  // Audit
+  capturedBy      String?  // userId of the capturing agent (null if customer-initiated)
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, subjectId, kind])
+  @@index([referenceType, referenceId])
+}
+
+model CallUsageDaily {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  day             String   // YYYY-MM-DD UTC
+  direction       String   // "inbound" | "outbound" | "internal"
+  // Counts
+  totalCalls      Int      @default(0)
+  aiHandledCalls  Int      @default(0)
+  humanHandledCalls Int    @default(0)
+  failedCalls     Int      @default(0)
+  // Duration in seconds
+  totalDurationSec Int    @default(0)
+  aiDurationSec   Int      @default(0)
+  humanDurationSec Int     @default(0)
+  // Recording storage (MB)
+  recordingStorageMb Float  @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, day, direction])
+  @@index([companyId, day])
+}
+
+model TtsUsageDaily {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  day             String
+  provider        String   // "piper" | "zai" | "kokoro" | "cosyvoice" | "tortoise"
+  language        String   @default("bn-BD")
+  charactersSynthesized Int @default(0)
+  audioSecondsGenerated Float @default(0)
+  costEstimateUsd Float   @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, day, provider, language])
+  @@index([companyId, day])
+}
+
+model AsrUsageDaily {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  day             String
+  provider        String   // "faster-whisper" | "zai" | "whisperx" | "whisper_cpp"
+  language        String   @default("bn-BD")
+  audioSecondsProcessed Float @default(0)
+  charactersTranscribed Int @default(0)
+  costEstimateUsd Float   @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, day, provider, language])
+  @@index([companyId, day])
+}
+
+// ==================== PHASE 2: CLOUD TELEPHONY ====================
+
+model PhoneNumber {
+  id              String   @id @default(cuid())
+  companyId       String?
+  company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  // E.164 format: +8801XXXXXXXXX
+  number          String   @unique
+  // Provider that provisioned this number
+  provider        String   // "twilio" | "telnyx" | "freeswitch" | "signalwire" | "manual"
+  providerNumberId String? // provider's internal id
+  // Country + type
+  country         String   @default("BD")
+  numberType      String   @default("local")  // local | toll_free | mobile | national
+  capabilities    String   @default("[\"voice\",\"sms\"]")  // JSON array
+  // Lifecycle
+  status          String   @default("available")  // available | assigned | active | released | porting
+  assignedAt      DateTime?
+  activatedAt     DateTime?
+  releasedAt      DateTime?
+  // Destination (what answers when this number is called)
+  destinationType String?  // "ivr" | "ai_agent" | "ring_group" | "queue" | "user" | "voicemail"
+  destinationId   String?  // FK to the destination entity (polymorphic)
+  // Business hours (override global defaults)
+  businessHoursStart String?
+  businessHoursEnd String?
+  workingDays     String?  // JSON array [1,2,3,4,5]
+  // Caller ID config
+  callerIdName    String?
+  // Audit
+  createdBy       String?
+  creator         User?    @relation("PhoneNumberCreator", fields: [createdBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@index([provider, status])
+}
+
+model Call {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // FreeSWITCH call UUID (or provider's call id)
+  providerCallId  String?  @unique
+  // Direction
+  direction       String   // "inbound" | "outbound" | "internal"
+  // Parties
+  fromNumber      String
+  toNumber        String
+  fromName        String?
+  toName          String?
+  // Routing
+  phoneNumberId   String?  // which inbound number was called
+  agentId         String?  // voice agent that handled (if AI)
+  humanAgentId    String?  // human user that handled
+  queueId         String?
+  ringGroupId     String?
+  // State machine
+  status          String   @default("ringing")  // ringing | active | hold | transfer | park | closed | failed
+  previousStatus  String?
+  // Timing
+  startedAt       DateTime @default(now())
+  answeredAt      DateTime?
+  endedAt         DateTime?
+  durationSec     Int      @default(0)
+  // Recording
+  recordingUrl    String?  // MinIO signed URL placeholder
+  recordingConsentId String? // Consent row id
+  hasRecording    Boolean  @default(false)
+  // AI conversation
+  transcript      String?  // full transcript (JSON or text)
+  summary         String?  // AI-generated summary
+  intent          String?  // detected intent
+  sentiment       String?  // "positive" | "neutral" | "negative" | "mixed"
+  actionItems     String?  // JSON array of {item, assignee, dueDate}
+  // Quality
+  qualityScore    Float?   // 0-100
+  // Outcome
+  outcome         String?  // "resolved" | "transferred" | "voicemail" | "abandoned" | "callback_scheduled"
+  // Failure
+  failureReason   String?
+  // Audit
+  createdBy       String?
+  creator         User?    @relation("CallCreator", fields: [createdBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@index([companyId, direction, createdAt])
+  @@index([agentId])
+  @@index([humanAgentId])
+
+  // Reverse relations
+  events          CallEvent[]
+  voicemails      Voicemail[] @relation("VoicemailCall")
+  callSummary     CallSummary?
+  callAnalytics   CallAnalytics?
+}
+
+model CallEvent {
+  id              String   @id @default(cuid())
+  callId          String
+  call            Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  // State transition: from → to
+  fromStatus      String?
+  toStatus        String
+  // Actor (who/what caused the transition)
+  actorType       String   // "system" | "ai_agent" | "human_agent" | "caller" | "supervisor"
+  actorId         String?
+  // Optional metadata
+  metadata        String   @default("{}")  // JSON
+  timestamp       DateTime @default(now())
+
+  @@index([callId, timestamp])
+}
+
+model IvrMenu {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  // JSON tree of nodes: [{ id, type: "play"|"gather"|"route"|"hangup", prompt?, inputVar?, routes: [{ dtmf, target }] }]
+  tree            String   @default("[]")
+  language        String   @default("bn-BD")
+  voiceId         String?
+  status          String   @default("draft")  // draft | active | archived
+  createdBy       String?
+  creator         User?    @relation("IvrMenuCreator", fields: [createdBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status])
+}
+
+model RingGroup {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  // Agent user ids in this ring group
+  memberIds       String   @default("[]")  // JSON array of userIds
+  // Dial strategy
+  strategy        String   @default("ring_all")  // ring_all | hunt | longest_idle | round_robin
+  ringTimeoutSec  Int      @default(20)
+  ringOrder       String?  // JSON array for hunt strategy
+  // Fallback
+  fallbackDestinationType String?  // "voicemail" | "queue" | "external"
+  fallbackDestinationId   String?
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status])
+}
+
+model CallQueue {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  // Members
+  agentIds        String   @default("[]")  // JSON array of userIds
+  // Queue config
+  maxSize         Int      @default(50)
+  priorityLevels  Int      @default(3)
+  // Caller experience
+  mohUrl          String?  // music on hold
+  announcePosition Boolean @default(true)
+  announceEta     Boolean  @default(true)
+  maxWaitSec      Int      @default(300)
+  // Overflow
+  overflowDestinationType String?  // "voicemail" | "external" | "ai_agent"
+  overflowDestinationId   String?
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status])
+}
+
+model Voicemail {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  callId          String?
+  call            Call?    @relation("VoicemailCall", fields: [callId], references: [id], onDelete: SetNull)
+  // Caller info
+  fromNumber      String
+  fromName        String?
+  // Recording
+  audioUrl        String
+  durationSec     Int
+  // Transcription
+  transcript      String?
+  transcriptionStatus String? @default("pending")  // pending | processing | completed | failed
+  // Routing
+  assignedTo      String?  // userId
+  // Status
+  status          String   @default("unread")  // unread | read | archived | deleted
+  listenedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([companyId, status, createdAt])
+  @@index([assignedTo, status])
+}
+
+// ==================== PHASE 3: AI VOICE ENGINE ====================
+
+model VoiceModel {
+  id              String   @id @default(cuid())
+  // Provider info
+  provider        String   // "piper" | "kokoro" | "cosyvoice" | "tortoise" | "zai"
+  modelId         String   // e.g. "bn_BD-google-medium"
+  displayName     String
+  // Language
+  language        String   @default("bn-BD")
+  gender          String?  // "male" | "female" | "neutral"
+  style           String?  // "formal" | "friendly" | "casual" | "narrator"
+  // Quality + footprint
+  quality         String   @default("medium")  // x_low | low | medium | high
+  sampleRateHz    Int      @default(22050)
+  // License
+  license         String?  // "MIT" | "Apache-2.0" | "CPML"
+  commercialUseOk Boolean  @default(true)
+  // Voice clone authorization (if this is a cloned voice)
+  cloneAuthorizationId String?
+  // Status
+  isEnabled       Boolean  @default(true)
+  evaluatedAt     DateTime?
+  evaluationScore Float?   // mean score from BANGLA_VOICE_MODEL_EVALUATION
+  // Audit
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([provider, modelId])
+  @@index([language, isEnabled])
+  @@index([provider, isEnabled])
+}
+
+model VoiceCloneAuthorization {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Voice owner
+  ownerName       String
+  ownerEmail       String?
+  ownerPhone       String?
+  // Identity verification
+  identityVerified Boolean  @default(false)
+  verificationMethod String?  // "government_id" | "video_call" | "in_person"
+  verificationDocHash String?  // SHA-256 of verification document
+  // Consent
+  consentScope    String   @default("commercial_ivr")  // commercial_ivr | personal_use | limited_campaign
+  consentMethod   String   @default("signed_form")  // signed_form | video_consent
+  consentFormUrl  String?  // stored PDF
+  // Validity
+  grantedAt       DateTime @default(now())
+  expiresAt       DateTime?
+  // Revocation
+  revokedAt       DateTime?
+  revocationReason String?
+  // Resulting voice model
+  resultingVoiceModelId String?
+  // Audit
+  capturedBy      String?
+  creator         User?    @relation("VoiceCloneAuthCreator", fields: [capturedBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, ownerEmail])
+  @@index([companyId, revokedAt])
+  usageLogs       VoiceCloneUsageLog[]
+}
+
+model VoiceCloneUsageLog {
+  id              String   @id @default(cuid())
+  authorizationId String
+  authorization   VoiceCloneAuthorization @relation(fields: [authorizationId], references: [id], onDelete: Cascade)
+  // Usage context
+  usageContext    String   // "ivr_prompt" | "tts_batch" | "live_call"
+  referenceType   String?  // "call" | "tts_job"
+  referenceId     String?
+  // Output
+  audioUrl        String?
+  durationSec     Int?
+  // Audit
+  actorUserId     String?
+  ipAddress       String?
+  createdAt       DateTime @default(now())
+
+  @@index([authorizationId, createdAt])
+}
+
+model PronunciationDictionary {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  language        String   @default("bn-BD")
+  // JSON: [{ word: "আলো ল্যাবস", phonetic: "alo labs", type: "proper_noun" }]
+  entries         String   @default("[]")
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, language])
+}
+
+model TtsJob {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Input
+  text            String
+  voiceModelId    String
+  language        String   @default("bn-BD")
+  speed           Float    @default(1.0)
+  pitch           Float    @default(1.0)
+  // Output
+  audioUrl        String?
+  durationSec     Int?
+  // Provider used
+  provider        String?
+  providerModelId String?
+  // Status
+  status          String   @default("queued")  // queued | processing | completed | failed
+  errorMessage    String?
+  // Cost
+  charactersProcessed Int  @default(0)
+  costEstimateUsd Float   @default(0)
+  // Audit
+  createdBy       String?
+  creator         User?    @relation("TtsJobCreator", fields: [createdBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status, createdAt])
+}
+
+// ==================== PHASE 4: AI CALL AGENTS ====================
+
+model OutboundCampaign {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  // Script
+  script          String   @default("")  // conversation flow
+  agentId         String?  // voice agent that runs the campaign
+  // Contact list
+  contactListId   String?  // reference to lead list filter
+  // Schedule
+  startAt         DateTime?
+  endAt           DateTime?
+  callingWindowStart String @default("09:00")  // local time
+  callingWindowEnd String  @default("18:00")
+  callingDays     String   @default("[1,2,3,4,5]")
+  timezone        String   @default("Asia/Dhaka")
+  // Compliance
+  dncSuppression  Boolean  @default(true)
+  consentRequired Boolean  @default(true)
+  maxAttemptsPerContact Int @default(3)
+  retryDelayHours Int      @default(24)
+  // Status
+  status          String   @default("draft")  // draft | scheduled | running | paused | completed | cancelled
+  startedAt       DateTime?
+  completedAt     DateTime?
+  // Metrics
+  totalContacts   Int      @default(0)
+  callsAttempted  Int      @default(0)
+  callsConnected  Int      @default(0)
+  callsAnswered   Int      @default(0)
+  // Audit
+  createdBy       String?
+  creator         User?    @relation("CampaignCreator", fields: [createdBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status])
+  calls           CampaignCall[]
+}
+
+model CampaignCall {
+  id              String   @id @default(cuid())
+  campaignId      String
+  campaign        OutboundCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Contact
+  leadId          String?
+  contactId       String?
+  toNumber        String
+  // Execution
+  callId          String?  // FK to Call row when call is made
+  attemptNumber   Int      @default(1)
+  scheduledAt     DateTime?
+  attemptedAt     DateTime?
+  connectedAt     DateTime?
+  // Outcome
+  outcome         String?  // "answered" | "no_answer" | "busy" | "failed" | "dnc_skipped" | "consent_missing"
+  durationSec     Int      @default(0)
+  // Personalization
+  dynamicVariables String  @default("{}")  // JSON: {name, account_id, etc.}
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([campaignId, outcome])
+  @@index([toNumber])
+}
+
+model CallSummary {
+  id              String   @id @default(cuid())
+  callId          String   @unique
+  call            Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  // Structured summary
+  intent          String?
+  summary         String
+  actionItems     String   @default("[]")  // JSON array
+  followUpDate    DateTime?
+  followUpType    String?  // "callback" | "email" | "sms" | "meeting"
+  // Customer signals
+  sentimentScore  Float?   // -1 to 1
+  satisfactionScore Float? // 0-100
+  objections      String?  // JSON array
+  keywords        String?  // JSON array
+  // Compliance flags
+  complianceFlags String?  // JSON array
+  // Audit
+  generatedBy     String   @default("ai")  // ai | human
+  generatedAt     DateTime @default(now())
+  reviewedAt      DateTime?
+  reviewedBy      String?
+
+  @@index([callId])
+}
+
+model KnowledgeBase {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  // Documents in this KB
+  documents       KnowledgeDocument[]
+  // Embedding config
+  embedProvider   String   @default("local")  // local | gemini
+  embedModel      String   @default("bge-m3")
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status])
+}
+
+model KnowledgeDocument {
+  id              String   @id @default(cuid())
+  knowledgeBaseId String
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  // Source
+  title           String
+  sourceType      String   // "pdf" | "docx" | "txt" | "csv" | "url" | "faq"
+  sourceUrl       String?  // original URL or storage path
+  // Content
+  rawText         String   @default("")  // extracted plain text
+  chunksCount     Int      @default(0)
+  // Permissions
+  visibleToAgents String   @default("[]")  // JSON array of agentIds; empty = all
+  // Status
+  status          String   @default("processing")  // processing | indexed | failed | archived
+  indexedAt       DateTime?
+  // Audit
+  uploadedBy      String?
+  creator         User?    @relation("KnowledgeDocCreator", fields: [uploadedBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([knowledgeBaseId, status])
+  chunks          KnowledgeChunk[]
+}
+
+model KnowledgeChunk {
+  id              String   @id @default(cuid())
+  documentId      String
+  document        KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  // Chunk content
+  chunkIndex      Int
+  text            String
+  // Embedding (stored as base64 or vector reference)
+  embedding       String?  // base64-encoded Float32Array; null until indexed
+  // Source reference (for citations)
+  sourceLocation  String?  // e.g. "page 5, paragraph 2"
+  // Retrieval audit
+  retrievalCount  Int      @default(0)
+  lastRetrievedAt DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([documentId, chunkIndex])
+}
+
+// ==================== PHASE 5: HUMAN CONTACT CENTER + CRM ====================
+
+model AgentStatus {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation("AgentStatusUser", fields: [userId], references: [id], onDelete: Cascade)
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // State
+  status          String   @default("offline")  // offline | available | busy | after_call | break | lunch | training
+  statusChangedAt DateTime @default(now())
+  // Current call (if any)
+  currentCallId   String?
+  // Metrics (rolling)
+  callsToday      Int      @default(0)
+  avgHandleTimeSec Int     @default(0)
+  // Optional: scheduled break end
+  breakEndsAt     DateTime?
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status])
+}
+
+model SupervisorAction {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Action
+  actionType      String   // "listen" | "whisper" | "barge_in" | "take_over" | "force_transfer" | "force_release"
+  callId          String?
+  agentUserId     String?  // human agent being supervised
+  supervisorUserId String  // supervisor performing the action
+  supervisor      User     @relation("SupervisorActor", fields: [supervisorUserId], references: [id])
+  // Context
+  reason          String?
+  metadata        String   @default("{}")  // JSON
+  // Result
+  outcome         String?  // "success" | "failed" | "rejected"
+  errorMessage    String?
+  timestamp       DateTime @default(now())
+
+  @@index([companyId, timestamp])
+  @@index([agentUserId])
+}
+
+model Customer {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Identity
+  name            String
+  email           String?
+  phone           String?
+  alternatePhone  String?
+  // Profile
+  customerCompany String?  // customer's company name (renamed to avoid clash with relation)
+  jobTitle        String?
+  country         String?
+  city            String?
+  // Status
+  status          String   @default("lead")  // lead | qualified | customer | churned | blocked
+  tags           String   @default("[]")  // JSON array
+  // Assignments
+  assignedAgentId String?
+  // Consent preferences
+  consentMarketingSms Boolean @default(false)
+  consentMarketingEmail Boolean @default(false)
+  consentCallRecording Boolean @default(false)
+  // Links
+  leadId          String?  // back-reference to Lead if originated as a lead
+  // Audit
+  createdBy       String?
+  creator         User?    @relation("CustomerCreator", fields: [createdBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@index([companyId, phone])
+  @@index([companyId, email])
+}
+
+model SharedInboxMessage {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Channel
+  channel         String   // "voice" | "sms" | "email" | "web_chat" | "whatsapp_disabled"
+  // Direction
+  direction       String   // "inbound" | "outbound"
+  // Parties
+  fromAddress     String
+  toAddress       String
+  fromName        String?
+  toName          String?
+  // Content
+  subject         String?
+  body            String
+  mediaUrls       String   @default("[]")  // JSON array
+  // Threading
+  threadId        String?
+  // Assignment
+  assignedToId    String?  // user id
+  // Status
+  status          String   @default("unread")  // unread | read | pending_reply | resolved | escalated
+  isAiGenerated   Boolean  @default(false)  // per directive §14: distinguish AI vs provider-confirmed
+  isProviderConfirmed Boolean @default(false)  // set true when SMS/email delivery receipt arrives
+  // Tags + internal notes
+  tags            String   @default("[]")  // JSON array
+  internalNotes   String?  // for internal context (not sent to customer)
+  // Audit
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, channel, status])
+  @@index([companyId, assignedToId])
+  @@index([threadId])
+}
+
+model CallAnalytics {
+  id              String   @id @default(cuid())
+  callId          String   @unique
+  call            Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  // Sentiment
+  overallSentiment String? // "positive" | "neutral" | "negative" | "mixed"
+  sentimentScore   Float?  // -1 to 1
+  sentimentTimeline String? // JSON array of { timestampSec, score }
+  // Topics
+  topics          String?  // JSON array of { topic, confidence, mentions }
+  // Quality
+  talkToListenRatio Float?  // 0-2 (1 = balanced)
+  silencePct       Float?  // 0-100
+  interruptionCount Int?
+  // Agent performance (if human-handled)
+  agentScorecard  String?  // JSON: { greeting, empathy, accuracy, closing } each 0-5
+  // Compliance
+  complianceFlags  String?  // JSON array: ["disclosure_missing", "dnc_violation_attempt"]
+  // Generated by
+  generatedBy     String   @default("ai")  // ai | human
+  generatedAt     DateTime @default(now())
+  reviewedAt      DateTime?
+  reviewedBy      String?
+
+  @@index([callId])
+}
+
+// ==================== PHASE 6: BILLING + SAAS ====================
+
+model SubscriptionPlan {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  displayName     String
+  description     String?
+  // Pricing (USD/month)
+  priceMonthly    Float    @default(0)
+  priceYearly     Float    @default(0)
+  // Limits
+  maxPhoneNumbers Int      @default(1)
+  maxUsers        Int      @default(3)
+  maxAiMinutes    Int      @default(100)
+  maxTtsCharacters Int     @default(10000)
+  maxAsrSeconds   Int      @default(3600)
+  maxRecordingStorageMb Int @default(500)
+  maxOutboundCallsPerDay Int @default(50)
+  // Features (JSON array of feature flags)
+  features        String   @default("[]")
+  // Trial
+  trialDays       Int      @default(0)
+  // Status
+  isPublic        Boolean  @default(true)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  subscriptions   TenantSubscription[]
+}
+
+model TenantSubscription {
+  id              String   @id @default(cuid())
+  companyId       String   @unique
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planId          String
+  plan            SubscriptionPlan @relation(fields: [planId], references: [id])
+  // Billing cycle
+  billingCycle   String   @default("monthly")  // monthly | yearly
+  startsAt       DateTime @default(now())
+  endsAt         DateTime?
+  // Trial
+  isTrial        Boolean  @default(false)
+  trialEndsAt    DateTime?
+  // Status
+  status         String   @default("active")  // active | past_due | cancelled | suspended
+  cancelledAt    DateTime?
+  // Payment method reference (provider-specific)
+  paymentMethodRef String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model UsageCredit {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Credit type
+  creditType      String   // "ai_minutes" | "tts_chars" | "asr_seconds" | "recording_mb" | "outbound_calls"
+  // Balance
+  balance         Float    @default(0)
+  // Auto-recharge
+  autoRechargeThreshold Float @default(0)
+  autoRechargeAmount Float @default(0)
+  // Audit
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, creditType])
+}
+
+model Invoice {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Invoice number (human-readable)
+  invoiceNumber   String   @unique
+  // Period
+  periodStart     DateTime
+  periodEnd       DateTime
+  // Amounts (USD)
+  subtotal        Float
+  tax             Float    @default(0)
+  total           Float
+  // Currency
+  currency        String   @default("USD")
+  // Line items (JSON array of { description, quantity, unitPrice, total })
+  lineItems       String
+  // Status
+  status          String   @default("draft")  // draft | sent | paid | past_due | void | refunded
+  sentAt          DateTime?
+  paidAt          DateTime?
+  dueAt           DateTime?
+  // Payment
+  paymentMethodRef String?
+  // Audit
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status])
+  payments        Payment[]
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoiceId       String?
+  invoice         Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  // Amount
+  amount          Float
+  currency        String   @default("USD")
+  // Provider
+  provider        String   // "stripe" | "sslcommerz" | "manual" | "bank_transfer"
+  providerPaymentId String?
+  // Method
+  method          String   // "card" | "bank" | "wallet" | "manual"
+  // Status
+  status          String   @default("pending")  // pending | succeeded | failed | refunded | disputed
+  processedAt     DateTime?
+  failureReason   String?
+  // Audit
+  createdBy       String?
+  creator         User?    @relation("PaymentCreator", fields: [createdBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, status])
+}
+
+model BillingAdjustment {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Type
+  type            String   // "credit" | "charge" | "refund" | "waiver"
+  // Amount (positive number; sign determined by type)
+  amount          Float
+  currency        String   @default("USD")
+  // Reason
+  reason          String
+  // Reference (optional)
+  invoiceId       String?
+  // Audit (per directive §5: manual adjustments with audit logs)
+  createdBy       String
+  creator         User     @relation("BillingAdjustmentCreator", fields: [createdBy], references: [id])
+  approvedBy      String?
+  approver        User?    @relation("BillingAdjustmentApprover", fields: [approvedBy], references: [id])
+  createdAt       DateTime @default(now())
+
+  @@index([companyId, createdAt])
 }
