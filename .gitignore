@@ -62,3 +62,4 @@ marketingos/db/
 upload/
 *.zip
 *.tar.gz
+tool-results/
