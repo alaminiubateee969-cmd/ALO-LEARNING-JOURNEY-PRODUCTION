@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
 import { emitEvent } from '@/lib/events';
+import { sendSmsViaProvider } from '@/lib/sms-provider-chain';
 
-// POST /api/sms/send — queue an SMS for sending
+// POST /api/sms/send — queue an SMS for sending via the configured provider chain
 // Body: { to: "+15551234567", body: "Hello!", leadId?: string, contactId?: string }
 //
-// Real delivery: in production this would call Twilio/httpsms/etc.
-// Here we mark as "queued" → simulate send → mark as "sent" after 1s.
-// The SmsMessage row persists a full audit trail regardless.
+// Real delivery: when TWILIO_* / HTTPSMS_* / TELNYX_* / DOMOVINA_SMS_* env vars
+// are configured, the chain calls the real provider API synchronously and
+// updates the SmsMessage row with the real provider message id. When no
+// provider is configured, the row is persisted as 'simulation' so the UI
+// can label it accordingly (no false claim of real delivery).
 export async function POST(req: NextRequest) {
   try {
     const token = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -32,7 +35,7 @@ export async function POST(req: NextRequest) {
     const sms = await db.smsMessage.create({
       data: {
         to,
-        from: null, // would be the assigned sender number in production
+        from: null,
         body: text,
         status: 'queued',
         leadId: body.leadId || null,
@@ -42,44 +45,55 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Simulate async send — in production this would call Twilio / httpsms / etc.
-    // We just mark as "sent" after a short delay.
-    setTimeout(async () => {
-      try {
-        await db.smsMessage.update({
-          where: { id: sms.id },
-          data: {
-            status: 'sent',
-            providerMessageId: `sim_${sms.id}_${Date.now()}`,
-          },
-        });
-        await emitEvent({
-          companyId: payload.companyId,
-          userId: payload.userId,
-          type: 'sms.sent',
-          title: 'SMS sent',
-          description: `SMS sent to ${to}: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"`,
-          resourceType: 'sms',
-          resourceId: sms.id,
-          link: body.leadId ? '/crm' : undefined,
-          metadata: { to, body: text.slice(0, 100) },
-        });
-      } catch (err) {
-        console.error('[sms send] failed to update status:', err);
-      }
-    }, 1000);
+    // Dispatch via real provider chain (or simulation when none configured)
+    const result = await sendSmsViaProvider({
+      to,
+      body: text,
+      companyId: payload.companyId,
+      sentBy: payload.userId,
+      leadId: body.leadId,
+      contactId: body.contactId,
+    });
+
+    // Update row with the actual outcome
+    await db.smsMessage.update({
+      where: { id: sms.id },
+      data: {
+        status: result.status === 'simulation' ? 'sent' : result.status,
+        providerMessageId: result.providerMessageId
+          ? `${result.providerName}_${result.providerMessageId}`
+          : `sim_${sms.id}_${Date.now()}`,
+      },
+    });
+
+    // Fire the event for notifications + audit log
+    await emitEvent({
+      companyId: payload.companyId,
+      userId: payload.userId,
+      type: result.simulated ? 'sms.simulated' : 'sms.sent',
+      title: result.simulated ? 'SMS simulated (no provider)' : `SMS sent via ${result.providerName}`,
+      description: `SMS to ${to}: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"`,
+      resourceType: 'sms',
+      resourceId: sms.id,
+      link: body.leadId ? '/crm' : undefined,
+      metadata: { to, body: text.slice(0, 100), provider: result.providerName, simulated: result.simulated },
+    });
 
     return NextResponse.json({
       data: {
         id: sms.id,
         to: sms.to,
         body: sms.body,
-        status: sms.status,
+        status: result.status,
+        provider: result.providerName,
+        providerMessageId: result.providerMessageId,
+        simulated: result.simulated,
         createdAt: sms.createdAt.toISOString(),
+        ...(result.error ? { warning: result.error } : {}),
       },
     }, { status: 201 });
-  } catch (err) {
+  } catch (err: any) {
     console.error('[POST /api/sms/send]', err);
-    return NextResponse.json({ error: 'Failed to send SMS' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to send SMS', message: err?.message?.slice(0, 200) }, { status: 500 });
   }
 }

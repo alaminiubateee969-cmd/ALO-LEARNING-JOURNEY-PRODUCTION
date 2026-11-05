@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
 import { emitEvent } from '@/lib/events';
+import { sendSmsViaProvider } from '@/lib/sms-provider-chain';
 export async function POST(req: NextRequest) {
   try {
     const token = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -24,11 +25,72 @@ export async function POST(req: NextRequest) {
     }
     if (recipients.length === 0) return NextResponse.json({ error: 'No recipients' }, { status: 400 });
     recipients = recipients.slice(0, 100);
-    let sent = 0, failed = 0;
+
+    let sent = 0, failed = 0, simulated = 0;
+    const providerUsed: string[] = [];
     for (const r of recipients) {
-      try { await db.smsMessage.create({ data: { to: r.phone, from: null, body: message, status: 'sent', providerMessageId: `broadcast_${Date.now()}_${sent}`, leadId: r.leadId, companyId: payload.companyId, sentBy: payload.userId } }); sent++; await new Promise(resolve => setTimeout(resolve, 100)); } catch { failed++; }
+      try {
+        // Persist queued row first
+        const sms = await db.smsMessage.create({
+          data: {
+            to: r.phone,
+            from: null,
+            body: message,
+            status: 'queued',
+            leadId: r.leadId,
+            companyId: payload.companyId,
+            sentBy: payload.userId,
+          },
+        });
+
+        // Dispatch via real provider chain
+        const result = await sendSmsViaProvider({
+          to: r.phone,
+          body: message,
+          companyId: payload.companyId,
+          sentBy: payload.userId,
+          leadId: r.leadId,
+        });
+
+        // Update row with outcome
+        await db.smsMessage.update({
+          where: { id: sms.id },
+          data: {
+            status: result.status === 'simulation' ? 'sent' : result.status,
+            providerMessageId: result.providerMessageId
+              ? `${result.providerName}_${result.providerMessageId}`
+              : `broadcast_${Date.now()}_${sent}`,
+          },
+        });
+
+        if (result.simulated) simulated++;
+        if (result.status === 'failed') failed++;
+        else sent++;
+        if (!providerUsed.includes(result.providerName)) providerUsed.push(result.providerName);
+        await new Promise(resolve => setTimeout(resolve, 100)); // rate-limit
+      } catch { failed++; }
     }
-    await emitEvent({ companyId: payload.companyId, userId: payload.userId, type: 'sms.broadcast_sent', title: `Broadcast to ${sent}`, description: message.slice(0, 60), resourceType: 'sms', metadata: { sent, failed } });
-    return NextResponse.json({ data: { sent, failed, total: recipients.length } }, { status: 201 });
-  } catch { return NextResponse.json({ error: 'Failed' }, { status: 500 }); }
+
+    await emitEvent({
+      companyId: payload.companyId,
+      userId: payload.userId,
+      type: simulated > 0 && sent === 0 ? 'sms.broadcast_simulated' : 'sms.broadcast_sent',
+      title: `Broadcast to ${sent} (${simulated} simulated)`,
+      description: message.slice(0, 60),
+      resourceType: 'sms',
+      metadata: { sent, failed, simulated, total: recipients.length, providers: providerUsed },
+    });
+
+    return NextResponse.json({
+      data: {
+        sent,
+        failed,
+        simulated,
+        total: recipients.length,
+        providers: providerUsed,
+      },
+    }, { status: 201 });
+  } catch (e: any) {
+    return NextResponse.json({ error: 'Failed', message: e?.message?.slice(0, 200) }, { status: 500 });
+  }
 }
