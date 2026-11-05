@@ -35,6 +35,9 @@ import {
   Bell,
   Network,
   Plug,
+  PhoneCall,
+  Headphones,
+  Sparkles,
 } from 'lucide-react';
 
 // Lazy load views
@@ -51,6 +54,11 @@ const TeamView = lazy(() => import('@/components/views/team-view').then(m => ({ 
 const WorkforceView = lazy(() => import('@/components/views/workforce-view').then(m => ({ default: m.WorkforceView })));
 const AiAgentsView = lazy(() => import('@/components/views/ai-agents-view').then(m => ({ default: m.AiAgentsView })));
 const AiModelsView = lazy(() => import('@/components/views/ai-models-view').then(m => ({ default: m.AiModelsView })));
+const VoiceAgentsView = lazy(() => import('@/components/views/voice-agents-view').then(m => ({ default: m.VoiceAgentsView })));
+const CallsView = lazy(() => import('@/components/views/calls-view').then(m => ({ default: m.CallsView })));
+const VoiceStudioView = lazy(() => import('@/components/views/voice-studio-view').then(m => ({ default: m.VoiceStudioView })));
+const ContactCenterView = lazy(() => import('@/components/views/contact-center-view').then(m => ({ default: m.ContactCenterView })));
+const BillingView = lazy(() => import('@/components/views/billing-view').then(m => ({ default: m.BillingView })));
 const SettingsView = lazy(() => import('@/components/views/settings-view').then(m => ({ default: m.SettingsView })));
 const IntegrationsView = lazy(() => import('@/components/views/integrations-view').then(m => ({ default: m.IntegrationsView })));
 const MessagesView = lazy(() => import('@/components/views/messages-view'));
@@ -77,6 +85,11 @@ const views: Record<ViewId, React.LazyExoticComponent<React.ComponentType>> = {
   integrations: IntegrationsView,
   subscriptions: SettingsView,
   settings: SettingsView,
+  'voice-agents': VoiceAgentsView,
+  'calls': CallsView,
+  'voice-studio': VoiceStudioView,
+  'contact-center': ContactCenterView,
+  'billing-voice': BillingView,
 };
 
 interface NavItem {
@@ -100,16 +113,21 @@ const navItems: NavItem[] = [
   { id: 'seo', label: 'SEO Engine', icon: <Search className="w-4 h-4" />, section: 'Marketing' },
   { id: 'campaigns', label: 'Campaigns', icon: <Megaphone className="w-4 h-4" />, section: 'Marketing' },
   { id: 'content', label: 'Content', icon: <FileText className="w-4 h-4" />, section: 'Marketing' },
+  { id: 'voice-agents', label: 'Voice Agents', icon: <Bot className="w-4 h-4" />, section: 'Voice Center' },
+  { id: 'calls', label: 'Call Center', icon: <PhoneCall className="w-4 h-4" />, badge: 'Live', section: 'Voice Center' },
+  { id: 'voice-studio', label: 'Voice Studio', icon: <Sparkles className="w-4 h-4" />, section: 'Voice Center' },
+  { id: 'contact-center', label: 'Contact Center', icon: <Headphones className="w-4 h-4" />, section: 'Voice Center' },
   { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="w-4 h-4" />, section: 'Reports' },
   { id: 'messages', label: 'Messages', icon: <Bell className="w-4 h-4" />, section: 'Reports' },
   { id: 'announcements', label: 'Announcements', icon: <Megaphone className="w-4 h-4" />, section: 'Reports' },
   { id: 'audit-logs', label: 'Audit Logs', icon: <FileText className="w-4 h-4" />, section: 'Reports' },
   { id: 'team', label: 'Team', icon: <UserCog className="w-4 h-4" />, section: 'Management' },
+  { id: 'billing-voice', label: 'Billing', icon: <CreditCard className="w-4 h-4" />, section: 'Management' },
   { id: 'subscriptions', label: 'Subscription', icon: <CreditCard className="w-4 h-4" />, section: 'Management' },
   { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, section: 'Management' },
 ];
 
-const sections = ['Main', 'Workforce', 'Connect', 'AI', 'Marketing', 'Reports', 'Management'];
+const sections = ['Main', 'Workforce', 'Connect', 'AI', 'Marketing', 'Voice Center', 'Reports', 'Management'];
 
 function ViewFallback() {
   return (

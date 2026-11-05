@@ -19,7 +19,12 @@ export type ViewId =
   | 'subscriptions'
   | 'settings'
   | 'ai-agents'
-  | 'ai-models';
+  | 'ai-models'
+  | 'voice-agents'
+  | 'calls'
+  | 'voice-studio'
+  | 'contact-center'
+  | 'billing-voice';
 
 export interface AuthUser {
   id: string;
