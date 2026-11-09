@@ -73,31 +73,31 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Login to GitHub Container Registry
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+      - name: Determine push strategy
+        id: push-strategy
+        run: |
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "push=true" >> $GITHUB_OUTPUT
+            echo "✅ Docker Hub credentials present — will push"
+          else
+            echo "push=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Docker Hub credentials not configured — build only (no push)"
+            echo "Configure DOCKERHUB_USERNAME + DOCKERHUB_TOKEN at Settings → Secrets → Actions"
+          fi
 
-      - name: Build only (no push — secrets not configured)
-        if: ${{ secrets.DOCKERHUB_USERNAME == '' }}
+      - name: Build (and push if credentials present)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          push: false
+          push: ${{ steps.push-strategy.outputs.push == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=local,src=/tmp/.buildx-cache

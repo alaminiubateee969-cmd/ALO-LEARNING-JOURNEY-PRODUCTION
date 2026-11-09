@@ -38,16 +38,25 @@ jobs:
     name: Deploy to VPS
     runs-on: ubuntu-24.04
     timeout-minutes: 18
-    # Skip deploy entirely when secrets aren't configured — prevents 228 failing runs
-    if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_SSH_KEY != '' }}
-
-    environment:
-      name: production
-      url: ${{ vars.DEPLOY_URL }}
 
     steps:
-      # ── Fail-fast on missing required secrets ────────────────
+      # ── Skip gracefully when secrets aren't configured ──────
+      - name: Skip deploy when secrets not configured
+        id: check-secrets
+        run: |
+          if [ -z "${{ secrets.DEPLOY_HOST }}" ] || [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Deploy secrets (DEPLOY_HOST / DEPLOY_SSH_KEY) not configured — skipping deploy."
+            echo "Configure them at: Settings → Secrets and variables → Actions"
+            exit 0
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "✅ Deploy secrets present"
+          fi
+
+      # ── Verify required secrets are configured (fail-fast) ────
       - name: Verify required secrets are configured
+        if: steps.check-secrets.outputs.skip != 'true'
         run: |
           set -euo pipefail
           MISSING=()
@@ -63,6 +72,7 @@ jobs:
 
       # ── Resolve the exact commit SHA being deployed ──────────
       - name: Resolve commit SHA for image tag
+        if: steps.check-secrets.outputs.skip != 'true'
         id: resolve
         run: |
           set -euo pipefail
@@ -79,6 +89,7 @@ jobs:
           echo "👉 Full SHA: ${FULL_SHA:-manual-deploy}"
 
       - name: Checkout repository
+        if: steps.check-secrets.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
@@ -86,6 +97,7 @@ jobs:
 
       # ── Configure SSH key ─────────────────────────────────────
       - name: Configure SSH key
+        if: steps.check-secrets.outputs.skip != 'true'
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
@@ -102,6 +114,7 @@ jobs:
 
       # ── Save current image tag for rollback ──────────────────
       - name: Save current running image tag
+        if: steps.check-secrets.outputs.skip != 'true'
         id: save-current
         continue-on-error: true
         run: |
@@ -118,6 +131,7 @@ jobs:
 
       # ── Pull latest image on VPS ─────────────────────────────
       - name: Pull latest Docker image
+        if: steps.check-secrets.outputs.skip != 'true'
         run: |
           set -euo pipefail
           IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.resolve.outputs.short_sha }}"
@@ -131,6 +145,7 @@ jobs:
 
       # ── Run database migrations ───────────────────────────────
       - name: Run Prisma migrations
+        if: steps.check-secrets.outputs.skip != 'true'
         run: |
           set -euo pipefail
           # NOTE: removed "|| true" — if migrations fail, the deploy MUST stop
@@ -145,6 +160,7 @@ jobs:
 
       # ── Rolling restart ──────────────────────────────────────
       - name: Rolling restart
+        if: steps.check-secrets.outputs.skip != 'true'
         env:
           IMAGE_TAG: ${{ steps.resolve.outputs.short_sha }}
           DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -177,6 +193,7 @@ jobs:
 
       # ── Health check verification ────────────────────────────
       - name: Verify health check
+        if: steps.check-secrets.outputs.skip != 'true'
         id: healthcheck
         env:
           DEPLOY_URL: ${{ vars.DEPLOY_URL || format('http://{0}', env.DEPLOY_HOST) }}
@@ -203,7 +220,7 @@ jobs:
 
       # ── Cleanup old images ───────────────────────────────────
       - name: Cleanup dangling images
-        if: success()
+        if: success() && steps.check-secrets.outputs.skip != 'true'
         continue-on-error: true
         run: |
           ssh -i ~/.ssh/deploy_key \
@@ -214,7 +231,7 @@ jobs:
 
       # ── Rollback on failure ──────────────────────────────────
       - name: Rollback to previous image
-        if: failure()
+        if: failure() && steps.check-secrets.outputs.skip != 'true'
         env:
           PREV_IMAGE: ${{ steps.save-current.outputs.previous_image }}
         run: |
@@ -240,7 +257,7 @@ jobs:
 
       # ── Notify (Slack / Discord / generic webhook) ───────────
       - name: Send deployment notification
-        if: always()
+        if: always() && steps.check-secrets.outputs.skip != 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           DEPLOY_WEBHOOK: ${{ secrets.DEPLOY_WEBHOOK_URL }}
@@ -283,7 +300,7 @@ jobs:
 
       # ── Summary ───────────────────────────────────────────────
       - name: Deployment summary
-        if: always()
+        if: always() && steps.check-secrets.outputs.skip != 'true'
         run: |
           {
             echo "## Deployment Summary"
