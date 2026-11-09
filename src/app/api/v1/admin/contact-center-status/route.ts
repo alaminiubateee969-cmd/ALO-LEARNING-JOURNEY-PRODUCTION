@@ -40,7 +40,6 @@ export async function GET(request: NextRequest) {
     db.callQueue.findMany({
       where: { status: 'active' },
       take: 200,
-      include: { _count: { select: { calls: true } } },
     }),
     db.supervisorAction.findMany({
       where: { timestamp: { gte: since24h } },

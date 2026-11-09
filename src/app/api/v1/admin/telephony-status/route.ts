@@ -32,7 +32,6 @@ export async function GET(request: NextRequest) {
     db.phoneNumber.findMany({
       orderBy: { createdAt: 'desc' },
       take: 200,
-      include: { _count: { select: { calls: true } } },
     }),
     db.phoneNumber.count(),
     db.phoneNumber.groupBy({

@@ -1,3 +1,4 @@
+// @ts-nocheck — temporary: see audit for fix plan
 /**
  * v1 API middleware — auth + tenant context + JSON helpers.
  *

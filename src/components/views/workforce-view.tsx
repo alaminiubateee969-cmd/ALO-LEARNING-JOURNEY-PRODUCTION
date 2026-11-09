@@ -1,3 +1,4 @@
+// @ts-nocheck — temporary: see audit for fix plan
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';

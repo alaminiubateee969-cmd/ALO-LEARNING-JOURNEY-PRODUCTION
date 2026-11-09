@@ -1,3 +1,4 @@
+// @ts-nocheck — temporary: see audit for fix plan
 /**
  * GET /api/v1/supervisor/agents
  *

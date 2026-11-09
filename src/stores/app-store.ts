@@ -38,12 +38,19 @@ export interface AuthUser {
   token: string;
 }
 
+interface Company {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 interface AppState {
   // Auth
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isSidebarOpen: boolean;
+  currentCompany: Company | null;
 
   // Navigation
   activeView: ViewId;
@@ -62,14 +69,20 @@ export const useAppStore = create<AppState>((set) => ({
   isAuthenticated: false,
   isLoading: true,
   isSidebarOpen: true,
+  currentCompany: null,
   activeView: 'dashboard',
 
-  setUser: (user) => set({ user, isAuthenticated: !!user, isLoading: false }),
+  setUser: (user) => set({
+    user,
+    isAuthenticated: !!user,
+    isLoading: false,
+    currentCompany: user ? { id: (user as any).companyId || '', name: (user as any).companyName || '', slug: '' } : null,
+  }),
   logout: () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('mos_token');
     }
-    set({ user: null, isAuthenticated: false, isLoading: false, activeView: 'dashboard' });
+    set({ user: null, isAuthenticated: false, isLoading: false, activeView: 'dashboard', currentCompany: null });
   },
   setLoading: (isLoading) => set({ isLoading }),
   setActiveView: (activeView) => set({ activeView }),
