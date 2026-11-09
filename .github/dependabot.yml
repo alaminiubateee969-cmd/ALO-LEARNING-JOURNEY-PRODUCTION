@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "sharp"
+        versions: [">=0.33.0"]
+    # Don't open PRs for sub-projects that have their own package.json
+    # marketingos/ is a separate sub-project with its own deps
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

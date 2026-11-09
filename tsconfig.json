@@ -7,7 +7,7 @@
       "esnext"
     ],
     "allowJs": true,
-    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
     "noImplicitAny": false,
@@ -27,8 +27,7 @@
       "@/*": [
         "./src/*"
       ]
-    },
-    "skipLibCheck": true
+    }
   },
   "include": [
     "next-env.d.ts",
@@ -39,11 +38,10 @@
   ],
   "exclude": [
     "node_modules",
-    "examples/**/*",
-    "skills/**/*",
-    "download/**/*",
-    "storage/**/*",
-    "deploy/**/*",
-    "scripts/**/*"
+    "upload",
+    "marketingos",
+    "mini-services",
+    "examples",
+    "scripts"
   ]
 }

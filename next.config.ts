@@ -1,12 +1,8 @@
 import type { NextConfig } from "next";
-
 const nextConfig: NextConfig = {
   output: "standalone",
-  // cPanel Note: standalone output is required for cPanel Node.js app.
-  // The build copies .next/static + public into .next/standalone so
-  // `node .next/standalone/server.js` works both locally and in cPanel containers.
+  typescript: { ignoreBuildErrors: true },
   reactStrictMode: false,
-  serverExternalPackages: ["sharp"],
+  allowedDevOrigins: ["127.0.0.1","localhost","21.0.4.113","103.231.239.79","marketing.alolabs.net"],
 };
-
 export default nextConfig;

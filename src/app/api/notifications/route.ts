@@ -1,44 +1,35 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { ensureSeeded } from "@/lib/seed";
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { verifyToken } from '@/lib/auth';
 
-export async function GET() {
-  await ensureSeeded();
-  const notifications = await db.notification.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
-  const unread = notifications.filter((n) => !n.read).length;
-  return NextResponse.json({ notifications, unread });
-}
+// GET /api/notifications — list current user's notifications
+export async function GET(req: NextRequest) {
+  try {
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
+    const payload = await verifyToken(token);
+    if (!payload || !payload.userId) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
 
-export async function POST(req: Request) {
-  await ensureSeeded();
-  const { action, id } = await req.json().catch(() => ({ action: "mark_all", id: null }));
+    const { isRead, limit } = Object.fromEntries(new URL(req.url).searchParams);
+    const where: any = { userId: payload.userId };
+    if (isRead === 'true') where.isRead = true;
+    if (isRead === 'false') where.isRead = false;
 
-  if (action === "mark_all") {
-    await db.notification.updateMany({
-      where: { read: false },
-      data: { read: true },
+    const notifications = await db.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit ? Number(limit) : 50,
     });
-    await db.auditLog.create({
-      data: { actor: "admin", action: "notifications.mark_all_read", detail: "Marked all notifications as read", severity: "info" },
+
+    const unreadCount = await db.notification.count({
+      where: { userId: payload.userId, isRead: false },
     });
-    return NextResponse.json({ ok: true });
-  }
 
-  if (action === "mark_one" && id) {
-    await db.notification.update({ where: { id }, data: { read: true } });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ data: notifications, unreadCount });
+  } catch (err) {
+    console.error('[GET /api/notifications]', err);
+    return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
   }
-
-  if (action === "clear_all") {
-    await db.notification.deleteMany({});
-    await db.auditLog.create({
-      data: { actor: "admin", action: "notifications.clear_all", detail: "Cleared all notifications", severity: "info" },
-    });
-    return NextResponse.json({ ok: true });
-  }
-
-  return NextResponse.json({ error: "unknown action" }, { status: 400 });
 }
