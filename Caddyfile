@@ -1,13 +1,18 @@
-# DEPRECATED REFERENCE ONLY — this repository does not establish whether the
-# live server uses Caddy, Nginx, or another proxy. Inspect the running service
-# and authoritative configuration read-only before making any proxy change.
-# Do not install this file without an explicit, reviewed proxy decision.
-learn.aloeducation.com {
-    reverse_proxy 127.0.0.1:3017
-    encode gzip
-    header {
-        X-Content-Type-Options nosniff
-        X-Frame-Options DENY
-        X-XSS-Protection "1; mode=block"
-    }
+marketing.alolabs.net {
+	reverse_proxy localhost:3000 {
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}
+www.marketing.alolabs.net {
+	redir https://marketing.alolabs.net{uri} permanent
 }

@@ -1,94 +1,113 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { updateLeadSchema } from "@/lib/crm-validation";
-import { parseJson, resolveCompanyScope, scopeError, validationError } from "@/lib/crm-server";
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { verifyToken } from '@/lib/auth';
+import { emitEvent } from '@/lib/events';
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+// GET /api/crm/leads/[id]
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
+    const payload = await verifyToken(token);
+    if (!payload || !payload.companyId) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-type RouteContext = { params: Promise<{ id: string }> };
-
-export async function GET(request: Request, context: RouteContext) {
-  const scope = await resolveCompanyScope(request);
-  if (scope.error) return scopeError(scope);
-  const { id } = await context.params;
-
-  const lead = await db.lead.findFirst({
-    where: { id, companyId: scope.companyId },
-    include: {
-      company: { select: { name: true, domain: true } },
-      activities: { orderBy: { createdAt: "desc" }, take: 50 },
-      quotations: { orderBy: { createdAt: "desc" }, include: { items: { orderBy: { position: "asc" } } } },
-    },
-  });
-  if (!lead) return NextResponse.json({ error: "lead_not_found" }, { status: 404 });
-  return NextResponse.json({ lead }, { headers: { "Cache-Control": "private, no-store" } });
+    const { id } = await params;
+    const lead = await db.lead.findFirst({
+      where: { id, companyId: payload.companyId },
+      include: {
+        activities: { orderBy: { createdAt: 'desc' } },
+        tags: true,
+        deal: true,
+        assignedTo: { include: { user: true } },
+      },
+    });
+    if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json({ lead });
+  } catch (err) {
+    console.error('[GET /api/crm/leads/[id]]', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
 
-export async function PATCH(request: Request, context: RouteContext) {
-  const scope = await resolveCompanyScope(request);
-  if (scope.error) return scopeError(scope);
-  const { id } = await context.params;
-  const parsedBody = await parseJson(request);
-  if ("response" in parsedBody) return parsedBody.response;
-  const parsed = updateLeadSchema.safeParse(parsedBody.body);
-  if (!parsed.success) return validationError(parsed.error.issues);
-  if (Object.keys(parsed.data).length === 0) {
-    return NextResponse.json({ error: "At least one field is required." }, { status: 400 });
-  }
+// PATCH /api/crm/leads/[id] — update lead (status, score, notes, etc.)
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
+    const payload = await verifyToken(token);
+    if (!payload || !payload.companyId) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-  const result = await db.$transaction(async (tx) => {
-    const existing = await tx.lead.findFirst({ where: { id, companyId: scope.companyId } });
-    if (!existing) return { notFound: true as const };
+    const { id } = await params;
+    const data = await req.json();
 
-    const nextEmail = parsed.data.email === undefined ? existing.email : parsed.data.email;
-    const nextPhone = parsed.data.phone === undefined ? existing.phone : parsed.data.phone;
-    if (!nextEmail && !nextPhone) return { missingContact: true as const };
+    // Verify ownership
+    const existing = await db.lead.findFirst({ where: { id, companyId: payload.companyId } });
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    if (
-      parsed.data.consentStatus === "consented" &&
-      parsed.data.consentRecordedAt &&
-      parsed.data.consentRecordedAt > new Date()
-    ) return { futureConsent: true as const };
+    const update: any = {};
+    const allowedFields = ['name', 'email', 'phone', 'companyName', 'source', 'status', 'score', 'notes', 'assignedToId'];
+    for (const field of allowedFields) {
+      if (data[field] !== undefined) update[field] = data[field];
+    }
 
-    const updated = await tx.lead.update({ where: { id }, data: parsed.data });
-    if (parsed.data.stage && parsed.data.stage !== existing.stage) {
-      await tx.leadActivity.create({
+    const lead = await db.lead.update({
+      where: { id },
+      data: update,
+      include: { tags: true, activities: { take: 5, orderBy: { createdAt: 'desc' } } },
+    });
+
+    // Log status changes as activities (orocrm-style audit trail)
+    if (data.status && data.status !== existing.status) {
+      await db.leadActivity.create({
         data: {
+          type: 'status_change',
+          content: `Status changed from ${existing.status} → ${data.status}`,
           leadId: id,
-          type: "stage_change",
-          body: `Stage changed from ${existing.stage} to ${parsed.data.stage}.`,
         },
       });
-    }
-    if (parsed.data.consentStatus && parsed.data.consentStatus !== existing.consentStatus) {
-      await tx.leadActivity.create({
-        data: { leadId: id, type: "note", body: `Marketing contact preference updated to ${parsed.data.consentStatus}.` },
+
+      // Fire event for status change — including "deal.won" if relevant
+      const isWon = data.status === 'won' || data.status === 'qualified';
+      await emitEvent({
+        companyId: payload.companyId,
+        userId: payload.userId,
+        type: `lead.status_changed`,
+        title: `Lead status updated`,
+        description: `Lead "${lead.name}" status: ${existing.status} → ${data.status}`,
+        resourceType: 'lead',
+        resourceId: id,
+        link: '/crm',
+        metadata: { oldStatus: existing.status, newStatus: data.status, leadName: lead.name },
       });
     }
-    await tx.auditLog.create({ data: { actor: "admin", action: "crm.lead.updated", detail: `Updated lead record ${id}`, severity: "info" } });
-    return { lead: updated };
-  });
 
-  if ("notFound" in result) return NextResponse.json({ error: "lead_not_found" }, { status: 404 });
-  if ("missingContact" in result) return NextResponse.json({ error: "At least one email address or phone number must remain on the record." }, { status: 400 });
-  if ("futureConsent" in result) return NextResponse.json({ error: "Consent capture date cannot be in the future." }, { status: 400 });
-  return NextResponse.json({ lead: result.lead }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ lead });
+  } catch (err) {
+    console.error('[PATCH /api/crm/leads/[id]]', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
 
-export async function DELETE(request: Request, context: RouteContext) {
-  const scope = await resolveCompanyScope(request);
-  if (scope.error) return scopeError(scope);
-  const { id } = await context.params;
+// DELETE /api/crm/leads/[id]
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
+    const payload = await verifyToken(token);
+    if (!payload || !payload.companyId) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-  const result = await db.$transaction(async (tx) => {
-    const existing = await tx.lead.findFirst({ where: { id, companyId: scope.companyId }, select: { id: true } });
-    if (!existing) return false;
-    await tx.auditLog.create({ data: { actor: "admin", action: "crm.lead.deleted", detail: `Deleted lead record ${id}`, severity: "warn" } });
-    await tx.lead.delete({ where: { id } });
-    return true;
-  });
+    const { id } = await params;
+    const existing = await db.lead.findFirst({ where: { id, companyId: payload.companyId } });
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  if (!result) return NextResponse.json({ error: "lead_not_found" }, { status: 404 });
-  return new NextResponse(null, { status: 204 });
+    // Cascade-delete child records (SQLite doesn't enforce referential actions for these)
+    await db.leadActivity.deleteMany({ where: { leadId: id } });
+    await db.leadTag.deleteMany({ where: { leadId: id } });
+    await db.lead.delete({ where: { id } });
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/crm/leads/[id]]', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
