@@ -7,6 +7,8 @@
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx scripts/verify-login.ts && tsx scripts/test-integrations.ts && tsx scripts/test-ollama-cloud.ts && tsx scripts/test-sms-providers.ts && tsx scripts/test-voice-contact-center.ts",
     "db:push": "prisma db push --accept-data-loss",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
