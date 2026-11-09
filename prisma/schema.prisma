@@ -87,6 +87,9 @@ model Company {
   payments       Payment[]
   billingAdjustments BillingAdjustment[]
   expenses     Expense[]
+  skills       Skill[]
+  prompts      Prompt[]
+  agentProfiles AgentProfile[]
 }
 
 // ==================== USER & ROLES ====================
@@ -526,6 +529,7 @@ model Department {
   color         String?
   companyId     String
   company       Company  @relation(fields: [companyId], references: [id])
+  prompts       Prompt[] @relation("PromptDepartment")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -2494,4 +2498,95 @@ model Expense {
 
   @@index([companyId, date])
   @@index([companyId, status])
+}
+
+// ==================== SKILLS + PROMPTS + AGENT PROFILES ====================
+// Comprehensive skill registry + prompt library + AI Agent profiles (2,000)
+
+model Skill {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  displayName     String
+  category        String   // marketing, sales, engineering, finance, operations, support, creative, data, security, management
+  subcategory     String?
+  description     String
+  proficiencyLevels String  @default("[\"beginner\",\"intermediate\",\"advanced\",\"expert\"]")
+  prerequisites   String   @default("[]")  // JSON: skill IDs required before this
+  tools           String   @default("[]")  // JSON: tool names this skill uses
+  isActive        Boolean  @default(true)
+  companyId       String?
+  company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([category, isActive])
+}
+
+model Prompt {
+  id              String   @id @default(cuid())
+  name            String
+  category        String   // system, task, role, instruction, template
+  subcategory     String?
+  content         String   // The prompt text (with {{variables}})
+  variables       String   @default("[]")  // JSON: list of template variables
+  language        String   @default("en")
+  tags            String   @default("[]")  // JSON
+  companyId       String?
+  company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  departmentId    String?
+  department      Department? @relation("PromptDepartment", fields: [departmentId], references: [id])
+  applicableRoles String   @default("[]")  // JSON: employee levels
+  version         Int      @default(1)
+  isActive        Boolean  @default(true)
+  useCount       Int      @default(0)
+  rating          Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([category, isActive])
+  @@index([departmentId])
+}
+
+model AgentProfile {
+  id              String   @id @default(cuid())
+  agentId         String   @unique  // Links to Employee.employeeId (EMP-XXXX)
+  name            String
+  role            String   // Chief Marketing Officer, SEO Specialist, etc.
+  department      String
+  level           String   // executive, director, manager, supervisor, specialist, worker
+
+  // Capabilities
+  skillsJson     String   @default("[]")  // JSON: array of skill names
+  toolsJson      String   @default("[]")  // JSON: array of tool names
+  promptsJson    String   @default("[]")  // JSON: array of prompt IDs
+  sopsJson       String   @default("[]")  // JSON: array of SOP IDs
+
+  // Model config
+  modelTier      String   @default("balanced")
+  preferredModel String?
+
+  // Knowledge + Memory
+  knowledgeBaseIds String  @default("[]")  // JSON: knowledge node IDs
+  memoryType     String   @default("episodic")  // episodic, semantic, procedural, working
+
+  // Behavior
+  constitution   String   @default("")  // Behavioral rules
+  authority      String   @default("{}")  // JSON: what they can authorize
+  kpisJson       String   @default("[]")  // JSON: KPI definitions
+  collaborationRules String  @default("[]")  // JSON: who they can collaborate with
+  escalationRules String  @default("[]")  // JSON: when to escalate
+
+  // Status
+  isActive       Boolean  @default(true)
+  totalExecutions Int     @default(0)
+  successRate   Float     @default(100)
+  avgLatencyMs  Int       @default(0)
+
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([companyId, isActive])
+  @@index([companyId, department])
 }
