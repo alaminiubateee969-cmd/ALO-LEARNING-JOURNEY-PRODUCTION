@@ -208,11 +208,12 @@ function safeJsonParse<T>(str: string | null | undefined, fallback: T): T {
 // ============================================================================
 
 export async function getEmployee(
-  employeeId: string
+  employeeIdOrId: string
 ): Promise<EmployeeWithRelations | null> {
   try {
-    const employee = await db.employee.findUnique({
-      where: { employeeId },
+    // Try by employeeId first (e.g. "EMP-0306"), then fall back to id (cuid)
+    let employee = await db.employee.findUnique({
+      where: { employeeId: employeeIdOrId },
       include: {
         department: {
           select: {
@@ -236,6 +237,23 @@ export async function getEmployee(
         },
       },
     });
+    if (!employee) {
+      // Fall back to cuid id
+      employee = await db.employee.findUnique({
+        where: { id: employeeIdOrId },
+        include: {
+          department: {
+            select: {
+              id: true, name: true, code: true, description: true,
+              parentId: true, level: true, icon: true, color: true,
+            },
+          },
+          reportsTo: {
+            select: { id: true, employeeId: true, name: true, title: true },
+          },
+        },
+      });
+    }
     return employee as EmployeeWithRelations | null;
   } catch (error) {
     console.error('[AgentRegistry.getEmployee] Error:', error);
