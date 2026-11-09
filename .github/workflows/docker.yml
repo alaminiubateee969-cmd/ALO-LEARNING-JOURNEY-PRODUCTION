@@ -4,10 +4,15 @@
 name: Docker Build & Push
 
 on:
+  # Build on version tags (releases) + manual dispatch.
+  # Automatic push trigger disabled to prevent failing runs when Docker Hub secrets aren't set.
+  # To enable: set DOCKERHUB_USERNAME + DOCKERHUB_TOKEN secrets, then uncomment push below.
+  # push:
+  #   branches: [main]
   push:
-    branches: [main]
     tags:
       - "v*"
+  workflow_dispatch:
 
 concurrency:
   group: docker-${{ github.ref }}

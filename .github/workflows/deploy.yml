@@ -8,9 +8,11 @@
 name: Deploy to VPS
 
 on:
-  push:
-    branches: [main]
-  # Manual trigger for re-deploys without code change
+  # Only trigger on manual dispatch — prevents 228+ failing runs when deploy secrets aren't set.
+  # To enable automatic deploy on push: set DEPLOY_HOST + DEPLOY_SSH_KEY secrets, then
+  # uncomment the push trigger below.
+  # push:
+  #   branches: [main]
   workflow_dispatch:
     inputs:
       image_tag:
