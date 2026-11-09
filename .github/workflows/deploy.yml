@@ -75,7 +75,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout exact SHA
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Fail closed if networking secrets are missing
         env:
@@ -178,7 +178,7 @@ jobs:
     environment: production
     steps:
       - name: Checkout exact SHA
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Fail closed if deployment secrets are missing
         env:
