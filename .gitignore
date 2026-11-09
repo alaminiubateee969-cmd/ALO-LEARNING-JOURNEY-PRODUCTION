@@ -63,3 +63,14 @@ upload/
 *.zip
 *.tar.gz
 tool-results/
+
+# Local secrets and generated artifacts
+.env
+.env.local
+.env.production
+.env.development.local
+.env.test.local
+node_modules/
+.next/
+*.pem
+*.key
