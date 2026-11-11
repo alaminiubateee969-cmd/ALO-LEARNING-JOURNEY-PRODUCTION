@@ -1,5 +1,14 @@
 # Deployment Runbook — Apply Sandbox Work to Your Real GitHub + VPS
 
+> **⚠️ Superseded — do not follow in this repository.** This runbook was written
+> for the standalone MarketingOS deployment (SQLite/Bun, `marketing.alolabs.net`).
+> Since PR #27, MarketingOS ships inside the ALO Learning Journey app and shares the
+> production MySQL database, so its `prisma db push --accept-data-loss`, seed and
+> direct `git push origin main` steps are unsafe here (`deploy.sh` is disabled for
+> the same reason). Use [`DEPLOYMENT.md`](../DEPLOYMENT.md),
+> [`MIGRATION-RECOVERY-PLAN.md`](../MIGRATION-RECOVERY-PLAN.md) and the
+> `Deploy to VPS` workflow instead. Kept for historical reference only.
+
 > This runbook tells you exactly how to take the work done in the sandbox and apply it to your real GitHub repository and VPS. **You must execute these steps yourself** — the sandbox cannot push to your repo or SSH to your VPS.
 
 ---
