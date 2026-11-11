@@ -164,13 +164,23 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Update employee tools to include this tool reference
-    await db.$executeRawUnsafe(
-      `UPDATE "Employee" SET "tools" = "tools" || ? WHERE "companyId" = ? AND "tools" NOT LIKE ?`,
-      `"${tool.id}"`,
-      companyId,
-      `"%${tool.id}%"`
-    );
+    // Add this tool to each employee's `tools` JSON array (once). The previous
+    // raw SQL was SQLite-only (`||` is logical OR on MySQL) and appended text
+    // after the array, producing invalid JSON such as `["a"]"b"`.
+    const employees = await db.employee.findMany({
+      where: { companyId },
+      select: { id: true, tools: true },
+    });
+    const updates = employees.flatMap((employee) => {
+      let parsed: unknown = [];
+      try { parsed = JSON.parse(employee.tools || '[]'); } catch { parsed = []; }
+      const current = Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string') : [];
+      if (current.includes(tool.id)) return [];
+      return [db.employee.update({ where: { id: employee.id }, data: { tools: JSON.stringify([...current, tool.id]) } })];
+    });
+    for (let i = 0; i < updates.length; i += 200) {
+      await db.$transaction(updates.slice(i, i + 200));
+    }
 
     return NextResponse.json({ connection, success: true });
   } catch {

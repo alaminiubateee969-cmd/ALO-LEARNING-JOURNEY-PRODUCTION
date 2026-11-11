@@ -81,7 +81,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // Unlink leads before deleting
-    await db.lead.updateMany({ where: { dealId: id }, data: { dealId: null } });
+    await db.mosLead.updateMany({ where: { dealId: id }, data: { dealId: null } });
     await db.deal.delete({ where: { id } });
 
     return NextResponse.json({ success: true });

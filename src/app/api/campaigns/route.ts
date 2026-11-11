@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const payload = await verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-    const campaigns = await db.campaign.findMany({
+    const campaigns = await db.mosCampaign.findMany({
       where: { companyId: payload.companyId },
       include: { contents: true },
       orderBy: { createdAt: 'desc' },
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     if (data.startDate) createData.startDate = new Date(data.startDate);
     if (data.endDate) createData.endDate = new Date(data.endDate);
     if (data.budget !== undefined) createData.budget = Number(data.budget);
-    const campaign = await db.campaign.create({ data: createData });
+    const campaign = await db.mosCampaign.create({ data: createData });
 
     // Fire event: campaign created
     await emitEvent({

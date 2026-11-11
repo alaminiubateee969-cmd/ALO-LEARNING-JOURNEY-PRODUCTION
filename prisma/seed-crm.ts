@@ -142,7 +142,7 @@ async function main() {
     if (source === 'Referral') score = Math.min(100, score + 15);
     if (source === 'LinkedIn') score = Math.min(100, score + 10);
 
-    const lead = await prisma.lead.create({
+    const lead = await prisma.mosLead.create({
       data: {
         name,
         email: i % 5 === 0 ? null : email, // 20% have no email
@@ -159,7 +159,7 @@ async function main() {
     });
 
     // Add a "created" activity
-    await prisma.leadActivity.create({
+    await prisma.mosLeadActivity.create({
       data: {
         type: 'created',
         content: `Lead captured via ${source}`,
@@ -169,7 +169,7 @@ async function main() {
 
     // Some leads get extra activities
     if (i % 3 === 0) {
-      await prisma.leadActivity.create({
+      await prisma.mosLeadActivity.create({
         data: {
           type: 'note',
           content: 'Follow-up call scheduled',
@@ -288,7 +288,7 @@ async function main() {
     const reach = status === 'completed' || status === 'active' ? rand(i, 50) * 1000 : 0;
     const clicks = reach > 0 ? Math.floor(reach * (0.03 + rand(i, 5) * 0.01)) : 0;
     const conversions = clicks > 0 ? Math.floor(clicks * (0.05 + rand(i, 5) * 0.02)) : 0;
-    await prisma.campaign.create({
+    await prisma.mosCampaign.create({
       data: {
         name,
         type,

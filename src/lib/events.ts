@@ -90,13 +90,13 @@ export async function emitEvent(payload: EventPayload): Promise<void> {
         metadata: JSON.stringify(metadata),
       }));
     if (notifData.length > 0) {
-      await db.notification.createMany({ data: notifData }).catch((e) =>
+      await db.mosNotification.createMany({ data: notifData }).catch((e) =>
         console.error('[emitEvent] notification createMany failed:', e),
       );
     }
 
     // 2. Audit log
-    await db.auditLog
+    await db.mosAuditLog
       .create({
         data: {
           action: type,

@@ -1,108 +1,25 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const SITE_URL = "https://marketing.alolabs.net";
-const SITE_NAME = "ALO Labs MarketingOS";
-const SITE_DESCRIPTION =
-  "ALO Labs MarketingOS — Enterprise AI Workforce Platform with 2,000 specialized AI employees, 120+ integrations, autonomous CRM, SEO, content, and campaign automation.";
-const OG_IMAGE = `${SITE_URL}/kexsio-logo.png`;
+import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
-  // --- Basic ---
-  title: {
-    default: "ALO Labs MarketingOS — Enterprise AI Workforce Platform",
-    template: `%s | ${SITE_NAME}`,
-  },
-  description: SITE_DESCRIPTION,
+  title: "আলো Learning Journey — Admin Command Center",
+  description:
+    "শিশুদের শিক্ষা ও প্যারেন্টিং নিয়ে সচেতনতা ✨ Own AI agents · RAG · Protective Mode · আলো — ভালোবাসা দিয়ে শেখার পথ 💛",
   keywords: [
-    "kexsio",
-    "marketing",
-    "AI",
-    "AI workforce",
-    "AI employees",
-    "social media",
-    "CRM",
-    "SEO",
-    "automation",
-    "content generation",
-    "campaigns",
-    "MarketingOS",
-    "enterprise marketing",
+    "ALO Learning Journey",
+    "parenting",
+    "child education",
+    "Bengali parenting",
     "AI agents",
-    "marketing automation",
-    "AI marketing platform",
+    "RAG",
+    "aloeducation",
   ],
-  authors: [{ name: "ALO Labs", url: SITE_URL }],
-  creator: "ALO Labs",
-  publisher: "ALO Labs",
-  category: "Business > Marketing > Automation",
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-video-preview": -1,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-    },
-  },
-
-  // --- Canonical ---
-  alternates: {
-    canonical: SITE_URL,
-  },
-
-  // --- Icons ---
+  authors: [{ name: "ALO Education" }],
   icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/kexsio-logo.png", type: "image/png", sizes: "512x512" },
-    ],
-    apple: [{ url: "/kexsio-logo.png", sizes: "512x512" }],
-    shortcut: "/favicon.ico",
+    icon: "/logo.svg",
   },
-
-  // --- Open Graph ---
-  openGraph: {
-    type: "website",
-    locale: "en_US",
-    url: SITE_URL,
-    siteName: SITE_NAME,
-    title: "ALO Labs MarketingOS — Enterprise AI Workforce Platform",
-    description: SITE_DESCRIPTION,
-    images: [
-      {
-        url: OG_IMAGE,
-        width: 512,
-        height: 512,
-        alt: "ALO Labs MarketingOS — Enterprise AI Workforce Platform",
-      },
-    ],
-  },
-
-  // --- Twitter Card ---
-  twitter: {
-    card: "summary_large_image",
-    title: "ALO Labs MarketingOS — Enterprise AI Workforce Platform",
-    description: SITE_DESCRIPTION,
-    images: [OG_IMAGE],
-  },
-
-  // --- App manifest ---
-  manifest: "/manifest.json",
 };
 
 export default function RootLayout({
@@ -111,16 +28,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="canonical" href={SITE_URL} />
-        <meta name="author" content="ALO Labs" />
-        <meta property="og:locale:alternate" content="en_US" />
-      </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
-      >
-        {children}
+    <html lang="bn" suppressHydrationWarning>
+      <body className="antialiased bg-background text-foreground">
+        <ThemeProvider>{children}</ThemeProvider>
         <Toaster />
       </body>
     </html>

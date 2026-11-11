@@ -43,14 +43,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-local-*
+# Root-level scratch files only (unanchored patterns hid src/lib/local-*.ts and api/**/test/)
+/local-*
 .claude
 .z-ai-config
 *.log
 dev.log
 dev.out.log
-test
-prompt
+/test
+/prompt
 
 server.log
 # Skills directory
@@ -74,3 +75,24 @@ node_modules/
 .next/
 *.pem
 *.key
+
+# ── Restored ALO Learning Journey rules (dropped by 0ab0c7d) ──────────────
+# Database files and the dev-only JSON store / backups must never be committed.
+out/
+db/
+*.db
+*.db-journal
+storage/videos/
+storage/photo-video/
+storage/local-db.json
+storage/backups/
+storage/scene-assets/
+storage/uploads/
+storage/agentos/
+public/generated/
+.vscode/
+.idea/
+!.env.example
+skills/
+__pycache__/
+*.py[cod]

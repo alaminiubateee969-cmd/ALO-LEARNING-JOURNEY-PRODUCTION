@@ -2,7 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword, createToken } from '@/lib/auth';
 
+// `/api/auth/*` is public in middleware.ts (next-auth needs it), so on the
+// production site this endpoint is reachable by anyone. Self-service MarketingOS
+// sign-up therefore fails closed in production unless explicitly enabled;
+// bootstrap the first account with `prisma/seed.ts` instead.
+function registrationEnabled(): boolean {
+  return process.env.NODE_ENV !== 'production' || process.env.MARKETINGOS_ALLOW_REGISTRATION === 'true';
+}
+
 export async function POST(req: NextRequest) {
+  if (!registrationEnabled()) {
+    return NextResponse.json(
+      { error: 'Self-service registration is disabled on this deployment.' },
+      { status: 403, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
   try {
     const { email, password, name, companyName, industry, country } = await req.json();
     if (!email || !password || !name) {
@@ -20,7 +34,7 @@ export async function POST(req: NextRequest) {
     });
 
     const slug = (companyName || name).toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 50);
-    const company = await db.company.create({
+    const company = await db.mosCompany.create({
       data: {
         name: companyName || `${name}'s Company`,
         slug,
