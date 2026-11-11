@@ -69,10 +69,22 @@ jobs:
 
       - name: Apply migrations twice to isolated MySQL and verify tables/columns
         run: |
-          npx prisma migrate deploy
-          npx prisma migrate deploy
-          npx prisma migrate status
-          npm run test:migrations:integration
+          # Print each command's output; on failure also publish its last lines as
+          # an error annotation so the database error is visible on the PR itself.
+          check() {
+            local title="$1"; shift
+            local code=0 out
+            out=$("$@" 2>&1) || code=$?
+            printf '%s\n' "$out"
+            if [ "$code" -ne 0 ]; then
+              echo "::error title=${title}::$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -n 40 | awk 'BEGIN { ORS = "%0A" } { gsub(/%/, "%25"); gsub(/\r/, "%0D"); print }')"
+              exit "$code"
+            fi
+          }
+          check "prisma migrate deploy (first run)" npx prisma migrate deploy
+          check "prisma migrate deploy (re-run must be a no-op)" npx prisma migrate deploy
+          check "prisma migrate status" npx prisma migrate status
+          check "migration integration test" npm run test:migrations:integration
 
       - name: Schema drift check (migrations must reproduce prisma/schema.prisma)
         run: |
@@ -82,16 +94,18 @@ jobs:
             --from-migrations prisma/migrations \
             --to-schema-datamodel prisma/schema.prisma \
             --shadow-database-url "mysql://root:ci-root@127.0.0.1:3306/ci_shadow" \
-            --script --exit-code > drift.sql
+            --script --exit-code > drift.sql 2> drift.err
           code=$?
           set -e
+          annotate() { awk 'BEGIN { ORS = "%0A" } { gsub(/%/, "%25"); gsub(/\r/, "%0D"); print }' "$1" | head -c 60000; }
           if [ "$code" = "2" ]; then
-            echo "::error::prisma/migrations does not reproduce prisma/schema.prisma. Add a migration containing:"
             cat drift.sql
+            echo "::error title=Schema drift::prisma/migrations does not reproduce prisma/schema.prisma. A migration needs:%0A$(annotate drift.sql)"
             exit 1
           fi
           if [ "$code" != "0" ]; then
-            cat drift.sql
+            cat drift.err drift.sql
+            echo "::error title=prisma migrate diff failed::$(cat drift.err drift.sql > drift.all; annotate drift.all)"
             exit "$code"
           fi
           echo "No drift: the migration chain reproduces prisma/schema.prisma exactly."
