@@ -94,7 +94,7 @@ async function main() {
   }
 
   console.log('\n[7/14] Voice agent CRUD');
-  const testCompany = await prisma.company.upsert({
+  const testCompany = await prisma.mosCompany.upsert({
     where: { slug: 'voice-test-' + Date.now() },
     update: {},
     create: { name: 'Voice Test Co', slug: 'voice-test-' + Date.now(), plan: 'professional' },
@@ -291,7 +291,7 @@ async function main() {
 
   // Cleanup
   await prisma.refreshToken.deleteMany({ where: { companyId: testCompany.id } }).catch(() => {});
-  await prisma.company.delete({ where: { id: testCompany.id } }).catch(() => {});
+  await prisma.mosCompany.delete({ where: { id: testCompany.id } }).catch(() => {});
 
   console.log(`\n────────────────────────────────────────`);
   console.log(`  ${pass} passed, ${fail} failed`);

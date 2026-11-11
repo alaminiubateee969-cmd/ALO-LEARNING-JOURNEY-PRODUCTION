@@ -29,7 +29,7 @@ async function seed() {
 
   // Create demo company FIRST (idempotent via upsert on slug) so the admin
   // link below can reference company.id.
-  const company = await prisma.company.upsert({
+  const company = await prisma.mosCompany.upsert({
     where: { slug: 'demo-agency' },
     update: {
       name: 'Demo Marketing Agency',
@@ -154,7 +154,7 @@ async function seed() {
 
   for (let i = 0; i < leadNames.length; i++) {
     const status = leadStatuses[i % leadStatuses.length];
-    await prisma.lead.create({
+    await prisma.mosLead.create({
       data: {
         name: leadNames[i],
         email: `${leadNames[i].toLowerCase().replace(' ', '.')}@email.com`,
@@ -296,7 +296,7 @@ async function seed() {
   ];
 
   for (const campaign of campaigns) {
-    await prisma.campaign.create({
+    await prisma.mosCampaign.create({
       data: {
         ...campaign,
         startDate: new Date('2025-01-01'),
@@ -327,7 +327,7 @@ async function seed() {
   });
 
   // Create audit logs
-  await prisma.auditLog.createMany({
+  await prisma.mosAuditLog.createMany({
     data: [
       { action: 'user.login', resource: 'auth', details: 'Admin logged in', userId: admin.id, companyId: company.id },
       { action: 'social.connect', resource: 'social_account', details: 'Connected Facebook account', userId: admin.id, companyId: company.id },

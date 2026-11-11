@@ -101,7 +101,7 @@ async function main() {
 
   console.log('\n[9/12] After-hours router — Asia/Dhaka');
   // Create a test company + rule
-  const testCompany = await prisma.company.upsert({
+  const testCompany = await prisma.mosCompany.upsert({
     where: { slug: 'test-ollama-cloud' },
     update: {},
     create: { name: 'Test Ollama Cloud', slug: 'test-ollama-cloud', plan: 'free' },
@@ -172,7 +172,7 @@ async function main() {
   console.log(`     → provider=${chainResult.provider}, model=${chainResult.model}, ${chainResult.durationMs}ms, ${chainResult.attempts} attempt(s)`);
 
   // Cleanup
-  await prisma.company.delete({ where: { id: testCompany.id } }).catch(() => {});
+  await prisma.mosCompany.delete({ where: { id: testCompany.id } }).catch(() => {});
 
   console.log(`\n────────────────────────────────────────`);
   console.log(`  ${pass} passed, ${fail} failed`);

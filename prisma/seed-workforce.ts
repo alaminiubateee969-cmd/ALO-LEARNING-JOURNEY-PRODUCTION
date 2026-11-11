@@ -339,9 +339,9 @@ async function main() {
   console.log('=' .repeat(60));
 
   // 1. Get or create company
-  let company = await prisma.company.findFirst({ where: { slug: 'demo' } });
+  let company = await prisma.mosCompany.findFirst({ where: { slug: 'demo' } });
   if (!company) {
-    company = await prisma.company.create({
+    company = await prisma.mosCompany.create({
       data: {
         name: 'Demo Company',
         slug: 'demo',
@@ -371,7 +371,7 @@ async function main() {
   console.log('\n🏢 Seeding Departments...');
   const deptMap: Record<string, string> = {}; // code → id
   for (const d of DEPARTMENTS) {
-    const existing = await prisma.department.findFirst({ where: { code: d.code, companyId } });
+    const existing = await prisma.mosDepartment.findFirst({ where: { code: d.code, companyId } });
     if (existing) {
       deptMap[d.code] = existing.id;
       continue;
@@ -383,7 +383,7 @@ async function main() {
     if (d.parentId && deptMap[d.parentId]) {
       data.parentId = deptMap[d.parentId];
     }
-    const created = await prisma.department.create({ data });
+    const created = await prisma.mosDepartment.create({ data });
     deptMap[d.code] = created.id;
   }
   console.log(`✅ Seeded ${Object.keys(deptMap).length} departments`);
@@ -406,7 +406,7 @@ async function main() {
     }
 
     // Get all departments for distribution
-    const allDepts = await prisma.department.findMany({ where: { companyId } });
+    const allDepts = await prisma.mosDepartment.findMany({ where: { companyId } });
     const deptCodes = allDepts.map(d => d.code);
     const levelDepts = allDepts.filter(d => d.level >= 2); // Departments at level 2+ for employee assignment
 
@@ -704,11 +704,11 @@ async function main() {
     { title: 'Financial Reporting Standards', content: 'Key financial statements: Balance Sheet (assets=liabilities+equity), Income Statement (revenue-expenses=profit), Cash Flow Statement. Monthly close process: bank reconciliation, accruals, prepayments, depreciation, review.', summary: 'Financial reporting basics', nodeType: 'reference', tags: JSON.stringify(['finance', 'accounting', 'reporting', 'standards']), category: 'Finance', accessLevel: 'company' },
   ];
 
-  const mktDept = await prisma.department.findFirst({ where: { code: 'MKT', companyId } });
-  const finDept = await prisma.department.findFirst({ where: { code: 'FIN', companyId } });
-  const salDept = await prisma.department.findFirst({ where: { code: 'SAL', companyId } });
-  const engDept = await prisma.department.findFirst({ where: { code: 'ENG', companyId } });
-  const datDept = await prisma.department.findFirst({ where: { code: 'DAT', companyId } });
+  const mktDept = await prisma.mosDepartment.findFirst({ where: { code: 'MKT', companyId } });
+  const finDept = await prisma.mosDepartment.findFirst({ where: { code: 'FIN', companyId } });
+  const salDept = await prisma.mosDepartment.findFirst({ where: { code: 'SAL', companyId } });
+  const engDept = await prisma.mosDepartment.findFirst({ where: { code: 'ENG', companyId } });
+  const datDept = await prisma.mosDepartment.findFirst({ where: { code: 'DAT', companyId } });
 
   for (let i = 0; i < knowledgeNodes.length; i++) {
     const kn = knowledgeNodes[i];
@@ -741,7 +741,7 @@ async function main() {
 
   // Final count
   const finalCount = await prisma.employee.count({ where: { companyId } });
-  const deptCount = await prisma.department.count({ where: { companyId } });
+  const deptCount = await prisma.mosDepartment.count({ where: { companyId } });
   const sopCount = await prisma.sop.count({ where: { companyId } });
   const knCount = await prisma.knowledgeNode.count({ where: { companyId } });
   const modelCount = await prisma.modelConfig.count();

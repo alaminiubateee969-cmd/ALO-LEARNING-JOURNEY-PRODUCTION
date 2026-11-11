@@ -1,25 +1,789 @@
+// ALO Learning Journey — Prisma schema (MySQL)
+// Operational data layer. The agent roster is a static config module
+// (src/lib/agents.ts) so it stays richly typed and always available even
+// before the DB is seeded. Runs, content, approvals, RAG, analytics etc.
+// are persisted here.
+
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Added rhel-openssl-* for CloudLinux/cPanel (RHEL-based) hosts like 115.187.18.53
+  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x", "rhel-openssl-1.0.x"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  domain    String?
+  logoUrl   String?
+  plan      String   @default("growth")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leads Lead[]
+}
+
+model AIAgentRun {
+  id          String   @id @default(cuid())
+  agentId     String
+  status      String   @default("idle") // idle | running | success | failed | blocked_external_setup
+  inputBrief String? @db.Text
+  outputJson String? @db.LongText
+  errorMsg String? @db.Text
+  retryCount  Int      @default(0)
+  costEstUsd  Float    @default(0)
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([agentId])
+  @@index([status])
+}
+
+model AdminOtpChallenge {
+  id              String    @id @default(cuid())
+  phoneHash       String    @unique
+  otpHash         String
+  expiresAt       DateTime
+  consumedAt      DateTime?
+  failedAttempts  Int       @default(0)
+  sentAt          DateTime?
+  windowStartedAt DateTime  @default(now())
+  sendCount       Int       @default(0)
+
+  @@index([expiresAt, consumedAt])
+}
+
+model ContentIdea {
+  id          String   @id @default(cuid())
+  topic       String
+  hook String @db.Text
+  angle String @db.Text
+  audience    String
+  ragSources String? @db.Text // JSON array of source titles
+  status      String   @default("idea") // idea | packaged | approved | published | rejected
+  createdAt   DateTime @default(now())
+
+  @@index([status])
+}
+
+model ContentPackage {
+  id           String   @id @default(cuid())
+  ideaId       String?
+  topic        String
+  reelScript String @db.LongText
+  hooksJson String @db.LongText // JSON: string[]
+  seoKeywords String? @db.Text // JSON: string[]
+  captionsJson String @db.LongText // JSON: { platform: caption }
+  hashtagsJson String? @db.Text // JSON: string[]
+  imagePrompt String? @db.Text
+  voiceDirection String? @db.Text
+  cta String @db.Text
+  disclaimerBn String? @db.Text
+  qualityScore Int      @default(0)
+  safetyStatus String   @default("pending") // pending | safe | needs_revision | blocked
+  ragCitations String? @db.Text // JSON
+  createdAt    DateTime @default(now())
+
+  @@index([safetyStatus])
+}
+
+model ApprovalItem {
+  id            String   @id @default(cuid())
+  packageId     String?
+  topic         String
+  type          String   @default("content") // content | comment | image | voice | video
+  title         String
+  summary String @db.Text
+  riskLevel     String   @default("low") // low | medium | high
+  blockedReasons String? @db.Text // JSON array
+  requiredEdits String? @db.Text // JSON array
+  status        String   @default("pending") // pending | approved | rejected | revised
+  reviewerNote String? @db.Text
+  createdAt     DateTime @default(now())
+  reviewedAt    DateTime?
+
+  @@index([status])
+}
+
+model SocialConnection {
+  id           String   @id @default(cuid())
+  platform     String   // facebook | instagram | youtube | tiktok | linkedin | x | whatsapp | telegram | pinterest | threads | gbp
+  accountName  String
+  handle        String?
+  status       String   @default("not_connected") // not_connected | connected | external_setup_required | expired | revoked | failed
+  scopesJson String? @db.Text
+  tokenExpiry  DateTime?
+  lastSyncAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([platform, accountName])
+}
+
+model RagDocument {
+  id         String   @id @default(cuid())
+  title      String
+  sourceType String   @default("manual") // manual | pdf | docx | csv | url | faq | policy
+  sourceUrl  String?
+  content String @db.LongText
+  tagsJson String? @db.Text // JSON array
+  chunkCount Int      @default(0)
+  createdAt  DateTime @default(now())
+}
+
+model RagChunk {
+  id          String   @id @default(cuid())
+  documentId  String
+  text String @db.LongText
+  keywordsJson String? @db.Text // JSON array
+  createdAt   DateTime @default(now())
+
+  @@index([documentId])
+}
+
+model AnalyticsSnapshot {
+  id           String   @id @default(cuid())
+  platform     String
+  metric       String   // views | reach | watch_time | retention | shares | saves | leads | comments | followers
+  value        Int
+  capturedAt   DateTime @default(now())
+
+  @@index([platform, metric])
+}
+
+model TelegramCommand {
+  id         String   @id @default(cuid())
+  command    String
+  args String? @db.Text
+  senderId   String
+  status     String   @default("received") // received | executed | rejected | unknown
+  response String? @db.Text
+  createdAt  DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      String   @default("system")
+  action     String
+  detail String? @db.Text
+  severity   String   @default("info") // info | warn | error | critical
+  createdAt  DateTime @default(now())
+
+  @@index([severity])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  body String @db.Text
+  kind      String   @default("info") // info | success | warn | danger
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model FamilyModel {
+  id               String   @id @default(cuid())
+  characterName    String
+  personType       String   // baby_girl | mother | father | teacher | narrator | user_owned
+  consentConfirmed Boolean  @default(false)
+  consentDate      DateTime?
+  referenceImages String? @db.Text // JSON array of urls
+  voiceSample      String?
+  appearanceJson String? @db.Text
+  voiceSettingsJson String? @db.Text
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+}
+
+model PublishedPost {
+  id          String   @id @default(cuid())
+  platform    String
+  providerPostId String?
+  url         String?
+  topic       String
+  status      String   @default("queued") // queued | scheduled | publishing | published | failed | external_setup_required
+  createdAt   DateTime @default(now())
+  publishedAt DateTime?
+  scheduledAt DateTime?
+  packageId   String?
+
+  @@index([status])
+  @@index([platform])
+}
+
+model CommentInbox {
+  id           String   @id @default(cuid())
+  platform     String
+  authorName   String
+  authorHandle String?
+  text String @db.Text
+  postTopic    String?
+  category     String   @default("safe_general")
+  riskLevel    String   @default("low")
+  status       String   @default("new")
+  draftReply String? @db.Text
+  createdAt    DateTime @default(now())
+  repliedAt    DateTime?
+
+  @@index([status])
+  @@index([category])
+}
+
+// ===== Workforce Architecture (2,000 AI Employee scale) =====
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  family      String   // CONTENT_STRATEGY | SOCIAL_MEDIA | IMAGE | VIDEO | VOICE | etc.
+  description String? @db.Text
+  agentCount  Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([family])
+}
+
+model AgentEmployee {
+  id            String   @id @default(cuid())
+  departmentId  String
+  name          String
+  role          String
+  specialization String
+  capabilities  String   // JSON: ["TEXT","IMAGE","VIDEO","VOICE","CALL","SMS","SOCIAL","ANALYTICS","RESEARCH","QA"]
+  tools String @db.Text // JSON array
+  modelProvider String   @default("local")
+  modelName     String   @default("local")
+  qualityScore  Float    @default(0)
+  successRate   Float    @default(0)
+  status        String   @default("idle") // idle | active | busy | failed | suspended
+  sopCoverage   Float    @default(0)
+  maxAttempts   Int      @default(3)
+  createdAt     DateTime @default(now())
+
+  @@index([departmentId])
+  @@index([status])
+  @@index([capabilities])
+}
+
+model LoopCycle {
+  id          String   @id @default(cuid())
+  objective String @db.Text
+  phase       String   @default("observe") // observe|understand|plan|delegate|create|verify|critique|correct|evaluate|publish|learn
+  status      String   @default("running") // running|completed|failed|escalated
+  agentsUsed String? @db.Text // JSON array of agent IDs
+  qualityScore Float   @default(0)
+  retryCount  Int      @default(0)
+  costUsd     Float    @default(0)
+  errorType   String?
+  lesson String? @db.Text
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([status])
+  @@index([phase])
+}
+
+// ===== Private Family AI Studio =====
+
+model FamilyProfile {
+  id               String   @id @default(cuid())
+  personName       String
+  personType       String   // me | wife | child
+  consentConfirmed Boolean  @default(false)
+  consentDate      DateTime?
+  guardianName     String?  // required if personType=child
+  voiceConsent     Boolean  @default(false)
+  faceConsent      Boolean  @default(false)
+  appearanceJson String? @db.Text // JSON: hair, eyes, build, etc.
+  voiceSettingsJson String? @db.Text
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  referenceAssets FamilyReferenceAsset[]
+  projects        FamilyProject[]
+
+  @@index([personType])
+}
+
+model FamilyReferenceAsset {
+  id            String   @id @default(cuid())
+  profileId     String
+  profile       FamilyProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  assetType     String   // photo | video | voice
+  angleType     String?  // front | left | right | three_quarter | full_body | close_up
+  context       String?  // indoor | outdoor | casual | formal
+  expression    String?  // smiling | neutral | surprised | etc.
+  lighting      String?  // natural | studio | low_light | golden_hour
+  clothing      String?  // casual | formal | sportswear | traditional
+  hairstyle     String?  // description
+  filePath      String
+  fileName      String?  // original filename
+  fileSize      Int      @default(0) // bytes
+  mimeType      String?  // image/jpeg | video/mp4 | audio/wav
+  qualityScore  Float    @default(0) // 0=blurry/low, 1=high
+  isDuplicate   Boolean  @default(false)
+  approved      Boolean  @default(false) // admin-approved for use
+  uploadedAt    DateTime @default(now())
+
+  @@index([profileId])
+  @@index([assetType])
+  @@index([approved])
+}
+
+model FamilyProject {
+  id            String   @id @default(cuid())
+  title         String
+  description String? @db.Text
+  prompt String @db.Text // user's one-click prompt
+  castProfileIds String @db.Text // JSON array of FamilyProfile IDs
+  status        String   @default("draft") // draft|running|completed|failed
+  qualityScore  Float    @default(0)
+  currentStage  String?  // creative_director|script|storyboard|...|final_director
+  outputJson String? @db.LongText // JSON: generated outputs per stage
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profiles      FamilyProfile[]
+
+  @@index([status])
+}
+
+model MediaGeneration {
+  id            String   @id @default(cuid())
+  projectId     String?
+  stage         String   // script|storyboard|image|video|voice|lip_sync|edit|upscale
+  inputJson String? @db.Text // JSON: input params
+  outputJson String? @db.LongText // JSON: generated output
+  qualityScore  Float    @default(0)
+  identityScore Float    @default(0) // face/likeness consistency 0-1
+  provider      String   @default("local")
+  status        String   @default("pending") // pending|running|passed|failed|regenerated
+  attempt       Int      @default(1)
+  maxAttempts   Int      @default(3)
+  issuesJson String? @db.Text // JSON array of quality issues
+  createdAt     DateTime @default(now())
+
+  @@index([projectId])
+  @@index([stage])
+  @@index([status])
+}
+
+// ===== Growth Loop: Content Opportunity + Hook Testing + Campaigns =====
+
+model ContentOpportunityScore {
+  id                  String   @id @default(cuid())
+  topic               String
+  searchDemand        Int      @default(0)   // 0-100
+  parentRelevance     Int      @default(0)   // 0-100
+  bangladeshRelevance Int      @default(0)   // 0-100
+  competition          Int      @default(0)   // 0-100 (higher = harder)
+  videoPotential      Int      @default(0)   // 0-100
+  brandFit            Int      @default(0)   // 0-100
+  finalScore          Int      @default(0)   // weighted average
+  rationale String? @db.Text
+  approved            Boolean  @default(false) // only high-score topics enter production
+  provider            String   @default("local")
+  createdAt           DateTime @default(now())
+
+  @@index([approved])
+  @@index([finalScore])
+}
+
+model HookTest {
+  id            String   @id @default(cuid())
+  topic         String
+  hookText String @db.Text
+  variant       String   @default("A") // A | B | C | D | E
+  impressions   Int      @default(0)
+  hookRetention Float    @default(0)   // 3-sec retention %
+  watchTime     Int      @default(0)   // avg seconds
+  completion    Float    @default(0)   // %
+  isWinner      Boolean  @default(false)
+  status        String   @default("draft") // draft | testing | completed | winner
+  createdAt     DateTime @default(now())
+  testedAt      DateTime?
+
+  @@index([topic])
+  @@index([status])
+}
+
+model Campaign {
+  id            String   @id @default(cuid())
+  title         String
+  topic         String
+  opportunityId String?
+  status        String   @default("planned") // planned|in_production|published|measured|learned
+  platformCount Int      @default(0)
+  totalAssets   Int      @default(0)
+  views         Int      @default(0)
+  reach         Int      @default(0)
+  engagement    Float    @default(0)
+  followerGain  Int      @default(0)
+  audienceRelevance Float @default(0) // % relevant parents
+  conversionRate Float   @default(0)
+  lesson String? @db.Text
+  createdAt     DateTime @default(now())
+  publishedAt   DateTime?
+  measuredAt    DateTime?
+
+  @@index([status])
+}
+
+// ===== Inkbox Adapter Layer (OPTIONAL — ALO works without it) =====
+
+model InkboxIntegration {
+  id            String   @id @default(cuid())
+  name          String
+  agentId       String
+  inkboxIdentityId String?
+  channels      String   @default("[]")
+  status        String   @default("not_connected")
+  configJson String? @db.Text
+  lastHealthCheck DateTime?
+  lastError String? @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+  @@index([agentId])
+}
+
+model AgentMessage {
+  id            String   @id @default(cuid())
+  senderAgentId String
+  recipientAgentId String
+  taskId        String?
+  objective String @db.Text
+  context String? @db.Text
+  requiredOutput String? @db.Text
+  priority      String   @default("normal")
+  status        String   @default("pending")
+  result String? @db.LongText
+  failureReason String? @db.Text
+  hopCount      Int      @default(0)
+  channel       String   @default("internal")
+  inkboxMessageId String?
+  createdAt     DateTime @default(now())
+  deliveredAt   DateTime?
+  completedAt   DateTime?
+
+  @@index([senderAgentId])
+  @@index([recipientAgentId])
+  @@index([status])
+  @@index([taskId])
+}
+
+// ===== Admissions CRM + Quote management =====
+// Personal data is limited to enquiry/contact fields. Do not use these records
+// for passport, immigration case files, health data, or other special-category data.
+model Lead {
+  id               String   @id @default(cuid())
+  companyId        String
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fullName         String
+  email            String?
+  phone            String?
+  targetCountry    String?
+  studyLevel       String?
+  courseInterest   String?
+  intake           String?
+  source           String   @default("website") // website | referral | social | event | partner | other
+  stage            String   @default("new") // new | contacted | qualified | consultation_booked | proposal_sent | enrolled | lost
+  consentStatus    String   @default("unknown") // unknown | consented | opted_out
+  consentRecordedAt DateTime?
+  nextFollowUp     DateTime?
+  notes            String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  activities LeadActivity[]
+  quotations Quotation[]
+
+  @@index([companyId, stage])
+  @@index([companyId, nextFollowUp])
+  @@index([companyId, createdAt])
+  @@index([email])
+}
+
+model LeadActivity {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type      String   @default("note") // created | note | call | email | whatsapp | meeting | follow_up | stage_change | quotation
+  body      String   @db.Text
+  actor     String   @default("admin")
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+model Quotation {
+  id             String   @id @default(cuid())
+  leadId         String
+  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  number         String   @unique
+  title          String
+  currency       String   @default("GBP") // GBP | USD | EUR | BDT
+  status         String   @default("draft") // draft | sent | accepted | declined | expired
+  subtotal       Decimal  @default(0) @db.Decimal(12, 2)
+  discountAmount Decimal  @default(0) @db.Decimal(12, 2)
+  taxRate        Decimal  @default(0) @db.Decimal(5, 2)
+  taxAmount      Decimal  @default(0) @db.Decimal(12, 2)
+  total          Decimal  @default(0) @db.Decimal(12, 2)
+  validUntil     DateTime?
+  terms          String?  @db.Text
+  notes          String?  @db.Text
+  acceptedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  items QuotationItem[]
+
+  @@index([leadId, status])
+  @@index([createdAt])
+}
+
+model QuotationItem {
+  id          String    @id @default(cuid())
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Int       @default(1)
+  unitPrice   Decimal   @default(0) @db.Decimal(12, 2)
+  lineTotal   Decimal   @default(0) @db.Decimal(12, 2)
+  position    Int       @default(0)
+
+  @@index([quotationId, position])
+}
+
+// ===== v2 additive models; admissions Lead remains a separate model/table. =====
+
+model Client {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  phone       String?
+  company     String?
+  type        String   @default("individual") // individual|company
+  status      String   @default("active") // active|inactive|blocked
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  clientId    String
+  name        String
+  service     String   // website|crm|automation|ai|video|seo
+  status      String   @default("inquiry") // inquiry|proposal|approved|development|review|deployment|completed|maintenance
+  budget      Float?
+  deadline    DateTime?
+  description String? @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([status])
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  clientId    String
+  projectId   String?
+  amount      Float
+  currency    String   @default("BDT")
+  status      String   @default("draft") // draft|sent|paid|overdue|cancelled
+  dueDate     DateTime?
+  paidAt      DateTime?
+  itemsJson   String?  @db.Text // JSON: [{description, quantity, price}]
+  createdAt   DateTime @default(now())
+
+  @@index([clientId])
+  @@index([status])
+}
+
+model MarketingCampaign {
+  id          String   @id @default(cuid())
+  name        String
+  channel     String   // email|whatsapp|social|sms
+  status      String   @default("draft") // draft|scheduled|running|completed|paused
+  audienceJson String? @db.Text // JSON: target criteria
+  content     String?  @db.Text
+  scheduledAt DateTime?
+  sentCount   Int      @default(0)
+  openCount   Int      @default(0)
+  clickCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([status])
+  @@index([channel])
+}
+
+model OtpRequest {
+  id          String   @id @default(cuid())
+  channel     String   // sms|email|whatsapp|voice
+  recipientHash  String   // keyed hash of normalized address/number; raw PII is not persisted
+  recipientLabel String   // masked display value, never the full address/number
+  codeHash       String   // keyed hash only; raw OTP codes are never persisted
+  purpose     String   @default("verification") // verification|login|transaction|reset
+  status      String   @default("pending") // pending|delivered|verified|expired|failed
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(5)
+  expiresAt   DateTime
+  verifiedAt  DateTime?
+  metadataJson String? @db.Text // provider, message_id, cost etc.
+  createdAt   DateTime @default(now())
+
+  @@index([recipientHash])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model VoiceGeneration {
+  id           String   @id @default(cuid())
+  text         String   @db.LongText
+  voice        String   // tongtong|chuichui|xiaochen|jam|kazi|douji|luodo
+  speed        Float    @default(1.0)
+  volume       Float    @default(1.0)
+  format       String   @default("wav") // wav|mp3|pcm
+  language     String   @default("bn") // bn|en|zh
+  filePath     String?
+  durationSec  Float?
+  charCount    Int      @default(0)
+  status       String   @default("pending") // pending|completed|failed
+  errorMessage String? @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([status])
+  @@index([voice])
+}
+
+model AudioTranscription {
+  id           String   @id @default(cuid())
+  fileName     String
+  fileSize     Int
+  format       String   // wav|mp3|m4a|flac|ogg
+  language     String   @default("auto")
+  transcription String? @db.LongText
+  wordCount    Int      @default(0)
+  durationSec  Float?
+  status       String   @default("pending") // pending|completed|failed
+  errorMessage String? @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([status])
+}
+
+model HumanAvatar {
+  id              String   @id @default(cuid())
+  ownerId         String   @default("dev-admin") // tenant/owner isolation
+  name            String   // e.g. "আদিত্য", "মেঘা", "Rahim Sir"
+  persona         String   // mother | father | teacher | narrator | doctor | expert
+  gender          String   // male | female
+  ageRange        String   // e.g. "28-35"
+  ethnicity       String   @default("south-asian") // south-asian | bengali | mixed
+  faceDescription String   @db.Text // detailed facial features for consistency
+  voiceProfile    String   // tongtong|chuichui|xiaochen|jam|kazi|douji|luodo
+  voiceSpeed      Float    @default(0.95)
+  backgroundStory String?  @db.Text // persona backstory for LLM context
+  consistencySeed String?  // hash to keep face consistent across regen
+  portraitUrl     String?  // generated portrait image url
+  portraitStatus  String   @default("pending") // pending|generated|failed
+  outfitStyle     String?  // e.g. "saree", "salwar kameez", "shirt"
+  sceneContext    String?  // e.g. "home study room", "outdoor garden"
+  active          Boolean  @default(true)
+  videoCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  videos          AvatarVideo[]
+
+  @@index([ownerId])
+  @@index([persona])
+  @@index([active])
+}
+
+model AvatarVideo {
+  id              String   @id @default(cuid())
+  ownerId         String   @default("dev-admin") // tenant/owner isolation
+  avatarId        String
+  avatar          HumanAvatar @relation(fields: [avatarId], references: [id], onDelete: Restrict)
+  prompt          String   @db.Text // user's original instruction
+  script          String?  @db.LongText // LLM-generated full script (Bengali)
+  scenesJson      String?  @db.LongText // JSON: [{text, imageUrl, audioUrl, durationSec}]
+  targetDuration  Int      // seconds (300-3600)
+  actualDuration  Float?   // measured final duration
+  videoUrl        String?
+  thumbnailUrl    String?
+  status          String   @default("pending") // pending|scripting|generating_audio|generating_images|composing|completed|failed
+  progress        Int      @default(0) // 0-100
+  currentStep     String?
+  errorMessage    String?
+  lipSyncUsed     Boolean  @default(false) // true if Wav2Lip applied
+  lipSyncReason   String?  // success|not_configured|http_error|invalid_output|timeout|provider_error
+  quality         String   @default("standard") // standard|hd|cinematic
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([avatarId])
+  @@index([status])
+}
+
+model MarketingLead {
+  id          String   @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  company     String?
+  source      String   @default("website") // website|whatsapp|telegram|referral|ads
+  service     String?  // website|crm|automation|ai|video|seo
+  budget      String?  // low|medium|high|enterprise
+  status      String   @default("new") // new|qualified|proposal|negotiation|won|lost
+  assignedTo  String?  // staff member
+  notes       String?  @db.Text
+  tagsJson    String?  @db.Text  // JSON array
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([source])
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║ MarketingOS / AI-workforce models (integrated in PR #27, 0ab0c7d)        ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+// These models were written for SQLite and are stored in the same MySQL
+// database as the ALO models above, in additive tables only (see migration
+// 20261111000000_marketingos_workforce_tables). Eight model names collided
+// with ALO models that already own production tables, so the MarketingOS
+// copies are prefixed `Mos` (Company, Lead, LeadActivity, Campaign,
+// Notification, AuditLog, Department, Invoice). Relation field names are
+// unchanged. Long/JSON strings use TEXT/LONGTEXT; string defaults on TEXT
+// columns are expression defaults because MySQL 8 rejects literal ones.
+
 // ==================== MULTI-TENANT COMPANY ====================
 
-model Company {
+model MosCompany {
   id          String   @id @default(cuid())
   name        String
   slug        String   @unique
-  logo        String?
-  website     String?
+  logo        String? @db.Text
+  website     String? @db.Text
   industry    String?
   country     String?
-  brandColors String?
-  targetAudience String?
-  marketingGoals String?
+  brandColors String? @db.Text
+  targetAudience String? @db.Text
+  marketingGoals String? @db.Text
   plan        String   @default("free")
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -27,18 +791,18 @@ model Company {
 
   users         CompanyUser[]
   socialAccounts SocialAccount[]
-  campaigns     Campaign[]
+  campaigns     MosCampaign[]
   contents      Content[]
   seoChallenges SeoChallenge[]
-  leads         Lead[]
+  leads         MosLead[]
   contacts      Contact[]
   deals         Deal[]
   tickets       Ticket[]
   aiAgents      AiAgent[]
-  auditLogs     AuditLog[]
+  auditLogs     MosAuditLog[]
   subscriptions Subscription[]
   invitations   Invitation[]
-  departments   Department[]
+  departments   MosDepartment[]
   employees     Employee[]
   knowledgeNodes KnowledgeNode[]
   toolConnections ToolConnection[]
@@ -83,7 +847,7 @@ model Company {
   knowledgeBases  KnowledgeBase[]
   subscription    TenantSubscription?
   usageCredits    UsageCredit[]
-  invoices        Invoice[]
+  invoices        MosInvoice[]
   payments       Payment[]
   billingAdjustments BillingAdjustment[]
   expenses     Expense[]
@@ -100,18 +864,18 @@ model User {
   passwordHash  String
   name          String
   phone         String?
-  avatar        String?
+  avatar        String? @db.Text
   isActive      Boolean   @default(true)
   lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   companyUsers  CompanyUser[]
-  auditLogs     AuditLog[]
+  auditLogs     MosAuditLog[]
   aiChatMessages AiChatMessage[]
   createdContents Content[] @relation("ContentCreator")
   sessions      UserSession[]
-  notifications  Notification[]  // notifications addressed to this user
+  notifications  MosNotification[]  // notifications addressed to this user
   sentMessages   Message[]  @relation("MessageSender")
   receivedMessages Message[] @relation("MessageRecipient")
   announcements  Announcement[] @relation("AnnouncementCreator")
@@ -151,14 +915,14 @@ model User {
 model CompanyUser {
   id          String   @id @default(cuid())
   role        String   @default("team_member")
-  permissions String   @default("{}")
+  permissions String @default(dbgenerated("('{}')")) @db.Text
   joinedAt    DateTime @default(now())
   userId      String
   user        User     @relation(fields: [userId], references: [id])
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     MosCompany  @relation(fields: [companyId], references: [id])
 
-  leadsAssigned      Lead[]  @relation("LeadAssignee")
+  leadsAssigned      MosLead[]  @relation("LeadAssignee")
   ticketsAssigned    Ticket[] @relation("TicketAssignee")
   ticketMessages     TicketMessage[]
 
@@ -171,19 +935,19 @@ model SocialAccount {
   id              String   @id @default(cuid())
   platform        String
   accountName     String
-  accountHandle   String?
+  accountHandle   String? @db.Text
   accountId       String?
-  avatarUrl       String?
-  accessToken     String
-  refreshToken    String?
+  avatarUrl       String? @db.Text
+  accessToken     String @db.Text
+  refreshToken    String? @db.Text
   tokenExpiresAt  DateTime?
-  scopes          String   @default("[]")
-  webhookUrl      String?
+  scopes          String @default(dbgenerated("('[]')")) @db.Text
+  webhookUrl      String? @db.Text
   status          String   @default("active")
   lastSyncedAt    DateTime?
   connectedAt     DateTime @default(now())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id])
+  company         MosCompany  @relation(fields: [companyId], references: [id])
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -196,28 +960,28 @@ model Content {
   type          String
   status        String   @default("draft")
   platform      String?
-  body          String?
-  mediaUrl      String?
+  body          String? @db.LongText
+  mediaUrl      String? @db.Text
   mediaType     String?
-  thumbnailUrl  String?
-  hashtags      String?
+  thumbnailUrl  String? @db.Text
+  hashtags      String? @db.Text
   scheduledAt   DateTime?
   publishedAt   DateTime?
-  engagement    String   @default("{}")
+  engagement    String @default(dbgenerated("('{}')")) @db.Text
   aiGenerated   Boolean  @default(false)
   creatorId     String?
   creator       User?    @relation("ContentCreator", fields: [creatorId], references: [id])
   companyId     String
-  company       Company  @relation(fields: [companyId], references: [id])
+  company       MosCompany  @relation(fields: [companyId], references: [id])
   campaignId    String?
-  campaign      Campaign? @relation(fields: [campaignId], references: [id])
+  campaign      MosCampaign? @relation(fields: [campaignId], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
 
 // ==================== CAMPAIGNS ====================
 
-model Campaign {
+model MosCampaign {
   id          String   @id @default(cuid())
   name        String
   type        String
@@ -225,9 +989,9 @@ model Campaign {
   budget      Float?
   startDate   DateTime?
   endDate     DateTime?
-  metrics     String   @default("{}")
+  metrics     String @default(dbgenerated("('{}')")) @db.Text
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     MosCompany  @relation(fields: [companyId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -236,7 +1000,7 @@ model Campaign {
 
 // ==================== CRM ====================
 
-model Lead {
+model MosLead {
   id            String   @id @default(cuid())
   name          String
   email         String?
@@ -245,17 +1009,17 @@ model Lead {
   source        String?
   status        String   @default("new")
   score         Int      @default(0)
-  notes         String?
+  notes         String? @db.Text
   assignedToId  String?
   assignedTo    CompanyUser? @relation("LeadAssignee", fields: [assignedToId], references: [id])
   companyId     String
-  company       Company  @relation(fields: [companyId], references: [id])
+  company       MosCompany  @relation(fields: [companyId], references: [id])
   dealId        String?
   deal          Deal?    @relation(fields: [dealId], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  activities  LeadActivity[]
+  activities  MosLeadActivity[]
   tags        LeadTag[]
 }
 
@@ -265,11 +1029,11 @@ model Contact {
   email       String?
   phone       String?
   companyName String?
-  position    String?
+  position    String? @db.Text
   source      String?
-  notes       String?
+  notes       String? @db.Text
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     MosCompany  @relation(fields: [companyId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -281,25 +1045,25 @@ model Deal {
   stage       String   @default("prospect")
   probability Int      @default(0)
   closeDate   DateTime?
-  notes       String?
+  notes       String? @db.Text
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     MosCompany  @relation(fields: [companyId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  leads  Lead[]
+  leads  MosLead[]
 }
 
 model Ticket {
   id          String   @id @default(cuid())
-  subject     String
-  description String?
+  subject     String @db.Text
+  description String? @db.Text
   status      String   @default("open")
   priority    String   @default("medium")
   assignedToId String?
   assignedTo  CompanyUser? @relation("TicketAssignee", fields: [assignedToId], references: [id])
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     MosCompany  @relation(fields: [companyId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -308,7 +1072,7 @@ model Ticket {
 
 model TicketMessage {
   id        String   @id @default(cuid())
-  content   String
+  content   String @db.LongText
   senderId  String?
   sender    CompanyUser? @relation(fields: [senderId], references: [id])
   ticketId  String
@@ -316,12 +1080,12 @@ model TicketMessage {
   createdAt DateTime @default(now())
 }
 
-model LeadActivity {
+model MosLeadActivity {
   id        String   @id @default(cuid())
   type      String
-  content   String?
+  content   String? @db.LongText
   leadId    String
-  lead      Lead     @relation(fields: [leadId], references: [id])
+  lead      MosLead     @relation(fields: [leadId], references: [id])
   createdAt DateTime @default(now())
 }
 
@@ -329,7 +1093,7 @@ model LeadTag {
   id        String   @id @default(cuid())
   name      String
   leadId    String
-  lead      Lead     @relation(fields: [leadId], references: [id])
+  lead      MosLead     @relation(fields: [leadId], references: [id])
   createdAt DateTime @default(now())
 }
 
@@ -338,16 +1102,16 @@ model LeadTag {
 model SeoChallenge {
   id             String   @id @default(cuid())
   name           String
-  websiteUrl     String
-  targetKeywords String?
+  websiteUrl     String @db.Text
+  targetKeywords String? @db.Text
   duration       Int      @default(60)
   status         String   @default("active")
   currentDay     Int      @default(0)
   score          Int      @default(0)
-  tasks          String   @default("[]")
-  results        String   @default("{}")
+  tasks          String @default(dbgenerated("('[]')")) @db.Text
+  results        String @default(dbgenerated("('{}')")) @db.LongText
   companyId      String
-  company        Company  @relation(fields: [companyId], references: [id])
+  company        MosCompany  @relation(fields: [companyId], references: [id])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -358,7 +1122,7 @@ model SeoDailyTask {
   id             String   @id @default(cuid())
   day            Int
   title          String
-  description    String?
+  description    String? @db.Text
   category       String
   status         String   @default("pending")
   completedAt    DateTime?
@@ -373,11 +1137,11 @@ model AiAgent {
   id          String   @id @default(cuid())
   name        String
   type        String
-  description String?
-  config      String   @default("{}")
+  description String? @db.Text
+  config      String @default(dbgenerated("('{}')")) @db.Text
   isEnabled   Boolean  @default(true)
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     MosCompany  @relation(fields: [companyId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -385,7 +1149,7 @@ model AiAgent {
 model AiChatMessage {
   id        String   @id @default(cuid())
   role      String
-  content   String
+  content   String @db.LongText
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
@@ -402,7 +1166,7 @@ model Subscription {
   startsAt    DateTime @default(now())
   endsAt      DateTime?
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     MosCompany  @relation(fields: [companyId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -417,38 +1181,38 @@ model Invitation {
   expiresAt   DateTime
   acceptedAt  DateTime?
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     MosCompany  @relation(fields: [companyId], references: [id])
   createdAt   DateTime @default(now())
 }
 
 // ==================== AUDIT LOG ====================
 
-model AuditLog {
+model MosAuditLog {
   id         String   @id @default(cuid())
   action     String
   resource   String
   resourceId String?
-  details    String?
+  details    String? @db.Text
   userId     String?
   user       User?    @relation(fields: [userId], references: [id])
   companyId  String?
-  company    Company?  @relation(fields: [companyId], references: [id])
+  company    MosCompany?  @relation(fields: [companyId], references: [id])
   createdAt  DateTime @default(now())
 }
 
 // ==================== NOTIFICATIONS ====================
 
-model Notification {
+model MosNotification {
   id          String    @id @default(cuid())
   userId      String                    // recipient — user who should see it
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   type        String                    // lead.created | deal.won | ticket.assigned | campaign.completed | system | announcement
   title       String
-  message     String
-  link        String?                  // URL to navigate to when clicked
+  message     String @db.Text
+  link        String? @db.Text  // URL to navigate to when clicked
   isRead      Boolean   @default(false)
   readAt      DateTime?
-  metadata    String    @default("{}") // JSON: extra context
+  metadata    String @default(dbgenerated("('{}')")) @db.LongText  // JSON: extra context
   createdAt   DateTime  @default(now())
 
   @@index([userId, isRead])
@@ -459,7 +1223,7 @@ model Notification {
 
 model Message {
   id           String    @id @default(cuid())
-  content      String
+  content      String @db.LongText
   senderId     String
   sender       User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
   recipientId  String
@@ -477,15 +1241,15 @@ model Message {
 model Announcement {
   id           String    @id @default(cuid())
   title        String
-  content      String
+  content      String @db.LongText
   priority     String    @default("normal")  // low | normal | high
-  targetRoles  String    @default("all")      // JSON array of role keys, or "all"
+  targetRoles  String @default(dbgenerated("('all')")) @db.Text  // JSON array of role keys, or "all"
   isActive     Boolean   @default(true)
   expiresAt    DateTime?
   createdBy    String?
   creator      User?     @relation("AnnouncementCreator", fields: [createdBy], references: [id])
   companyId    String
-  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      MosCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
@@ -495,14 +1259,14 @@ model Announcement {
 model Activity {
   id           String    @id @default(cuid())
   companyId    String
-  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      MosCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId       String?
   user         User?     @relation("ActivityActor", fields: [userId], references: [id])
   type         String                    // lead.created | deal.won | content.published | campaign.completed | ...
-  description  String
+  description  String @db.Text
   resourceType String?                  // lead | deal | contact | ticket | campaign | content | ...
   resourceId   String?
-  metadata     String    @default("{}") // JSON
+  metadata     String @default(dbgenerated("('{}')")) @db.LongText  // JSON
   createdAt    DateTime  @default(now())
 
   @@index([companyId, createdAt])
@@ -515,20 +1279,20 @@ model Activity {
 // ==================== DEPARTMENTS ====================
 // Organizational departments that house AI employees
 
-model Department {
+model MosDepartment {
   id            String   @id @default(cuid())
   name          String
   code          String   @unique  // e.g. "MKT", "ENG", "FIN"
-  description   String?
+  description   String? @db.Text
   parentId      String?               // For sub-departments
-  parent        Department?  @relation("DeptHierarchy", fields: [parentId], references: [id])
-  children      Department[]  @relation("DeptHierarchy")
+  parent        MosDepartment?  @relation("DeptHierarchy", fields: [parentId], references: [id])
+  children      MosDepartment[]  @relation("DeptHierarchy")
   level         Int      @default(0)  // 0=executive, 1=director, 2=department, 3=team
   sortOrder     Int      @default(0)
   icon          String?
   color         String?
   companyId     String
-  company       Company  @relation(fields: [companyId], references: [id])
+  company       MosCompany  @relation(fields: [companyId], references: [id])
   prompts       Prompt[] @relation("PromptDepartment")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -548,32 +1312,32 @@ model Employee {
   title           String               // e.g. "Chief Marketing Officer"
   level           String   @default("specialist") // executive, director, manager, supervisor, specialist, worker
   status          String   @default("idle")       // idle, working, busy, offline, training
-  avatar          String?
-  mission         String               // What this employee exists to do
-  constitution     String?              // Behavioral rules and constraints
-  authority       String   @default("{}") // JSON: what they can authorize
-  permissions     String   @default("{}") // JSON: RBAC permissions
+  avatar          String? @db.Text
+  mission         String @db.Text  // What this employee exists to do
+  constitution     String? @db.LongText  // Behavioral rules and constraints
+  authority       String @default(dbgenerated("('{}')")) @db.Text  // JSON: what they can authorize
+  permissions     String @default(dbgenerated("('{}')")) @db.Text  // JSON: RBAC permissions
 
   // Specialization
   departmentId    String
-  department      Department @relation(fields: [departmentId], references: [id])
+  department      MosDepartment @relation(fields: [departmentId], references: [id])
   reportsToId     String?
   reportsTo       Employee?  @relation("EmpHierarchy", fields: [reportsToId], references: [id])
   directReports   Employee[]  @relation("EmpHierarchy")
 
   // Skills & Capabilities
-  skills          String   @default("[]") // JSON array of skill IDs/names
-  capabilities    String   @default("[]") // JSON: what this employee can DO
-  tools           String   @default("[]") // JSON: tools this employee can use
+  skills          String @default(dbgenerated("('[]')")) @db.Text  // JSON array of skill IDs/names
+  capabilities    String @default(dbgenerated("('[]')")) @db.Text  // JSON: what this employee can DO
+  tools           String @default(dbgenerated("('[]')")) @db.Text  // JSON: tools this employee can use
 
   // Model Configuration
   preferredModel  String?              // Preferred AI model for this employee
   modelTier       String   @default("balanced") // fast, balanced, reasoning, coding, vision, specialized
-  modelConfig     String   @default("{}") // JSON: model-specific config
+  modelConfig     String @default(dbgenerated("('{}')")) @db.Text  // JSON: model-specific config
 
   // KPIs & Performance
-  kpis            String   @default("[]") // JSON: KPI definitions
-  currentKpis     String   @default("{}") // JSON: current KPI values
+  kpis            String @default(dbgenerated("('[]')")) @db.Text  // JSON: KPI definitions
+  currentKpis     String @default(dbgenerated("('{}')")) @db.Text  // JSON: current KPI values
   totalTasks      Int      @default(0)
   completedTasks  Int      @default(0)
   failedTasks     Int      @default(0)
@@ -586,17 +1350,17 @@ model Employee {
   canConsult      Boolean  @default(true)
   canReview       Boolean  @default(false)
   canEscalate     Boolean  @default(true)
-  collaborationRules String @default("{}")
+  collaborationRules String @default(dbgenerated("('{}')")) @db.Text
 
   // Escalation
-  escalationRules String   @default("[]") // JSON: when/how to escalate
-  escalationPath  String   @default("[]") // JSON: chain of escalation
+  escalationRules String @default(dbgenerated("('[]')")) @db.Text  // JSON: when/how to escalate
+  escalationPath  String @default(dbgenerated("('[]')")) @db.Text  // JSON: chain of escalation
 
   // System
   isEnabled       Boolean  @default(true)
   isAvailable     Boolean  @default(true)
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id])
+  company         MosCompany  @relation(fields: [companyId], references: [id])
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -614,7 +1378,7 @@ model TaskExecution {
 
   // Task Info
   title           String
-  description     String?
+  description     String? @db.Text
   taskType        String               // e.g. "content_creation", "seo_analysis", "lead_qualification"
   complexity      String   @default("standard") // simple, standard, complex, enterprise
   executionPath   String   @default("fast")     // fast, standard, complex, enterprise
@@ -630,9 +1394,9 @@ model TaskExecution {
 
   // Execution
   status          String   @default("pending") // pending, running, completed, failed, escalated, validated
-  input           String   @default("{}")     // JSON: task input/context
-  output          String?                   // JSON: task result
-  modelUsed       String?                   // Which model was actually used
+  input           String @default(dbgenerated("('{}')")) @db.Text  // JSON: task input/context
+  output          String? @db.LongText  // JSON: task result
+  modelUsed       String? @db.Text  // Which model was actually used
   modelTier       String?                   // fast, balanced, reasoning, etc.
   promptTokens    Int      @default(0)
   completionTokens Int     @default(0)
@@ -641,33 +1405,33 @@ model TaskExecution {
   completedAt     DateTime?
 
   // Knowledge & Memory Used
-  skillsUsed      String   @default("[]") // JSON: skills loaded
-  sopsUsed        String   @default("[]") // JSON: SOPs followed
-  knowledgeUsed   String   @default("[]") // JSON: knowledge nodes retrieved
-  memoryUsed      String   @default("[]") // JSON: memory types accessed
+  skillsUsed      String @default(dbgenerated("('[]')")) @db.Text  // JSON: skills loaded
+  sopsUsed        String @default(dbgenerated("('[]')")) @db.Text  // JSON: SOPs followed
+  knowledgeUsed   String @default(dbgenerated("('[]')")) @db.Text  // JSON: knowledge nodes retrieved
+  memoryUsed      String @default(dbgenerated("('[]')")) @db.Text  // JSON: memory types accessed
   ragUsed         Boolean  @default(false)
 
   // Quality
   validationStatus String?  // passed, failed, skipped
   validationScore  Float?
   validatorId      String?
-  qualityNotes     String?
+  qualityNotes     String? @db.Text
 
   // Self-Healing
   retryCount      Int      @default(0)
   maxRetries      Int      @default(3)
   fallbackModel   String?
-  fallbackReason  String?
+  fallbackReason  String? @db.Text
 
   // Collaboration
   collaborationType String? // solo, delegated, consulted, parallel, synthesized
   parentTaskId     String?  // For sub-tasks
-  childTaskIds     String   @default("[]") // JSON
-  consultedEmployees String @default("[]") // JSON
+  childTaskIds     String @default(dbgenerated("('[]')")) @db.Text  // JSON
+  consultedEmployees String @default(dbgenerated("('[]')")) @db.Text  // JSON
 
   // Learning
-  lessonLearned   String?
-  improvementTags String   @default("[]") // JSON
+  lessonLearned   String? @db.Text
+  improvementTags String @default(dbgenerated("('[]')")) @db.Text  // JSON
 
   companyId       String
   createdAt       DateTime @default(now())
@@ -685,8 +1449,8 @@ model EmployeeMemory {
   memoryType      String               // working, episodic, semantic, procedural, department, organizational
   category        String?              // Sub-category for organization
   title           String
-  content         String               // The actual memory content
-  metadata        String   @default("{}") // JSON: extra context
+  content         String @db.LongText  // The actual memory content
+  metadata        String @default(dbgenerated("('{}')")) @db.LongText  // JSON: extra context
   relevance       Float    @default(1.0) // Relevance score 0-1
   accessCount     Int      @default(0)
   lastAccessedAt  DateTime?
@@ -711,31 +1475,31 @@ model EmployeeMemory {
 model KnowledgeNode {
   id              String   @id @default(cuid())
   title           String
-  content         String               // The knowledge content
-  summary         String?              // Short summary for quick matching
+  content         String @db.LongText  // The knowledge content
+  summary         String? @db.LongText  // Short summary for quick matching
   nodeType        String   @default("document") // document, faq, guideline, template, policy, best_practice
-  tags            String   @default("[]") // JSON: searchable tags
+  tags            String @default(dbgenerated("('[]')")) @db.Text  // JSON: searchable tags
   category        String?
 
   // Embedding for similarity search (stored as JSON array of floats)
-  embedding       String?              // JSON: vector embedding
+  embedding       String? @db.LongText  // JSON: vector embedding
 
   // Access Control
   departmentId    String?
-  department      Department? @relation(fields: [departmentId], references: [id])
+  department      MosDepartment? @relation(fields: [departmentId], references: [id])
   accessLevel     String   @default("company") // public, department, role, restricted
-  accessRoles     String   @default("[]") // JSON: roles that can access
+  accessRoles     String @default(dbgenerated("('[]')")) @db.Text  // JSON: roles that can access
 
   // Usage tracking
   accessCount     Int      @default(0)
   rating          Float    @default(0)    // User-rated quality 0-5
 
   // Source
-  sourceUrl       String?
+  sourceUrl       String? @db.Text
   sourceType      String?
 
   companyId       String
-  company         Company?  @relation(fields: [companyId], references: [id])
+  company         MosCompany?  @relation(fields: [companyId], references: [id])
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -746,23 +1510,23 @@ model KnowledgeNode {
 model Sop {
   id              String   @id @default(cuid())
   name            String
-  description     String?
+  description     String? @db.Text
   version         Int      @default(1)
   category        String               // e.g. "content_creation", "lead_qualification"
-  triggerConditions String @default("[]") // JSON: when this SOP should be triggered
+  triggerConditions String @default(dbgenerated("('[]')")) @db.Text  // JSON: when this SOP should be triggered
 
   // SOP Steps (JSON array of step objects)
-  steps           String   @default("[]")
+  steps           String @default(dbgenerated("('[]')")) @db.LongText
   // Each step: { order, title, description, decisionPoints: [], validations: [] }
 
   // Preconditions
-  preconditions    String   @default("[]") // JSON: what must be true before execution
+  preconditions    String @default(dbgenerated("('[]')")) @db.Text  // JSON: what must be true before execution
 
   // Which employees/departments this SOP applies to
   departmentId    String?
-  department      Department? @relation(fields: [departmentId], references: [id])
-  applicableRoles String   @default("[]") // JSON: employee levels that should follow this
-  applicableTasks String   @default("[]") // JSON: task types that trigger this SOP
+  department      MosDepartment? @relation(fields: [departmentId], references: [id])
+  applicableRoles String @default(dbgenerated("('[]')")) @db.Text  // JSON: employee levels that should follow this
+  applicableTasks String @default(dbgenerated("('[]')")) @db.Text  // JSON: task types that trigger this SOP
 
   isActive        Boolean  @default(true)
   usageCount      Int      @default(0)
@@ -784,17 +1548,17 @@ model WorkforceConversation {
 
   // Messages stored as JSON array for efficiency
   // Each: { role: 'user'|'agent'|'system', content, timestamp, modelUsed, skillsLoaded, memoryAccessed }
-  messages        String   @default("[]")
+  messages        String @default(dbgenerated("('[]')")) @db.LongText
   messageCount    Int      @default(0)
 
   // Context loaded for this conversation
-  skillsLoaded    String   @default("[]") // JSON
-  knowledgeLoaded String   @default("[]") // JSON
-  memoryAccessed  String   @default("[]") // JSON
-  sopsLoaded      String   @default("[]") // JSON
+  skillsLoaded    String @default(dbgenerated("('[]')")) @db.Text  // JSON
+  knowledgeLoaded String @default(dbgenerated("('[]')")) @db.Text  // JSON
+  memoryAccessed  String @default(dbgenerated("('[]')")) @db.Text  // JSON
+  sopsLoaded      String @default(dbgenerated("('[]')")) @db.Text  // JSON
 
   // Execution context
-  taskContext     String?              // If conversation led to task execution
+  taskContext     String? @db.LongText  // If conversation led to task execution
   totalTokens     Int      @default(0)
 
   companyId       String
@@ -810,7 +1574,7 @@ model ModelConfig {
   name            String               // e.g. "gpt-4o", "claude-3.5-sonnet"
   provider        String               // e.g. "openai", "anthropic"
   tier            String               // fast, balanced, reasoning, coding, vision, embedding, specialized
-  capabilities    String   @default("[]") // JSON: text, vision, function_calling, etc.
+  capabilities    String @default(dbgenerated("('[]')")) @db.Text  // JSON: text, vision, function_calling, etc.
   maxTokens       Int      @default(4096)
   costPer1kInput  Float    @default(0)
   costPer1kOutput Float    @default(0)
@@ -818,8 +1582,8 @@ model ModelConfig {
   qualityScore    Float    @default(0) // Benchmark quality 0-100
   isEnabled       Boolean  @default(true)
   isFallback      Boolean  @default(false)
-  fallbackFor     String?              // ID of model this is a fallback for
-  config          String   @default("{}") // JSON: provider-specific config
+  fallbackFor     String? @db.Text  // ID of model this is a fallback for
+  config          String @default(dbgenerated("('{}')")) @db.Text  // JSON: provider-specific config
   sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -834,11 +1598,11 @@ model ToolDefinition {
   id              String   @id @default(cuid())
   toolNumber      Int      @unique           // e.g. 001, 002, ... 120
   name            String                     // e.g. "Google Search Console"
-  url             String                     // e.g. "https://search.google.com/search-console"
+  url             String @db.Text  // e.g. "https://search.google.com/search-console"
   authType        String                     // oauth2, api_key, bot_token, partner, none, internal, webhook
   
   // Required environment variables / credentials
-  requiredCredentials String @default("[]") // JSON: [{key: "GOOGLE_CLIENT_ID", label: "Client ID", isSecret: false}, ...]
+  requiredCredentials String @default(dbgenerated("('[]')")) @db.Text  // JSON: [{key: "GOOGLE_CLIENT_ID", label: "Client ID", isSecret: false}, ...]
   
   connectionType  String                     // api, rest_api, graph_api, bot_api, webhook, platform, partner_api, internal, tracking, database, redis, automation
   
@@ -846,14 +1610,14 @@ model ToolDefinition {
   category        String                     // google, meta, social, content, scholarship, university, google_workspace, microsoft, communication, crm, email, ai_provider, payment, tracking, security, notification, infrastructure, devops, bd_platform, alo_internal
   subcategory     String?                    // e.g. "seo", "paid_ads", "organic", "messaging"
   
-  capabilities    String                     // e.g. "SEO/keyword/performance data"
+  capabilities    String @db.Text  // e.g. "SEO/keyword/performance data"
   automationLevel String   @default("MANUAL") // AUTO, LIMITED, MANUAL, CHECK, PARTNER, AUTO/LIMITED, MANUAL/AUTO CONTENT
   
   // Status & metadata
-  description     String?
+  description     String? @db.Text
   icon            String?                    // Icon name from lucide
   color           String?                    // Brand color hex
-  documentationUrl String?
+  documentationUrl String? @db.Text
   isEnabled       Boolean  @default(true)
   sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
@@ -867,7 +1631,7 @@ model ToolDefinition {
 model ToolConnection {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id])
+  company         MosCompany  @relation(fields: [companyId], references: [id])
   toolId          String
   tool            ToolDefinition @relation(fields: [toolId], references: [id])
   
@@ -875,15 +1639,15 @@ model ToolConnection {
   status          String   @default("disconnected") // disconnected, connecting, active, error, revoked
   connectedAt     DateTime?
   lastSyncedAt    DateTime?
-  lastError       String?
+  lastError       String? @db.Text
   
   // Stored credentials (encrypted at rest in production)
-  credentials     String   @default("{}") // JSON: {env_var_name: encrypted_value, ...}
+  credentials     String @default(dbgenerated("('{}')")) @db.Text  // JSON: {env_var_name: encrypted_value, ...}
   
   // Configuration
-  config          String   @default("{}") // JSON: tool-specific configuration
-  webhooks        String   @default("[]") // JSON: registered webhook URLs
-  scopes          String   @default("[]") // JSON: OAuth scopes granted
+  config          String @default(dbgenerated("('{}')")) @db.Text  // JSON: tool-specific configuration
+  webhooks        String @default(dbgenerated("('[]')")) @db.Text  // JSON: registered webhook URLs
+  scopes          String @default(dbgenerated("('[]')")) @db.Text  // JSON: OAuth scopes granted
   
   // Usage tracking
   totalCalls      Int      @default(0)
@@ -911,16 +1675,16 @@ model ToolUsageLog {
   
   // What happened
   action          String                     // e.g. "fetch_data", "send_message", "create_post"
-  endpoint        String?                    // API endpoint called
+  endpoint        String? @db.Text  // API endpoint called
   method          String?                    // HTTP method
-  requestSummary  String?                    // Summary of request
+  requestSummary  String? @db.LongText  // Summary of request
   responseStatus  Int?                       // HTTP status code
   durationMs      Int?                       // How long the call took
   
   // Result
   isSuccess       Boolean  @default(false)
-  errorMessage    String?
-  responseData    String?                    // JSON: response data (truncated for large responses)
+  errorMessage    String? @db.Text
+  responseData    String? @db.LongText  // JSON: response data (truncated for large responses)
   
   createdAt       DateTime @default(now())
 }
@@ -930,12 +1694,12 @@ model ToolUsageLog {
 
 model Webhook {
   id          String   @id @default(cuid())
-  url         String
-  events      String   @default("[]") // JSON array of event names: ["lead.created", "campaign.completed"]
+  url         String @db.Text
+  events      String @default(dbgenerated("('[]')")) @db.Text  // JSON array of event names: ["lead.created", "campaign.completed"]
   status      String   @default("active") // active | disabled
-  secret      String?                   // for signature verification
+  secret      String? @db.Text  // for signature verification
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     MosCompany  @relation(fields: [companyId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -944,12 +1708,12 @@ model ApiKey {
   id          String   @id @default(cuid())
   name        String
   keyPrefix   String                   // first 8 chars shown in UI
-  hashedKey   String                   // bcrypt hash of the full key
+  hashedKey   String @db.Text  // bcrypt hash of the full key
   lastUsedAt  DateTime?
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     MosCompany  @relation(fields: [companyId], references: [id])
   // Scopes (JSON array) — e.g. ["calls:read", "calls:write", "billing:read"]
-  scopes      String   @default("[]")
+  scopes      String @default(dbgenerated("('[]')")) @db.Text
   // Per-minute rate limit (null = use company default)
   rateLimitPerMin Int?
   // Optional expiry
@@ -961,9 +1725,9 @@ model UserSession {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id])
-  deviceInfo  String                   // e.g. "Chrome on macOS"
+  deviceInfo  String @db.Text  // e.g. "Chrome on macOS"
   ipAddress   String?
-  location    String?
+  location    String? @db.Text
   lastActiveAt DateTime @default(now())
   createdAt   DateTime @default(now())
 }
@@ -977,9 +1741,9 @@ model FeedSource {
   category     String   @default("general")
   isActive     Boolean  @default(true)
   lastFetchedAt DateTime?
-  lastError    String?
+  lastError    String? @db.Text
   companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   items        FeedItem[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -990,30 +1754,30 @@ model FeedItem {
   sourceId     String
   source       FeedSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   title        String
-  link         String
-  description  String?
-  author       String?
+  link         String @db.Text
+  description  String? @db.Text
+  author       String? @db.Text
   publishedAt  DateTime
-  guid         String?
+  guid         String? @db.Text
   isRead       Boolean  @default(false)
   isStarred    Boolean  @default(false)
   companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
 }
 
 model SmsMessage {
   id           String   @id @default(cuid())
-  to           String
-  from         String?
-  body         String
+  to           String @db.Text
+  from         String? @db.Text
+  body         String @db.LongText
   status       String   @default("queued")
   providerMessageId String?
-  error        String?
+  error        String? @db.Text
   leadId       String?
   contactId    String?
   companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   sentBy       String?
   sender       User?    @relation("SmsSender", fields: [sentBy], references: [id])
   createdAt    DateTime @default(now())
@@ -1023,29 +1787,29 @@ model SmsMessage {
 model Competitor {
   id           String   @id @default(cuid())
   name         String
-  website      String?
-  description  String?
-  strengths    String   @default("[]")
-  weaknesses   String   @default("[]")
-  pricing      String?
-  marketShare  String?
+  website      String? @db.Text
+  description  String? @db.Text
+  strengths    String @default(dbgenerated("('[]')")) @db.Text
+  weaknesses   String @default(dbgenerated("('[]')")) @db.Text
+  pricing      String? @db.Text
+  marketShare  String? @db.Text
   threatLevel  String   @default("medium")
   companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
 
 model KeywordTracker {
   id           String   @id @default(cuid())
-  keyword      String
+  keyword      String @db.Text
   searchVolume Int      @default(0)
   difficulty   Int      @default(0)
   trend        String   @default("stable")
   lastPosition Int?
-  competitorPositions String @default("{}")
+  competitorPositions String @default(dbgenerated("('{}')")) @db.Text
   companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -1055,13 +1819,13 @@ model EnrichmentCache {
   domain       String   @unique
   companyName  String?
   industry     String?
-  website      String?
-  description  String?
-  logo         String?
-  employees    String?
+  website      String? @db.Text
+  description  String? @db.Text
+  logo         String? @db.Text
+  employees    String? @db.Text
   foundedYear  Int?
-  linkedinUrl  String?
-  twitterHandle String?
+  linkedinUrl  String? @db.Text
+  twitterHandle String? @db.Text
   fetchedAt    DateTime @default(now())
 }
 
@@ -1070,15 +1834,15 @@ model EnrichmentCache {
 model Workflow {
   id           String   @id @default(cuid())
   name         String
-  description  String?
+  description  String? @db.Text
   trigger      String   @default("manual")  // manual | lead.created | deal.won | ticket.created | schedule
-  triggerConfig String  @default("{}")      // JSON: schedule config, event filter, etc.
-  steps        String   @default("[]")      // JSON array of step definitions
+  triggerConfig String @default(dbgenerated("('{}')")) @db.Text  // JSON: schedule config, event filter, etc.
+  steps        String @default(dbgenerated("('[]')")) @db.LongText  // JSON array of step definitions
   isActive     Boolean  @default(false)
   lastRunAt    DateTime?
   runCount     Int      @default(0)
   companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy    String?
   creator      User?    @relation("WorkflowCreator", fields: [createdBy], references: [id])
   createdAt    DateTime @default(now())
@@ -1092,13 +1856,13 @@ model WorkflowRun {
   workflow     Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   status       String   @default("pending")  // pending | running | completed | failed
   trigger      String   @default("manual")
-  input        String   @default("{}")
-  output       String?
-  error        String?
+  input        String @default(dbgenerated("('{}')")) @db.Text
+  output       String? @db.LongText
+  error        String? @db.Text
   startedAt    DateTime?
   completedAt  DateTime?
   companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
 }
 
@@ -1112,7 +1876,7 @@ model Integration {
   id              String   @id @default(cuid())
   // Globally unique connection id surfaced in the API as {connection_id}
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Provider slug: google, youtube, meta, linkedin, x, tiktok, pinterest,
   // wordpress, hubspot, stripe, shopify, google_search_console, ga4, gtm,
   // google_ads, mailchimp, sendgrid, etc.
@@ -1122,9 +1886,9 @@ model Integration {
   // Connection-level status (separate from credential_status)
   status          String   @default("pending")  // pending | connected | action_required | expired | revoked | unavailable | error
   // OAuth scopes granted by the user (JSON array — non-secret)
-  grantedScopes   String   @default("[]")
+  grantedScopes   String @default(dbgenerated("('[]')")) @db.Text
   // Resources selected by the user (de-normalised copy for fast reads)
-  selectedResources String  @default("[]")  // JSON array of {type, id, name}
+  selectedResources String @default(dbgenerated("('[]')")) @db.Text  // JSON array of {type, id, name}
   // OAuth state id (FK to OAuthState) used during the in-flight authorize flow
   currentStateId  String?
   // Token expiry (iso) — populated on callback; used by daily health check
@@ -1156,11 +1920,11 @@ model IntegrationSecret {
   // developer_token, webhook_signing_secret, service_account_json, etc.
   kind            String
   // AES-256-GCM envelope: iv:ciphertext:authTag (all base64). Never plaintext.
-  ciphertext      String
+  ciphertext      String @db.LongText
   // Key version of the master key that encrypted this (for rotation)
   keyVersion      Int      @default(1)
   // Masked value shown to the user, e.g. "****x7Kq" — never the secret itself
-  maskedValue     String?
+  maskedValue     String? @db.Text
   // When this secret was last rotated/refreshed
   rotatedAt       DateTime?
   createdAt       DateTime @default(now())
@@ -1183,13 +1947,13 @@ model IntegrationResource {
   // Human-readable name (channel title, page name, property name)
   name            String?
   // Permission level the user has on this resource (owner, admin, user, etc.)
-  permission      String?
+  permission      String? @db.Text
   // Whether the user explicitly selected this resource
   selected        Boolean  @default(false)
   // Whether the resource is reachable on the provider API right now
   status          String   @default("valid")  // valid | action_required | expired | unavailable
   // Raw metadata returned by discovery (non-secret)
-  metadata        String   @default("{}")  // JSON
+  metadata        String @default(dbgenerated("('{}')")) @db.LongText  // JSON
   discoveredAt    DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1207,7 +1971,7 @@ model IntegrationLog {
   // Outcome: success | failure | pending
   outcome         String   @default("success")
   // Non-secret message (error reason, scope delta, etc.)
-  message         String?
+  message         String? @db.Text
   // Who initiated the action
   actorUserId     String?
   // Source: ui | api | agent | scheduler | webhook
@@ -1222,18 +1986,18 @@ model IntegrationLog {
 model OAuthState {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId          String
   user            User     @relation("OAuthStateUser", fields: [userId], references: [id], onDelete: Cascade)
   provider        String
   // High-entropy random — bound to the user's session, validated on callback
   state           String   @unique
   // PKCE code_verifier (S256 challenge). Never sent to the provider.
-  codeVerifier    String
+  codeVerifier    String @db.Text
   // The redirect URI the provider should send the user back to
-  redirectUri     String
+  redirectUri     String @db.Text
   // Requested scopes (JSON array)
-  scopes          String   @default("[]")
+  scopes          String @default(dbgenerated("('[]')")) @db.Text
   // Auto-expire so abandoned authorizations don't accumulate
   expiresAt       DateTime
   // Set to true on successful callback so re-use is rejected
@@ -1250,13 +2014,13 @@ model OAuthState {
 model IntegrationManifest {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Project / workspace grouping
   projectId       String?
   workspaceId     String?
   // JSON: list of {provider, connection_id, credential_reference (vault://),
   // resources[], status}
-  manifest        String   @default("{}")
+  manifest        String @default(dbgenerated("('{}')")) @db.Text
   // When the user confirmed the setup
   confirmedAt     DateTime @default(now())
   // Who confirmed
@@ -1285,7 +2049,7 @@ model AiModelProvider {
   // Display category for the admin UI
   category        String   @default("free")  // free | paid | self-hosted | hybrid
   // Base URL the chain calls (e.g. https://api.groq.com/openai/v1)
-  baseUrl         String?
+  baseUrl         String? @db.Text
   // Whether the provider speaks OpenAI-compatible /v1/chat/completions
   openAiCompatible Boolean @default(true)
   // Whether this provider can be used without an API key (local Ollama)
@@ -1294,9 +2058,9 @@ model AiModelProvider {
   // — if null, the key is stored encrypted in AiModelProvider.secretCipher
   apiKeyEnvName   String?
   // AES-256-GCM envelope ciphertext of the API key (when not env-var-driven)
-  secretCipher    String?
+  secretCipher    String? @db.Text
   secretKeyVersion Int     @default(1)
-  secretMasked    String?
+  secretMasked    String? @db.Text
   // Whether the super admin has enabled this provider in the active chain
   isEnabled       Boolean  @default(true)
   // Sort priority — lower = earlier in the chain
@@ -1304,13 +2068,13 @@ model AiModelProvider {
   // Health check
   lastCheckedAt   DateTime?
   lastStatus      String?  // ok | rate_limited | auth_failed | unreachable | unknown
-  lastError       String?
+  lastError       String? @db.Text
   // Documentation link for the admin UI
-  docsUrl         String?
+  docsUrl         String? @db.Text
   // Free-tier rate limit info (display only)
-  rateLimitNote   String?
+  rateLimitNote   String? @db.Text
   // Notes for other admins
-  notes           String?
+  notes           String? @db.Text
   // Audit
   createdBy       String?
   creator         User?    @relation("AiModelProviderCreator", fields: [createdBy], references: [id])
@@ -1336,7 +2100,7 @@ model AiModelEntry {
   // Context window in tokens (helps the chain pick the right model)
   contextWindow   Int      @default(8192)
   // Capabilities: JSON array ["chat", "vision", "tools", "json_mode"]
-  capabilities    String   @default("[\"chat\"]")
+  capabilities    String @default(dbgenerated("('[\"chat\"]')")) @db.Text
   // Whether this model is the default fallback for the provider
   isDefault       Boolean  @default(false)
   // Whether this model is enabled in the chain
@@ -1344,9 +2108,9 @@ model AiModelEntry {
   // Estimated throughput for admin display
   maxOutputTokens Int      @default(4096)
   // Free-tier notes (e.g. "6 requests/min on free tier")
-  freeTierNote    String?
+  freeTierNote    String? @db.Text
   // Audit
-  createdBy       String?
+  createdBy       String? @db.Text
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   agentAssignments AgentModelAssignment[]
@@ -1366,7 +2130,7 @@ model AiModelEntry {
 model AgentModelAssignment {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Agent type slug — matches AiAgent.type from existing schema
   agentType       String
   // FK to provider + model entry (both required)
@@ -1405,7 +2169,7 @@ model CircuitBreakerState {
   consecutiveFailures Int  @default(0)
   consecutiveSuccesses Int @default(0)
   lastFailureAt   DateTime?
-  lastFailureReason String?
+  lastFailureReason String? @db.Text
   lastSuccessAt   DateTime?
   trippedAt       DateTime?
   // Number of times the breaker has tripped to "open" — for monitoring
@@ -1418,7 +2182,7 @@ model CircuitBreakerState {
 model AgentUsageDaily {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   agentType       String
   // YYYY-MM-DD (UTC) — daily bucket
   day             String
@@ -1444,7 +2208,7 @@ model AgentUsageDaily {
 model AgentExecutionLog {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   agentType       String
   // Which provider+model actually served the request
   providerSlug    String
@@ -1463,9 +2227,9 @@ model AgentExecutionLog {
   latencyMs       Int
   // Outcome
   success         Boolean
-  errorMessage    String?
+  errorMessage    String? @db.Text
   // Whether the response was discarded (filtered, PII scrub, schema fail)
-  discardedReason String?
+  discardedReason String? @db.Text
   // Whether a fallback provider served this request
   usedFallback    Boolean  @default(false)
   // User who triggered the run (if applicable)
@@ -1484,22 +2248,22 @@ model AgentExecutionLog {
 model AfterHoursRule {
   id              String   @id @default(cuid())
   companyId       String   @unique
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // IANA timezone — defaults to Asia/Dhaka per master directive
   timezone        String   @default("Asia/Dhaka")
   // JSON array of weekday numbers that are working days
   // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
-  workingDays     String   @default("[1,2,3,4,5]")  // Mon-Fri default
+  workingDays     String @default(dbgenerated("('[1,2,3,4,5]')")) @db.Text  // Mon-Fri default
   // HH:MM in the configured timezone
   workingStart    String   @default("09:00")
   workingEnd      String   @default("18:00")
   // JSON array of {date: "YYYY-MM-DD", name: "..."} for public holidays
-  holidays        String   @default("[]")
+  holidays        String @default(dbgenerated("('[]')")) @db.Text
   // What to do with inbound messages outside working hours
   // queue | auto_reply_with_disclaimer | emergency_only
   afterHoursPolicy String  @default("auto_reply_with_disclaimer")
   // Disclaimer text appended to auto-replies during off-hours
-  afterHoursDisclaimer String?
+  afterHoursDisclaimer String? @db.Text
   updatedAt       DateTime @updatedAt
 }
 
@@ -1512,10 +2276,10 @@ model MfaSecret {
   userId          String   @unique
   user            User     @relation("MfaSecretUser", fields: [userId], references: [id], onDelete: Cascade)
   // TOTP secret encrypted via vault (AES-256-GCM)
-  secretCipher    String
+  secretCipher    String @db.Text
   secretKeyVersion Int     @default(1)
   // Backup codes (bcrypt-hashed, JSON array)
-  backupCodesHash String?
+  backupCodesHash String? @db.Text
   isEnabled       Boolean  @default(false)
   enabledAt       DateTime?
   lastUsedAt      DateTime?
@@ -1533,11 +2297,11 @@ model RefreshToken {
   // JWT-style claims
   expiresAt       DateTime
   // Rotation: when used, this token's "rotatedTo" points to the new token
-  rotatedTo       String?
+  rotatedTo       String? @db.Text
   revokedAt       DateTime?
-  revokedReason   String?  // logout | rotation | breach | expired | admin
+  revokedReason   String? @db.Text  // logout | rotation | breach | expired | admin
   // Device info for audit
-  userAgent       String?
+  userAgent       String? @db.Text
   ipAddress       String?
   createdAt       DateTime @default(now())
 
@@ -1548,30 +2312,30 @@ model RefreshToken {
 model VoiceAgent {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name            String
-  description     String?
-  purpose         String?  // "inbound_receptionist" | "outbound_sales" | "support" | "survey"
+  description     String? @db.Text
+  purpose         String? @db.Text  // "inbound_receptionist" | "outbound_sales" | "support" | "survey"
   language        String   @default("bn-BD")
   // Voice configuration
   voiceId          String?
-  speakingStyle   String?  // "formal" | "friendly" | "professional" | "casual"
-  personality     String?
+  speakingStyle   String? @db.Text  // "formal" | "friendly" | "professional" | "casual"
+  personality     String? @db.Text
   // Conversation
-  systemPrompt    String   @default("")
-  greetingMessage String?
-  fallbackResponse String?
+  systemPrompt    String @default(dbgenerated("('')")) @db.LongText
+  greetingMessage String? @db.Text
+  fallbackResponse String? @db.LongText
   // Behavior
   maxCallDurationSec Int   @default(300)
-  workingHoursStart String? // "09:00"
-  workingHoursEnd   String? // "18:00"
-  workingDays      String  @default("[1,2,3,4,5]")
+  workingHoursStart String? @db.Text  // "09:00"
+  workingHoursEnd   String? @db.Text  // "18:00"
+  workingDays      String @default(dbgenerated("('[1,2,3,4,5]')")) @db.Text
   // Knowledge
   knowledgeBaseId String?
   // CRM link
   crmEnabled      Boolean  @default(true)
   // Tools (JSON array of tool names from agent-tools.ts allowlist)
-  allowlistedTools String  @default("[\"crm_lookup_lead\",\"crm_create_lead\",\"content_save_artifact\"]")
+  allowlistedTools String @default(dbgenerated("('[\"crm_lookup_lead\",\"crm_create_lead\",\"content_save_artifact\"]')")) @db.Text
   // Sensitive-action approval gate
   approvalMode    String  @default("suspend")  // suspend | auto_approve | auto_reject
   // Deployment
@@ -1593,7 +2357,7 @@ model VoiceAgent {
 model Consent {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Who consented (customer phone, email, or userId)
   subjectType     String   // "caller" | "customer" | "lead" | "user"
   subjectId       String   // phone number / email / userId
@@ -1601,20 +2365,20 @@ model Consent {
   kind            String   // "call_recording" | "marketing_sms" | "marketing_email" | "data_processing" | "voice_clone"
   // How they consented
   method          String   // "ivr_dtmf" | "ivr_voice" | "web_form" | "sms_reply" | "signed_form"
-  methodDetail    String?  // e.g. "pressed 1" / "signed PDF on 2026-01-01"
+  methodDetail    String? @db.Text  // e.g. "pressed 1" / "signed PDF on 2026-01-01"
   // Scope
   scope           String   @default("this_call")  // this_call | ongoing | 12_months
   expiresAt       DateTime?
   // Revocation
   revokedAt       DateTime?
-  revocationReason String?
+  revocationReason String? @db.Text
   // Reference (e.g. callId for call_recording consent)
   referenceType   String?  // "call" | "campaign" | "voice_clone"
   referenceId     String?
   // Audit
-  capturedBy      String?  // userId of the capturing agent (null if customer-initiated)
+  capturedBy      String? @db.Text  // userId of the capturing agent (null if customer-initiated)
   ipAddress       String?
-  userAgent       String?
+  userAgent       String? @db.Text
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1625,7 +2389,7 @@ model Consent {
 model CallUsageDaily {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   day             String   // YYYY-MM-DD UTC
   direction       String   // "inbound" | "outbound" | "internal"
   // Counts
@@ -1649,7 +2413,7 @@ model CallUsageDaily {
 model TtsUsageDaily {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   day             String
   provider        String   // "piper" | "zai" | "kokoro" | "cosyvoice" | "tortoise"
   language        String   @default("bn-BD")
@@ -1666,7 +2430,7 @@ model TtsUsageDaily {
 model AsrUsageDaily {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   day             String
   provider        String   // "faster-whisper" | "zai" | "whisperx" | "whisper_cpp"
   language        String   @default("bn-BD")
@@ -1685,7 +2449,7 @@ model AsrUsageDaily {
 model PhoneNumber {
   id              String   @id @default(cuid())
   companyId       String?
-  company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company         MosCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   // E.164 format: +8801XXXXXXXXX
   number          String   @unique
   // Provider that provisioned this number
@@ -1694,7 +2458,7 @@ model PhoneNumber {
   // Country + type
   country         String   @default("BD")
   numberType      String   @default("local")  // local | toll_free | mobile | national
-  capabilities    String   @default("[\"voice\",\"sms\"]")  // JSON array
+  capabilities    String @default(dbgenerated("('[\"voice\",\"sms\"]')")) @db.Text  // JSON array
   // Lifecycle
   status          String   @default("available")  // available | assigned | active | released | porting
   assignedAt      DateTime?
@@ -1704,9 +2468,9 @@ model PhoneNumber {
   destinationType String?  // "ivr" | "ai_agent" | "ring_group" | "queue" | "user" | "voicemail"
   destinationId   String?  // FK to the destination entity (polymorphic)
   // Business hours (override global defaults)
-  businessHoursStart String?
-  businessHoursEnd String?
-  workingDays     String?  // JSON array [1,2,3,4,5]
+  businessHoursStart String? @db.Text
+  businessHoursEnd String? @db.Text
+  workingDays     String? @db.Text  // JSON array [1,2,3,4,5]
   // Caller ID config
   callerIdName    String?
   // Audit
@@ -1722,7 +2486,7 @@ model PhoneNumber {
 model Call {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // FreeSWITCH call UUID (or provider's call id)
   providerCallId  String?  @unique
   // Direction
@@ -1747,21 +2511,21 @@ model Call {
   endedAt         DateTime?
   durationSec     Int      @default(0)
   // Recording
-  recordingUrl    String?  // MinIO signed URL placeholder
+  recordingUrl    String? @db.Text  // MinIO signed URL placeholder
   recordingConsentId String? // Consent row id
   hasRecording    Boolean  @default(false)
   // AI conversation
-  transcript      String?  // full transcript (JSON or text)
-  summary         String?  // AI-generated summary
+  transcript      String? @db.LongText  // full transcript (JSON or text)
+  summary         String? @db.LongText  // AI-generated summary
   intent          String?  // detected intent
   sentiment       String?  // "positive" | "neutral" | "negative" | "mixed"
-  actionItems     String?  // JSON array of {item, assignee, dueDate}
+  actionItems     String? @db.Text  // JSON array of {item, assignee, dueDate}
   // Quality
   qualityScore    Float?   // 0-100
   // Outcome
   outcome         String?  // "resolved" | "transferred" | "voicemail" | "abandoned" | "callback_scheduled"
   // Failure
-  failureReason   String?
+  failureReason   String? @db.Text
   // Audit
   createdBy       String?
   creator         User?    @relation("CallCreator", fields: [createdBy], references: [id])
@@ -1791,7 +2555,7 @@ model CallEvent {
   actorType       String   // "system" | "ai_agent" | "human_agent" | "caller" | "supervisor"
   actorId         String?
   // Optional metadata
-  metadata        String   @default("{}")  // JSON
+  metadata        String @default(dbgenerated("('{}')")) @db.LongText  // JSON
   timestamp       DateTime @default(now())
 
   @@index([callId, timestamp])
@@ -1800,11 +2564,11 @@ model CallEvent {
 model IvrMenu {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name            String
-  description     String?
+  description     String? @db.Text
   // JSON tree of nodes: [{ id, type: "play"|"gather"|"route"|"hangup", prompt?, inputVar?, routes: [{ dtmf, target }] }]
-  tree            String   @default("[]")
+  tree            String @default(dbgenerated("('[]')")) @db.Text
   language        String   @default("bn-BD")
   voiceId         String?
   status          String   @default("draft")  // draft | active | archived
@@ -1819,15 +2583,15 @@ model IvrMenu {
 model RingGroup {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name            String
-  description     String?
+  description     String? @db.Text
   // Agent user ids in this ring group
-  memberIds       String   @default("[]")  // JSON array of userIds
+  memberIds       String @default(dbgenerated("('[]')")) @db.Text  // JSON array of userIds
   // Dial strategy
   strategy        String   @default("ring_all")  // ring_all | hunt | longest_idle | round_robin
   ringTimeoutSec  Int      @default(20)
-  ringOrder       String?  // JSON array for hunt strategy
+  ringOrder       String? @db.Text  // JSON array for hunt strategy
   // Fallback
   fallbackDestinationType String?  // "voicemail" | "queue" | "external"
   fallbackDestinationId   String?
@@ -1841,16 +2605,16 @@ model RingGroup {
 model CallQueue {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name            String
-  description     String?
+  description     String? @db.Text
   // Members
-  agentIds        String   @default("[]")  // JSON array of userIds
+  agentIds        String @default(dbgenerated("('[]')")) @db.Text  // JSON array of userIds
   // Queue config
   maxSize         Int      @default(50)
   priorityLevels  Int      @default(3)
   // Caller experience
-  mohUrl          String?  // music on hold
+  mohUrl          String? @db.Text  // music on hold
   announcePosition Boolean @default(true)
   announceEta     Boolean  @default(true)
   maxWaitSec      Int      @default(300)
@@ -1867,17 +2631,17 @@ model CallQueue {
 model Voicemail {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   callId          String?
   call            Call?    @relation("VoicemailCall", fields: [callId], references: [id], onDelete: SetNull)
   // Caller info
   fromNumber      String
   fromName        String?
   // Recording
-  audioUrl        String
+  audioUrl        String @db.Text
   durationSec     Int
   // Transcription
-  transcript      String?
+  transcript      String? @db.LongText
   transcriptionStatus String? @default("pending")  // pending | processing | completed | failed
   // Routing
   assignedTo      String?  // userId
@@ -1901,12 +2665,12 @@ model VoiceModel {
   // Language
   language        String   @default("bn-BD")
   gender          String?  // "male" | "female" | "neutral"
-  style           String?  // "formal" | "friendly" | "casual" | "narrator"
+  style           String? @db.Text  // "formal" | "friendly" | "casual" | "narrator"
   // Quality + footprint
   quality         String   @default("medium")  // x_low | low | medium | high
   sampleRateHz    Int      @default(22050)
   // License
-  license         String?  // "MIT" | "Apache-2.0" | "CPML"
+  license         String? @db.Text  // "MIT" | "Apache-2.0" | "CPML"
   commercialUseOk Boolean  @default(true)
   // Voice clone authorization (if this is a cloned voice)
   cloneAuthorizationId String?
@@ -1926,7 +2690,7 @@ model VoiceModel {
 model VoiceCloneAuthorization {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Voice owner
   ownerName       String
   ownerEmail       String?
@@ -1938,13 +2702,13 @@ model VoiceCloneAuthorization {
   // Consent
   consentScope    String   @default("commercial_ivr")  // commercial_ivr | personal_use | limited_campaign
   consentMethod   String   @default("signed_form")  // signed_form | video_consent
-  consentFormUrl  String?  // stored PDF
+  consentFormUrl  String? @db.Text  // stored PDF
   // Validity
   grantedAt       DateTime @default(now())
   expiresAt       DateTime?
   // Revocation
   revokedAt       DateTime?
-  revocationReason String?
+  revocationReason String? @db.Text
   // Resulting voice model
   resultingVoiceModelId String?
   // Audit
@@ -1963,11 +2727,11 @@ model VoiceCloneUsageLog {
   authorizationId String
   authorization   VoiceCloneAuthorization @relation(fields: [authorizationId], references: [id], onDelete: Cascade)
   // Usage context
-  usageContext    String   // "ivr_prompt" | "tts_batch" | "live_call"
+  usageContext    String @db.LongText  // "ivr_prompt" | "tts_batch" | "live_call"
   referenceType   String?  // "call" | "tts_job"
   referenceId     String?
   // Output
-  audioUrl        String?
+  audioUrl        String? @db.Text
   durationSec     Int?
   // Audit
   actorUserId     String?
@@ -1980,11 +2744,11 @@ model VoiceCloneUsageLog {
 model PronunciationDictionary {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name            String
   language        String   @default("bn-BD")
   // JSON: [{ word: "আলো ল্যাবস", phonetic: "alo labs", type: "proper_noun" }]
-  entries         String   @default("[]")
+  entries         String @default(dbgenerated("('[]')")) @db.Text
   status          String   @default("active")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1995,22 +2759,22 @@ model PronunciationDictionary {
 model TtsJob {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Input
-  text            String
+  text            String @db.LongText
   voiceModelId    String
   language        String   @default("bn-BD")
   speed           Float    @default(1.0)
   pitch           Float    @default(1.0)
   // Output
-  audioUrl        String?
+  audioUrl        String? @db.Text
   durationSec     Int?
   // Provider used
   provider        String?
   providerModelId String?
   // Status
   status          String   @default("queued")  // queued | processing | completed | failed
-  errorMessage    String?
+  errorMessage    String? @db.Text
   // Cost
   charactersProcessed Int  @default(0)
   costEstimateUsd Float   @default(0)
@@ -2028,11 +2792,11 @@ model TtsJob {
 model OutboundCampaign {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name            String
-  description     String?
+  description     String? @db.Text
   // Script
-  script          String   @default("")  // conversation flow
+  script          String @default(dbgenerated("('')")) @db.LongText  // conversation flow
   agentId         String?  // voice agent that runs the campaign
   // Contact list
   contactListId   String?  // reference to lead list filter
@@ -2041,7 +2805,7 @@ model OutboundCampaign {
   endAt           DateTime?
   callingWindowStart String @default("09:00")  // local time
   callingWindowEnd String  @default("18:00")
-  callingDays     String   @default("[1,2,3,4,5]")
+  callingDays     String @default(dbgenerated("('[1,2,3,4,5]')")) @db.Text
   timezone        String   @default("Asia/Dhaka")
   // Compliance
   dncSuppression  Boolean  @default(true)
@@ -2085,7 +2849,7 @@ model CampaignCall {
   outcome         String?  // "answered" | "no_answer" | "busy" | "failed" | "dnc_skipped" | "consent_missing"
   durationSec     Int      @default(0)
   // Personalization
-  dynamicVariables String  @default("{}")  // JSON: {name, account_id, etc.}
+  dynamicVariables String @default(dbgenerated("('{}')")) @db.Text  // JSON: {name, account_id, etc.}
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -2099,22 +2863,22 @@ model CallSummary {
   call            Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
   // Structured summary
   intent          String?
-  summary         String
-  actionItems     String   @default("[]")  // JSON array
+  summary         String @db.LongText
+  actionItems     String @default(dbgenerated("('[]')")) @db.Text  // JSON array
   followUpDate    DateTime?
   followUpType    String?  // "callback" | "email" | "sms" | "meeting"
   // Customer signals
   sentimentScore  Float?   // -1 to 1
   satisfactionScore Float? // 0-100
-  objections      String?  // JSON array
-  keywords        String?  // JSON array
+  objections      String? @db.Text  // JSON array
+  keywords        String? @db.Text  // JSON array
   // Compliance flags
-  complianceFlags String?  // JSON array
+  complianceFlags String? @db.Text  // JSON array
   // Audit
   generatedBy     String   @default("ai")  // ai | human
   generatedAt     DateTime @default(now())
   reviewedAt      DateTime?
-  reviewedBy      String?
+  reviewedBy      String? @db.Text
 
   @@index([callId])
 }
@@ -2122,9 +2886,9 @@ model CallSummary {
 model KnowledgeBase {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name            String
-  description     String?
+  description     String? @db.Text
   // Documents in this KB
   documents       KnowledgeDocument[]
   // Embedding config
@@ -2144,12 +2908,12 @@ model KnowledgeDocument {
   // Source
   title           String
   sourceType      String   // "pdf" | "docx" | "txt" | "csv" | "url" | "faq"
-  sourceUrl       String?  // original URL or storage path
+  sourceUrl       String? @db.Text  // original URL or storage path
   // Content
-  rawText         String   @default("")  // extracted plain text
+  rawText         String @default(dbgenerated("('')")) @db.LongText  // extracted plain text
   chunksCount     Int      @default(0)
   // Permissions
-  visibleToAgents String   @default("[]")  // JSON array of agentIds; empty = all
+  visibleToAgents String @default(dbgenerated("('[]')")) @db.Text  // JSON array of agentIds; empty = all
   // Status
   status          String   @default("processing")  // processing | indexed | failed | archived
   indexedAt       DateTime?
@@ -2169,11 +2933,11 @@ model KnowledgeChunk {
   document        KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   // Chunk content
   chunkIndex      Int
-  text            String
+  text            String @db.LongText
   // Embedding (stored as base64 or vector reference)
-  embedding       String?  // base64-encoded Float32Array; null until indexed
+  embedding       String? @db.LongText  // base64-encoded Float32Array; null until indexed
   // Source reference (for citations)
-  sourceLocation  String?  // e.g. "page 5, paragraph 2"
+  sourceLocation  String? @db.Text  // e.g. "page 5, paragraph 2"
   // Retrieval audit
   retrievalCount  Int      @default(0)
   lastRetrievedAt DateTime?
@@ -2189,7 +2953,7 @@ model AgentStatus {
   userId          String   @unique
   user            User     @relation("AgentStatusUser", fields: [userId], references: [id], onDelete: Cascade)
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // State
   status          String   @default("offline")  // offline | available | busy | after_call | break | lunch | training
   statusChangedAt DateTime @default(now())
@@ -2208,7 +2972,7 @@ model AgentStatus {
 model SupervisorAction {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Action
   actionType      String   // "listen" | "whisper" | "barge_in" | "take_over" | "force_transfer" | "force_release"
   callId          String?
@@ -2216,11 +2980,11 @@ model SupervisorAction {
   supervisorUserId String  // supervisor performing the action
   supervisor      User     @relation("SupervisorActor", fields: [supervisorUserId], references: [id])
   // Context
-  reason          String?
-  metadata        String   @default("{}")  // JSON
+  reason          String? @db.Text
+  metadata        String @default(dbgenerated("('{}')")) @db.LongText  // JSON
   // Result
   outcome         String?  // "success" | "failed" | "rejected"
-  errorMessage    String?
+  errorMessage    String? @db.Text
   timestamp       DateTime @default(now())
 
   @@index([companyId, timestamp])
@@ -2230,20 +2994,20 @@ model SupervisorAction {
 model Customer {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Identity
   name            String
   email           String?
   phone           String?
   alternatePhone  String?
   // Profile
-  customerCompany String?  // customer's company name (renamed to avoid clash with relation)
-  jobTitle        String?
+  customerCompany String? @db.Text  // customer's company name (renamed to avoid clash with relation)
+  jobTitle        String? @db.Text
   country         String?
   city            String?
   // Status
   status          String   @default("lead")  // lead | qualified | customer | churned | blocked
-  tags           String   @default("[]")  // JSON array
+  tags           String @default(dbgenerated("('[]')")) @db.Text  // JSON array
   // Assignments
   assignedAgentId String?
   // Consent preferences
@@ -2266,20 +3030,20 @@ model Customer {
 model SharedInboxMessage {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Channel
   channel         String   // "voice" | "sms" | "email" | "web_chat" | "whatsapp_disabled"
   // Direction
   direction       String   // "inbound" | "outbound"
   // Parties
-  fromAddress     String
-  toAddress       String
+  fromAddress     String @db.Text
+  toAddress       String @db.Text
   fromName        String?
   toName          String?
   // Content
-  subject         String?
-  body            String
-  mediaUrls       String   @default("[]")  // JSON array
+  subject         String? @db.Text
+  body            String @db.LongText
+  mediaUrls       String @default(dbgenerated("('[]')")) @db.Text  // JSON array
   // Threading
   threadId        String?
   // Assignment
@@ -2289,8 +3053,8 @@ model SharedInboxMessage {
   isAiGenerated   Boolean  @default(false)  // per directive §14: distinguish AI vs provider-confirmed
   isProviderConfirmed Boolean @default(false)  // set true when SMS/email delivery receipt arrives
   // Tags + internal notes
-  tags            String   @default("[]")  // JSON array
-  internalNotes   String?  // for internal context (not sent to customer)
+  tags            String @default(dbgenerated("('[]')")) @db.Text  // JSON array
+  internalNotes   String? @db.Text  // for internal context (not sent to customer)
   // Audit
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -2305,24 +3069,24 @@ model CallAnalytics {
   callId          String   @unique
   call            Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
   // Sentiment
-  overallSentiment String? // "positive" | "neutral" | "negative" | "mixed"
+  overallSentiment String? @db.Text  // "positive" | "neutral" | "negative" | "mixed"
   sentimentScore   Float?  // -1 to 1
-  sentimentTimeline String? // JSON array of { timestampSec, score }
+  sentimentTimeline String? @db.Text  // JSON array of { timestampSec, score }
   // Topics
-  topics          String?  // JSON array of { topic, confidence, mentions }
+  topics          String? @db.Text  // JSON array of { topic, confidence, mentions }
   // Quality
   talkToListenRatio Float?  // 0-2 (1 = balanced)
   silencePct       Float?  // 0-100
   interruptionCount Int?
   // Agent performance (if human-handled)
-  agentScorecard  String?  // JSON: { greeting, empathy, accuracy, closing } each 0-5
+  agentScorecard  String? @db.Text  // JSON: { greeting, empathy, accuracy, closing } each 0-5
   // Compliance
-  complianceFlags  String?  // JSON array: ["disclosure_missing", "dnc_violation_attempt"]
+  complianceFlags  String? @db.Text  // JSON array: ["disclosure_missing", "dnc_violation_attempt"]
   // Generated by
   generatedBy     String   @default("ai")  // ai | human
   generatedAt     DateTime @default(now())
   reviewedAt      DateTime?
-  reviewedBy      String?
+  reviewedBy      String? @db.Text
 
   @@index([callId])
 }
@@ -2333,7 +3097,7 @@ model SubscriptionPlan {
   id              String   @id @default(cuid())
   name            String   @unique
   displayName     String
-  description     String?
+  description     String? @db.Text
   // Pricing (USD/month)
   priceMonthly    Float    @default(0)
   priceYearly     Float    @default(0)
@@ -2346,7 +3110,7 @@ model SubscriptionPlan {
   maxRecordingStorageMb Int @default(500)
   maxOutboundCallsPerDay Int @default(50)
   // Features (JSON array of feature flags)
-  features        String   @default("[]")
+  features        String @default(dbgenerated("('[]')")) @db.Text
   // Trial
   trialDays       Int      @default(0)
   // Status
@@ -2360,7 +3124,7 @@ model SubscriptionPlan {
 model TenantSubscription {
   id              String   @id @default(cuid())
   companyId       String   @unique
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   planId          String
   plan            SubscriptionPlan @relation(fields: [planId], references: [id])
   // Billing cycle
@@ -2374,7 +3138,7 @@ model TenantSubscription {
   status         String   @default("active")  // active | past_due | cancelled | suspended
   cancelledAt    DateTime?
   // Payment method reference (provider-specific)
-  paymentMethodRef String?
+  paymentMethodRef String? @db.Text
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
@@ -2382,7 +3146,7 @@ model TenantSubscription {
 model UsageCredit {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Credit type
   creditType      String   // "ai_minutes" | "tts_chars" | "asr_seconds" | "recording_mb" | "outbound_calls"
   // Balance
@@ -2397,10 +3161,10 @@ model UsageCredit {
   @@unique([companyId, creditType])
 }
 
-model Invoice {
+model MosInvoice {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Invoice number (human-readable)
   invoiceNumber   String   @unique
   // Period
@@ -2413,14 +3177,14 @@ model Invoice {
   // Currency
   currency        String   @default("USD")
   // Line items (JSON array of { description, quantity, unitPrice, total })
-  lineItems       String
+  lineItems       String @db.Text
   // Status
   status          String   @default("draft")  // draft | sent | paid | past_due | void | refunded
   sentAt          DateTime?
   paidAt          DateTime?
   dueAt           DateTime?
   // Payment
-  paymentMethodRef String?
+  paymentMethodRef String? @db.Text
   // Audit
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -2432,9 +3196,9 @@ model Invoice {
 model Payment {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   invoiceId       String?
-  invoice         Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoice         MosInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   // Amount
   amount          Float
   currency        String   @default("USD")
@@ -2446,7 +3210,7 @@ model Payment {
   // Status
   status          String   @default("pending")  // pending | succeeded | failed | refunded | disputed
   processedAt     DateTime?
-  failureReason   String?
+  failureReason   String? @db.Text
   // Audit
   createdBy       String?
   creator         User?    @relation("PaymentCreator", fields: [createdBy], references: [id])
@@ -2459,14 +3223,14 @@ model Payment {
 model BillingAdjustment {
   id              String   @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Type
   type            String   // "credit" | "charge" | "refund" | "waiver"
   // Amount (positive number; sign determined by type)
   amount          Float
   currency        String   @default("USD")
   // Reason
-  reason          String
+  reason          String @db.Text
   // Reference (optional)
   invoiceId       String?
   // Audit (per directive §5: manual adjustments with audit logs)
@@ -2483,9 +3247,9 @@ model BillingAdjustment {
 model Expense {
   id          String   @id @default(cuid())
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   title       String
-  description String?
+  description String? @db.Text
   amount      Float
   currency    String   @default("BDT")
   category    String   @default("general")
@@ -2509,13 +3273,13 @@ model Skill {
   displayName     String
   category        String   // marketing, sales, engineering, finance, operations, support, creative, data, security, management
   subcategory     String?
-  description     String
-  proficiencyLevels String  @default("[\"beginner\",\"intermediate\",\"advanced\",\"expert\"]")
-  prerequisites   String   @default("[]")  // JSON: skill IDs required before this
-  tools           String   @default("[]")  // JSON: tool names this skill uses
+  description     String @db.Text
+  proficiencyLevels String @default(dbgenerated("('[\"beginner\",\"intermediate\",\"advanced\",\"expert\"]')")) @db.Text
+  prerequisites   String @default(dbgenerated("('[]')")) @db.Text  // JSON: skill IDs required before this
+  tools           String @default(dbgenerated("('[]')")) @db.Text  // JSON: tool names this skill uses
   isActive        Boolean  @default(true)
   companyId       String?
-  company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company         MosCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -2527,15 +3291,15 @@ model Prompt {
   name            String
   category        String   // system, task, role, instruction, template
   subcategory     String?
-  content         String   // The prompt text (with {{variables}})
-  variables       String   @default("[]")  // JSON: list of template variables
+  content         String @db.LongText  // The prompt text (with {{variables}})
+  variables       String @default(dbgenerated("('[]')")) @db.Text  // JSON: list of template variables
   language        String   @default("en")
-  tags            String   @default("[]")  // JSON
+  tags            String @default(dbgenerated("('[]')")) @db.Text  // JSON
   companyId       String?
-  company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company         MosCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   departmentId    String?
-  department      Department? @relation("PromptDepartment", fields: [departmentId], references: [id])
-  applicableRoles String   @default("[]")  // JSON: employee levels
+  department      MosDepartment? @relation("PromptDepartment", fields: [departmentId], references: [id])
+  applicableRoles String @default(dbgenerated("('[]')")) @db.Text  // JSON: employee levels
   version         Int      @default(1)
   isActive        Boolean  @default(true)
   useCount       Int      @default(0)
@@ -2556,25 +3320,25 @@ model AgentProfile {
   level           String   // executive, director, manager, supervisor, specialist, worker
 
   // Capabilities
-  skillsJson     String   @default("[]")  // JSON: array of skill names
-  toolsJson      String   @default("[]")  // JSON: array of tool names
-  promptsJson    String   @default("[]")  // JSON: array of prompt IDs
-  sopsJson       String   @default("[]")  // JSON: array of SOP IDs
+  skillsJson     String @default(dbgenerated("('[]')")) @db.Text  // JSON: array of skill names
+  toolsJson      String @default(dbgenerated("('[]')")) @db.Text  // JSON: array of tool names
+  promptsJson    String @default(dbgenerated("('[]')")) @db.Text  // JSON: array of prompt IDs
+  sopsJson       String @default(dbgenerated("('[]')")) @db.Text  // JSON: array of SOP IDs
 
   // Model config
   modelTier      String   @default("balanced")
   preferredModel String?
 
   // Knowledge + Memory
-  knowledgeBaseIds String  @default("[]")  // JSON: knowledge node IDs
+  knowledgeBaseIds String @default(dbgenerated("('[]')")) @db.Text  // JSON: knowledge node IDs
   memoryType     String   @default("episodic")  // episodic, semantic, procedural, working
 
   // Behavior
-  constitution   String   @default("")  // Behavioral rules
-  authority      String   @default("{}")  // JSON: what they can authorize
-  kpisJson       String   @default("[]")  // JSON: KPI definitions
-  collaborationRules String  @default("[]")  // JSON: who they can collaborate with
-  escalationRules String  @default("[]")  // JSON: when to escalate
+  constitution   String @default(dbgenerated("('')")) @db.LongText  // Behavioral rules
+  authority      String @default(dbgenerated("('{}')")) @db.Text  // JSON: what they can authorize
+  kpisJson       String @default(dbgenerated("('[]')")) @db.Text  // JSON: KPI definitions
+  collaborationRules String @default(dbgenerated("('[]')")) @db.Text  // JSON: who they can collaborate with
+  escalationRules String @default(dbgenerated("('[]')")) @db.Text  // JSON: when to escalate
 
   // Status
   isActive       Boolean  @default(true)
@@ -2583,7 +3347,7 @@ model AgentProfile {
   avgLatencyMs  Int       @default(0)
 
   companyId      String
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company        MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

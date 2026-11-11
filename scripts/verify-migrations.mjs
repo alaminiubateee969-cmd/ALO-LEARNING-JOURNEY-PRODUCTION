@@ -23,6 +23,19 @@ function parseColumns(value) {
   return value.split(",").map((column) => column.trim().replace(/`/g, "").split(/\s+/)[0]);
 }
 
+const PRISMA_REFERENTIAL_ACTIONS = new Map([
+  ["Cascade", "CASCADE"],
+  ["Restrict", "RESTRICT"],
+  ["SetNull", "SET NULL"],
+  ["NoAction", "NO ACTION"],
+  ["SetDefault", "SET DEFAULT"],
+]);
+const SQL_REFERENTIAL_ACTION = "(SET\\s+NULL|SET\\s+DEFAULT|NO\\s+ACTION|RESTRICT|CASCADE)";
+
+function normalizeAction(value) {
+  return value.replace(/\s+/g, " ").toUpperCase();
+}
+
 function readMigration(directory) {
   const sql = readFileSync(path.join(migrationsRoot, directory, "migration.sql"), "utf8");
   const executableSql = sql.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*--.*$/gm, " ");
@@ -33,7 +46,21 @@ function readMigration(directory) {
     name: match[2],
     body: match[3],
   }));
-  return { sql, executableSql, tableDefinitions };
+  // Prisma-generated migrations declare foreign keys in separate statements.
+  const alterForeignKeys = [...executableSql.matchAll(new RegExp(
+    `ALTER\\s+TABLE\\s+\`([^\`]+)\`\\s+ADD\\s+CONSTRAINT\\s+\`[^\`]+\`\\s+FOREIGN\\s+KEY\\s*\\(([^)]+)\\)\\s+REFERENCES\\s+\`([^\`]+)\`\\s*\\(([^)]+)\\)\\s+ON\\s+DELETE\\s+${SQL_REFERENTIAL_ACTION}`,
+    "gi",
+  ))].map((match) => ({
+    table: match[1],
+    fields: parseColumns(match[2]),
+    targetTable: match[3],
+    references: parseColumns(match[4]),
+    onDelete: normalizeAction(match[5]),
+  }));
+  // String literals (e.g. JSON defaults like '["chat"]') are data, not SQL: blank
+  // them before the destructive-statement and identifier-quoting heuristics.
+  const sqlWithoutLiterals = executableSql.replace(/'(?:[^'\\]|\\.|'')*'/g, "''");
+  return { sql, executableSql, sqlWithoutLiterals, tableDefinitions, alterForeignKeys };
 }
 
 function parsePrismaModels(schema) {
@@ -62,16 +89,18 @@ function parsePrismaModels(schema) {
     modelToTable.set(name, table);
 
     for (const line of body.split(/\r?\n/)) {
-      const relation = line.match(/^\s{2}\w+\s+(\w+)\??\s+@relation\(([^)]*)\)/);
+      const relation = line.match(/^\s{2}\w+\s+(\w+)(\?)?\s+@relation\(([^)]*)\)/);
       if (relation) {
-        const fields = relation[2].match(/\bfields:\s*\[([^\]]+)\]/)?.[1];
-        const references = relation[2].match(/\breferences:\s*\[([^\]]+)\]/)?.[1];
+        const fields = relation[3].match(/\bfields:\s*\[([^\]]+)\]/)?.[1];
+        const references = relation[3].match(/\breferences:\s*\[([^\]]+)\]/)?.[1];
         if (fields && references) {
           model.relations.push({
             fields: parseColumns(fields),
             targetModel: relation[1],
             references: parseColumns(references),
-            onDelete: relation[2].match(/\bonDelete:\s*(\w+)/)?.[1]?.toUpperCase() ?? "RESTRICT",
+            // Prisma's default is SET NULL for optional relations, RESTRICT otherwise.
+            onDelete: PRISMA_REFERENTIAL_ACTIONS.get(relation[3].match(/\bonDelete:\s*(\w+)/)?.[1] ?? "")
+              ?? (relation[2] ? "SET NULL" : "RESTRICT"),
           });
         }
       }
@@ -120,13 +149,13 @@ function parseSqlTable(tableDefinition) {
   }
 
   for (const foreignKey of tableDefinition.body.matchAll(
-    /FOREIGN\s+KEY\s*\(([^)]+)\)\s+REFERENCES\s+`([^`]+)`\s*\(([^)]+)\)\s+ON\s+DELETE\s+(\w+)/gi,
+    new RegExp(`FOREIGN\\s+KEY\\s*\\(([^)]+)\\)\\s+REFERENCES\\s+\`([^\`]+)\`\\s*\\(([^)]+)\\)\\s+ON\\s+DELETE\\s+${SQL_REFERENTIAL_ACTION}`, "gi"),
   )) {
     relations.push({
       fields: parseColumns(foreignKey[1]),
       targetTable: foreignKey[2],
       references: parseColumns(foreignKey[3]),
-      onDelete: foreignKey[4].toUpperCase(),
+      onDelete: normalizeAction(foreignKey[4]),
     });
   }
 
@@ -137,7 +166,16 @@ const schema = readFileSync(schemaPath, "utf8");
 assert(/datasource\s+db\s*\{[\s\S]*?provider\s*=\s*"mysql"/m.test(schema), "Prisma datasource must remain MySQL.");
 const { models: modelSpecs, modelToTable } = parsePrismaModels(schema);
 const models = [...modelSpecs.keys()];
-assert(models.length === 42, `Expected 42 Prisma models; found ${models.length}.`);
+// ALO models are declared before the MarketingOS banner; the MarketingOS models
+// (PR #27) after it. Both counts are part of the reviewed contract.
+const marketingOsMarker = schema.indexOf("MarketingOS / AI-workforce models");
+assert(marketingOsMarker > 0, "The MarketingOS section banner is missing from prisma/schema.prisma.");
+const modelOffsets = new Map([...schema.matchAll(/^model\s+(\w+)\s*\{/gm)].map((match) => [match[1], match.index]));
+const aloModels = models.filter((name) => modelOffsets.get(name) < marketingOsMarker);
+const marketingOsModels = models.filter((name) => modelOffsets.get(name) > marketingOsMarker);
+assert(aloModels.length === 42, `Expected 42 ALO Prisma models; found ${aloModels.length}.`);
+assert(marketingOsModels.length === 99, `Expected 99 MarketingOS Prisma models; found ${marketingOsModels.length}.`);
+assert(models.length === 141, `Expected 141 Prisma models; found ${models.length}.`);
 assert(new Set(models).size === models.length, "Duplicate Prisma model names found.");
 assert(models.includes("Lead") && models.includes("MarketingLead"), "Admissions Lead and MarketingLead must remain separate models.");
 
@@ -158,8 +196,9 @@ const expectedDirectories = [
   "20261010000000_admissions_crm_quotes",
   "20261010000001_admin_otp_challenges",
   "20261018000000_v2_additive_mysql_tables",
+  "20261111000000_marketingos_workforce_tables",
 ];
-assert(JSON.stringify(directories) === JSON.stringify(expectedDirectories), "Migration directories differ from the reviewed five-migration MySQL chain.");
+assert(JSON.stringify(directories) === JSON.stringify(expectedDirectories), "Migration directories differ from the reviewed six-migration MySQL chain.");
 assert(readFileSync(lockPath, "utf8").trim() === 'provider = "mysql"', "Migration lock provider is not exactly MySQL.");
 
 const addedModels = new Set([
@@ -169,11 +208,12 @@ const addedModels = new Set([
 const admissionsModels = new Set(["Lead", "LeadActivity", "Quotation", "QuotationItem"]);
 const otpModels = new Set(["AdminOtpChallenge"]);
 const expectedByMigration = new Map([
-  ["20261001000000_initial_baseline", { expected: models.filter((name) => !addedModels.has(name) && !admissionsModels.has(name) && !otpModels.has(name)), extra: ["_FamilyProfileToFamilyProject"], baseline: true }],
+  ["20261001000000_initial_baseline", { expected: aloModels.filter((name) => !addedModels.has(name) && !admissionsModels.has(name) && !otpModels.has(name)), extra: ["_FamilyProfileToFamilyProject"], baseline: true }],
   ["20261007000000_human_avatar_ownership", { models: ["HumanAvatar", "AvatarVideo"] }],
   ["20261010000000_admissions_crm_quotes", { models: [...admissionsModels] }],
   ["20261010000001_admin_otp_challenges", { models: [...otpModels] }],
   ["20261018000000_v2_additive_mysql_tables", { models: ["Client", "Project", "Invoice", "MarketingCampaign", "MarketingLead", "OtpRequest", "VoiceGeneration", "AudioTranscription"] }],
+  ["20261111000000_marketingos_workforce_tables", { models: marketingOsModels }],
 ]);
 
 const createdTables = new Set();
@@ -195,12 +235,18 @@ for (const directory of directories) {
     else assert(!ifNotExists, `${directory} must fail closed if a purportedly new table already exists.`);
     sqlSchemas.set(name, parseSqlTable(tableDefinition));
   }
+  for (const foreignKey of parsed.alterForeignKeys) {
+    const table = sqlSchemas.get(foreignKey.table);
+    assert(table, `${directory} adds a foreign key to unknown table ${foreignKey.table}.`);
+    const { table: _owner, ...relation } = foreignKey;
+    table.relations.push(relation);
+  }
 
   assert(
-    !/\b(?:DROP\s+\w+|TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM|RENAME\s+TABLE)\b|\bALTER\s+TABLE\b[\s\S]*?\bDROP\b/i.test(parsed.executableSql),
+    !/\b(?:DROP\s+\w+|TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM|RENAME\s+TABLE)\b|\bALTER\s+TABLE\b[\s\S]*?\bDROP\b/i.test(parsed.sqlWithoutLiterals),
     `${directory} contains a destructive SQL operation.`,
   );
-  assert(!/\bPRAGMA\b|\bAUTOINCREMENT\b|"(?:HumanAvatar|AvatarVideo|\w+)"/i.test(parsed.executableSql), `${directory} contains SQLite-specific syntax or double-quoted identifiers.`);
+  assert(!/\bPRAGMA\b|\bAUTOINCREMENT\b|"(?:HumanAvatar|AvatarVideo|\w+)"/i.test(parsed.sqlWithoutLiterals), `${directory} contains SQLite-specific syntax or double-quoted identifiers.`);
   if (contract.extra) {
     assert(contract.extra.every((table) => actualTables.includes(table)), `${directory} is missing the implicit family-project relation table.`);
   }
@@ -243,4 +289,4 @@ assert(familyJoin.relations.length === 2 && familyJoin.relations.every((relation
 const avatarMigration = readMigration("20261007000000_human_avatar_ownership").executableSql;
 assert(/REFERENCES\s+`HumanAvatar`\s*\(`id`\)\s+ON\s+DELETE\s+RESTRICT/i.test(avatarMigration), "AvatarVideo FK must restrict deletion to preserve associated video records.");
 
-console.log(`PASS: ${models.length} Prisma models, ${checkedColumns} scalar column types, indexes, unique constraints, primary keys, foreign keys, and one implicit relation table match five additive MySQL migrations; no destructive SQL found.`);
+console.log(`PASS: ${models.length} Prisma models, ${checkedColumns} scalar column types, indexes, unique constraints, primary keys, foreign keys, and one implicit relation table match six additive MySQL migrations; no destructive SQL found.`);
