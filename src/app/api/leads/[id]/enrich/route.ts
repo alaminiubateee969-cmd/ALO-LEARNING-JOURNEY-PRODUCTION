@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const { id } = await params;
-    const lead = await db.lead.findFirst({ where: { id, companyId: payload.companyId } });
+    const lead = await db.mosLead.findFirst({ where: { id, companyId: payload.companyId } });
     if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
 
     // Determine the domain to enrich from
@@ -62,8 +62,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     if (Object.keys(update).length > 0) {
-      const updated = await db.lead.update({ where: { id }, data: update });
-      await db.leadActivity.create({
+      const updated = await db.mosLead.update({ where: { id }, data: update });
+      await db.mosLeadActivity.create({
         data: {
           type: 'enriched',
           content: `Enriched via ${enrichment.source} — industry: ${enrichment.industry || 'unknown'}`,

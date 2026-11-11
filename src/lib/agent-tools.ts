@@ -35,7 +35,7 @@ registerTool({
   },
   requiresApproval: false,
   handler: async (args, ctx): Promise<ToolResult> => {
-    const lead = await db.lead.create({
+    const lead = await db.mosLead.create({
       data: {
         name: args.name,
         email: args.email || null,
@@ -77,7 +77,7 @@ registerTool({
   },
   requiresApproval: false,
   handler: async (args, ctx): Promise<ToolResult> => {
-    const lead = await db.lead.updateMany({
+    const lead = await db.mosLead.updateMany({
       where: { id: args.leadId, companyId: ctx.companyId },
       data: { status: args.newStatus },
     });
@@ -265,7 +265,7 @@ registerTool({
     if (args.email) where.email = args.email;
     else if (args.phone) where.phone = args.phone;
     else return { success: false, output: 'Provide email or phone to look up.' };
-    const lead = await db.lead.findFirst({ where });
+    const lead = await db.mosLead.findFirst({ where });
     if (!lead) return { success: true, output: 'No matching lead found.' };
     // Mask PII before returning to the LLM
     return {

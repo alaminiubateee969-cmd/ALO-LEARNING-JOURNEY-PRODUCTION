@@ -1,44 +1,251 @@
-/**
- * Platform definitions for the dashboard.
- *
- * Lists all social/marketing/integration platforms supported by MarketingOS.
- * Used by the dashboard view to show platform counts + connection status.
- */
+// Platform + image-size registry for ALO Learning Journey
 
-export interface Platform {
+export interface PlatformDef {
   id: string;
   name: string;
-  icon: string;
-  category: 'social' | 'analytics' | 'crm' | 'email' | 'ecommerce';
+  bn: string;
+  icon: string; // emoji
+  color: string; // tailwind text color class
+  bgColor: string;
   connected: boolean;
+  scopes: string[];
+  mediaSizes: { label: string; w: number; h: number }[];
 }
 
-export const PLATFORMS: Platform[] = [
-  { id: 'facebook', name: 'Facebook', icon: 'facebook', category: 'social', connected: false },
-  { id: 'instagram', name: 'Instagram', icon: 'instagram', category: 'social', connected: false },
-  { id: 'linkedin', name: 'LinkedIn', icon: 'linkedin', category: 'social', connected: false },
-  { id: 'twitter', name: 'X (Twitter)', icon: 'twitter', category: 'social', connected: false },
-  { id: 'tiktok', name: 'TikTok', icon: 'tiktok', category: 'social', connected: false },
-  { id: 'youtube', name: 'YouTube', icon: 'youtube', category: 'social', connected: false },
-  { id: 'pinterest', name: 'Pinterest', icon: 'pinterest', category: 'social', connected: false },
-  { id: 'google_analytics', name: 'Google Analytics', icon: 'chart', category: 'analytics', connected: false },
-  { id: 'google_search_console', name: 'Search Console', icon: 'search', category: 'analytics', connected: false },
-  { id: 'hubspot', name: 'HubSpot CRM', icon: 'crm', category: 'crm', connected: false },
-  { id: 'mailchimp', name: 'Mailchimp', icon: 'mail', category: 'email', connected: false },
-  { id: 'sendgrid', name: 'SendGrid', icon: 'mail', category: 'email', connected: false },
-  { id: 'shopify', name: 'Shopify', icon: 'shop', category: 'ecommerce', connected: false },
-  { id: 'stripe', name: 'Stripe', icon: 'card', category: 'ecommerce', connected: false },
+export const PLATFORMS: PlatformDef[] = [
+  {
+    id: "facebook",
+    name: "Facebook",
+    bn: "ফেসবুক",
+    icon: "📘",
+    color: "text-blue-600",
+    bgColor: "bg-blue-50",
+    connected: true,
+    scopes: ["pages_manage_posts", "pages_read_engagement"],
+    mediaSizes: [
+      { label: "Profile", w: 1080, h: 1080 },
+      { label: "Cover", w: 1640, h: 624 },
+      { label: "Feed", w: 1200, h: 630 },
+    ],
+  },
+  {
+    id: "instagram",
+    name: "Instagram",
+    bn: "ইনস্টাগ্রাম",
+    icon: "📸",
+    color: "text-pink-600",
+    bgColor: "bg-pink-50",
+    connected: true,
+    scopes: ["instagram_content_publish"],
+    mediaSizes: [
+      { label: "Profile", w: 1080, h: 1080 },
+      { label: "Square", w: 1080, h: 1080 },
+      { label: "Portrait", w: 1080, h: 1350 },
+      { label: "Reel cover", w: 1080, h: 1920 },
+      { label: "Story", w: 1080, h: 1920 },
+    ],
+  },
+  {
+    id: "youtube",
+    name: "YouTube",
+    bn: "ইউটিউব",
+    icon: "▶️",
+    color: "text-red-600",
+    bgColor: "bg-red-50",
+    connected: true,
+    scopes: ["youtube.upload"],
+    mediaSizes: [
+      { label: "Profile", w: 800, h: 800 },
+      { label: "Thumbnail", w: 1280, h: 720 },
+      { label: "Banner", w: 2560, h: 1440 },
+    ],
+  },
+  {
+    id: "tiktok",
+    name: "TikTok",
+    bn: "টিকটক",
+    icon: "🎵",
+    color: "text-gray-900",
+    bgColor: "bg-gray-100",
+    connected: false,
+    scopes: ["video.upload"],
+    mediaSizes: [
+      { label: "Profile", w: 1080, h: 1080 },
+      { label: "Video", w: 1080, h: 1920 },
+    ],
+  },
+  {
+    id: "linkedin",
+    name: "LinkedIn",
+    bn: "লিংকডইন",
+    icon: "💼",
+    color: "text-sky-700",
+    bgColor: "bg-sky-50",
+    connected: false,
+    scopes: ["w_member_social"],
+    mediaSizes: [
+      { label: "Profile", w: 400, h: 400 },
+      { label: "Post", w: 1200, h: 627 },
+      { label: "Cover", w: 1128, h: 191 },
+    ],
+  },
+  {
+    id: "x",
+    name: "X (Twitter)",
+    bn: "এক্স",
+    icon: "✖️",
+    color: "text-gray-900",
+    bgColor: "bg-gray-100",
+    connected: false,
+    scopes: ["tweet.read", "tweet.write"],
+    mediaSizes: [
+      { label: "Profile", w: 800, h: 800 },
+      { label: "Post", w: 1600, h: 900 },
+      { label: "Header", w: 1500, h: 500 },
+    ],
+  },
+  {
+    id: "whatsapp",
+    name: "WhatsApp Business",
+    bn: "হোয়াটসঅ্যাপ",
+    icon: "💬",
+    color: "text-green-600",
+    bgColor: "bg-green-50",
+    connected: true,
+    scopes: ["whatsapp_business_messaging"],
+    mediaSizes: [
+      { label: "Profile", w: 1080, h: 1080 },
+      { label: "Status", w: 1080, h: 1920 },
+    ],
+  },
+  {
+    id: "telegram",
+    name: "Telegram",
+    bn: "টেলিগ্রাম",
+    icon: "✈️",
+    color: "text-cyan-600",
+    bgColor: "bg-cyan-50",
+    connected: true,
+    scopes: ["bot.messages"],
+    mediaSizes: [{ label: "Post", w: 1280, h: 720 }],
+  },
+  {
+    id: "pinterest",
+    name: "Pinterest",
+    bn: "পিন্টারেস্ট",
+    icon: "📌",
+    color: "text-red-700",
+    bgColor: "bg-red-50",
+    connected: false,
+    scopes: ["boards:read", "pins:write"],
+    mediaSizes: [{ label: "Pin", w: 1000, h: 1500 }],
+  },
+  {
+    id: "threads",
+    name: "Threads",
+    bn: "থ্রেডস",
+    icon: "🧵",
+    color: "text-gray-900",
+    bgColor: "bg-gray-100",
+    connected: false,
+    scopes: ["threads_basic"],
+    mediaSizes: [{ label: "Post", w: 1080, h: 1350 }],
+  },
+  {
+    id: "gbp",
+    name: "Google Business",
+    bn: "গুগল বিজনেস",
+    icon: "📍",
+    color: "text-emerald-700",
+    bgColor: "bg-emerald-50",
+    connected: false,
+    scopes: ["business.manage"],
+    mediaSizes: [{ label: "Post", w: 1200, h: 900 }],
+  },
 ];
 
-export function getConnectedPlatforms(): Platform[] {
-  return PLATFORMS.filter(p => p.connected);
+// Bengali parenting topic presets for the Content Studio
+export const TOPIC_PRESETS: { topic: string; audience: string }[] = [
+  { topic: "১৮ মাসের শিশুর ভাষা বিকাশে মায়ের ভূমিকা", audience: "নবজাতক-পিতামাতা" },
+  { topic: "স্ক্রিন টাইম কমানোর ৫টি বাস্তব উপায়", audience: "প্রাক-প্রাথমিক পিতামাতা" },
+  { topic: "রাগ করলে শিশুকে শান্ত করার কৌশল", audience: "পিতামাতা" },
+  { topic: "প্রথম দিনের স্কুল প্রস্তুতি", audience: "প্রাথমিক পিতামাতা" },
+  { topic: "শিশুর ঘুমের রুটিন তৈরি", audience: "নবজাতক-পিতামাতা" },
+  { topic: "মায়ের মানসিক স্বাস্থ্য ও সংবেদনশীল প্যারেন্টিং", audience: "মায়েরা" },
+];
+
+export const ADMIN_COMMANDS = [
+  { cmd: "/start", desc: "Show the admin-console status", admin: false },
+  { cmd: "/help", desc: "List supported admin-console commands", admin: false },
+  { cmd: "/ideas", desc: "Draft and save content ideas; outputs require review", admin: true },
+  { cmd: "/status", desc: "Count pending approvals and queued posts", admin: true },
+  { cmd: "/review", desc: "List items awaiting approval", admin: true },
+  { cmd: "/approve <ID>", desc: "Approve one stored item", admin: true },
+  { cmd: "/reject <ID>", desc: "Reject one stored item", admin: true },
+  { cmd: "/publish <ID>", desc: "Check publishing setup; does not publish externally", admin: true },
+  { cmd: "/analytics", desc: "Show counts of recent recorded analytics", admin: true },
+  { cmd: "/connections", desc: "Show platform connection states stored in ALO", admin: true },
+  { cmd: "/failures", desc: "Count recorded failed agent runs", admin: true },
+  { cmd: "/comments", desc: "Count sensitive comments awaiting review", admin: true },
+];
+
+// Historical route name; these commands are in-app admin-console commands,
+// not proof of a connected Telegram bot.
+export const TELEGRAM_COMMANDS = ADMIN_COMMANDS;
+
+export const SAFETY_CHECKS = [
+  "Child safety",
+  "Medical claims",
+  "Parent shaming",
+  "Fear-based language",
+  "Unsafe parenting advice",
+  "Fake expert claims",
+  "Guaranteed outcomes",
+  "Violence",
+  "Abuse",
+  "Sexual content",
+  "Political persuasion",
+  "Religious hostility",
+  "Copyright risk",
+  "Platform policy risk",
+  "Face-consent status",
+  "Voice-consent status",
+  "Deepfake risk",
+  "Bengali grammar",
+  "Subtitle accuracy",
+  "Brand tone",
+  "Image integrity",
+  "Face consistency",
+  "Lip-sync quality",
+  "Audio quality",
+  "CTA safety",
+  "Comment safety",
+];
+
+export const FAMILY_CHARACTERS = [
+  { id: "baby_girl", name: "Baby Girl", bn: "বেবি গার্ল", personType: "শিশু", emoji: "👶" },
+  { id: "mother", name: "Mother", bn: "মা", personType: "অভিভাবক", emoji: "👩" },
+  { id: "father", name: "Father", bn: "বাবা", personType: "অভিভাবক", emoji: "👨" },
+  { id: "teacher", name: "Teacher", bn: "শিক্ষক", personType: "শিক্ষক", emoji: "🧑‍🏫" },
+  { id: "narrator", name: "Narrator", bn: "বর্ণনাকারী", personType: "বর্ণনা", emoji: "🎙️" },
+];
+
+// ─── MarketingOS dashboard helpers (integrated in PR #27) ─────────────────────
+// The MarketingOS dashboard only needs read-only helpers over the same registry,
+// so it shares ALO's platform list instead of maintaining a second copy.
+
+/** @deprecated Use `PlatformDef`; kept for MarketingOS imports. */
+export type Platform = PlatformDef;
+
+export function getConnectedPlatforms(): PlatformDef[] {
+  return PLATFORMS.filter((platform) => platform.connected);
 }
 
 export function getPlatformCount(): number {
   return PLATFORMS.length;
 }
 
-export function PlatformBadge({ platform }: { platform: string }) {
-  return null; // placeholder — dashboard renders its own badges
+/** Placeholder kept for API compatibility: the dashboard renders its own badges. */
+export function PlatformBadge(_props: { platform: string; size?: "sm" | "md" | "lg" }): null {
+  return null;
 }
-

@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   const where: any = { companyId: ctx.companyId };
   if (status) where.status = status;
 
-  const invoices = await db.invoice.findMany({
+  const invoices = await db.mosInvoice.findMany({
     where,
     orderBy: { createdAt: 'desc' },
     take: limit,
@@ -63,12 +63,12 @@ export async function POST(request: NextRequest) {
     return badRequest('invoiceNumber, periodStart, periodEnd, subtotal, total are required');
   }
 
-  const existing = await db.invoice.findUnique({ where: { invoiceNumber: body.invoiceNumber } });
+  const existing = await db.mosInvoice.findUnique({ where: { invoiceNumber: body.invoiceNumber } });
   if (existing) return badRequest(`invoice number "${body.invoiceNumber}" already exists`);
 
   const lineItems = Array.isArray(body.lineItems) ? body.lineItems : [];
 
-  const created = await db.invoice.create({
+  const created = await db.mosInvoice.create({
     data: {
       companyId: ctx.companyId,
       invoiceNumber: String(body.invoiceNumber),
