@@ -1,113 +1,124 @@
-# ALO Labs AISMH — Continuous Integration
-# FIXED: branches: [main] (was malformed "branches: [main]" in the previous version)
-# FIXED: removed rg secret-scan that always passes via "|| echo" — now properly fails on real secrets
-
 name: CI
 
+# Verified-PR gate: every pull request into main must pass this workflow, and
+# deploy.yml runs it as its `verify` job (workflow_call) before any production
+# step. The toolchain matches production: Node 22 + npm, with package-lock.json
+# as the canonical lockfile (scripts/deploy-production.sh and cPanel both run
+# `npm ci`). bun.lock is kept for local Bun users only and is not used here.
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+  workflow_call:
 
-# Don't run multiple CI runs in parallel on the same branch
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
-# Don't fail the whole workflow if one optional job fails
-# (we mark them continue-on-error where appropriate)
 permissions:
   contents: read
 
-env:
-  BUN_VERSION: "1"
+# When deploy.yml calls this workflow it runs in the caller's context, so the
+# group must include the workflow name; otherwise the push-triggered CI run and
+# deploy's `verify` job would cancel each other.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  quality:
-    name: Lint + Typecheck + Tests
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+  validate:
+    name: validate
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root
+          MYSQL_DATABASE: ci
+          MYSQL_USER: ci
+          MYSQL_PASSWORD: ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-root"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      # Isolated, throwaway CI database only — never a production URL.
+      DATABASE_URL: "mysql://ci:ci@127.0.0.1:3306/ci"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v5
         with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v6
-        with:
-          path: |
-            node_modules
-            .bun
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
+          node-version-file: .nvmrc
+          cache: npm
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
 
-      - name: Generate Prisma client
-        run: bunx prisma generate
-        env:
-          DATABASE_URL: "file:./db/ci.db"
+      - name: Validate Prisma and generate client
+        run: |
+          npx prisma validate
+          npx prisma generate
+
+      - name: Verify the checked-in migration contract
+        run: npm run verify:migrations
+
+      - name: Apply migrations twice to isolated MySQL and verify tables/columns
+        run: |
+          npx prisma migrate deploy
+          npx prisma migrate deploy
+          npx prisma migrate status
+          npm run test:migrations:integration
+
+      - name: Schema drift check (migrations must reproduce prisma/schema.prisma)
+        run: |
+          mysql -h 127.0.0.1 -uroot -pci-root -e "CREATE DATABASE IF NOT EXISTS ci_shadow"
+          set +e
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "mysql://root:ci-root@127.0.0.1:3306/ci_shadow" \
+            --script --exit-code > drift.sql
+          code=$?
+          set -e
+          if [ "$code" = "2" ]; then
+            echo "::error::prisma/migrations does not reproduce prisma/schema.prisma. Add a migration containing:"
+            cat drift.sql
+            exit 1
+          fi
+          if [ "$code" != "0" ]; then
+            cat drift.sql
+            exit "$code"
+          fi
+          echo "No drift: the migration chain reproduces prisma/schema.prisma exactly."
 
       - name: Lint
-        run: bun run lint
+        run: npm run lint
 
       - name: Typecheck
-        run: bun run typecheck
-        continue-on-error: true   # next.config.ts has ignoreBuildErrors:true — type errors don't block the build
+        run: npm run typecheck
 
-      - name: Run tests (if present)
-        run: bun run test
-        continue-on-error: true   # no test suite yet — don't block on this
+      - name: Unit tests and deploy rollback test
+        run: |
+          npm test
+          bash scripts/test-deploy-rollback.sh
 
-  build:
-    name: Production build
-    needs: quality
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      # Built without JWT_SECRET / VAULT_MASTER_KEY on purpose, like the server
+      # build in scripts/deploy-production.sh: MarketingOS secrets are runtime-only
+      # and must never be able to break an ALO release build.
+      - name: Production build
+        run: npm run build
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: bunx prisma generate
-        env:
-          DATABASE_URL: "file:./db/ci.db"
-
-      - name: Build
-        run: bun run build
-        env:
-          DATABASE_URL: "file:./db/ci.db"
-          JWT_SECRET: "ci-build-secret-not-used-in-production"
-          NODE_ENV: "production"
-
-      - name: Verify build output
+      - name: Verify standalone output
         run: test -f .next/standalone/server.js
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: standalone-build
-          path: .next/standalone/
-          retention-days: 3
 
   security-scan:
     name: Secret scan
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
       - name: Checkout
@@ -116,38 +127,41 @@ jobs:
       - name: Check for hardcoded secrets
         run: |
           set -euo pipefail
-          # Look for obvious secret patterns — fail if any are found
-          # Excludes: node_modules, build output, upload/ (old project copies), marketingos/ (sub-project), scripts/ (test fixtures)
-          FOUND=$(grep -rEn "password\s*[:=]\s*['\"][^'\"]{6,}['\"]|api[_-]?key\s*[:=]\s*['\"][^'\"]{10,}['\"]" \
-            --include="*.ts" --include="*.tsx" --include="*.js" \
+          # A credential-like key (any case, optionally quoted, e.g. apiKey,
+          # OPENAI_API_KEY, "client_secret") assigned a quoted literal with no
+          # whitespace: passwords >= 6 chars, other secrets >= 10 chars. Real
+          # credentials contain no spaces, so UI labels such as
+          # `missing_api_key: "Missing API key"` are not flagged. Excludes
+          # dependencies, build output, archived uploads, the separate
+          # marketingos/ sub-project, and scripts/ + tests/ fixtures.
+          PATTERN="(password|passwd)['\"]?\s*[:=]\s*['\"][^'\"[:space:]]{6,}['\"]|(secret|api[_-]?key|access[_-]?token)['\"]?\s*[:=]\s*['\"][^'\"[:space:]]{10,}['\"]"
+          FOUND=$(grep -rEni "${PATTERN}" \
+            --include="*.ts" --include="*.tsx" --include="*.js" --include="*.mjs" \
             --exclude-dir=node_modules --exclude-dir=.next --exclude-dir=dist \
-            --exclude-dir=upload --exclude-dir=marketingos --exclude-dir=mini-services --exclude-dir=examples --exclude-dir=scripts \
+            --exclude-dir=upload --exclude-dir=marketingos --exclude-dir=mini-services \
+            --exclude-dir=examples --exclude-dir=scripts --exclude-dir=tests \
             . || true)
           if [ -n "${FOUND}" ]; then
-            echo "❌ Hardcoded secrets found:"
+            echo "::error::Possible hardcoded secrets found:"
             echo "${FOUND}"
             echo ""
             echo "Move these to environment variables before committing."
             exit 1
           fi
-          echo "✅ No hardcoded secrets found"
+          echo "No hardcoded secrets found"
 
-      - name: Check .env not tracked
+      - name: Check .env is not tracked
         run: |
-          if git ls-files | grep -E "^\.env$"; then
-            echo "❌ .env is tracked in git. Run: git rm --cached .env"
+          if git ls-files | grep -E "(^|/)\.env$"; then
+            echo "::error::.env is tracked in git. Run: git rm --cached .env"
             exit 1
           fi
-          echo "✅ .env is not tracked"
+          echo ".env is not tracked"
 
-      - name: Check db/custom.db not tracked
+      - name: Check database files are not tracked
         run: |
-          if git ls-files | grep -E "db/custom\.db|\.sqlite$|\.sqlite3$"; then
-            echo "❌ Database binary is tracked in git. Run: git rm --cached db/custom.db"
+          if git ls-files | grep -iE "\.(db|sqlite|sqlite3)$|\.db-journal$"; then
+            echo "::error::A database file is tracked in git. Remove it with git rm --cached."
             exit 1
           fi
-          echo "✅ No database binaries tracked"
-
-      - name: Audit dependencies (informational)
-        run: bun audit || true
-        continue-on-error: true
+          echo "No database files tracked"
