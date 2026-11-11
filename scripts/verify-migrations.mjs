@@ -133,12 +133,16 @@ function parsePrismaModels(schema) {
 
 function parseSqlTable(tableDefinition) {
   const columns = new Map();
+  const notNull = new Set();
   const indexes = new Set();
   const relations = [];
 
   for (const line of tableDefinition.body.split(/\r?\n/)) {
     const column = line.match(/^\s*`([^`]+)`\s+([A-Z]+(?:\s*\([^)]*\))?)(?=\s|$)/i);
-    if (column) columns.set(column[1], normalizeType(column[2]));
+    if (column) {
+      columns.set(column[1], normalizeType(column[2]));
+      if (/\bNOT\s+NULL\b/i.test(line)) notNull.add(column[1]);
+    }
 
     const primary = line.match(/^\s*PRIMARY\s+KEY\s*\(([^)]+)\)/i);
     if (primary) indexes.add(`PRIMARY:${parseColumns(primary[1]).join(",")}`);
@@ -159,7 +163,7 @@ function parseSqlTable(tableDefinition) {
     });
   }
 
-  return { columns, indexes, relations };
+  return { columns, notNull, indexes, relations };
 }
 
 const schema = readFileSync(schemaPath, "utf8");
@@ -254,6 +258,21 @@ for (const directory of directories) {
 
 const expectedTables = [...modelSpecs.values()].map((model) => model.table).concat("_FamilyProfileToFamilyProject");
 assert(JSON.stringify(sorted([...createdTables])) === JSON.stringify(sorted(expectedTables)), "Migration chain does not create exactly all model tables plus the implicit relation table.");
+
+// MySQL refuses ON DELETE SET NULL on a NOT NULL column (error 1830) when the
+// migration runs; SQLite never checked this, so catch it before a real database.
+// It happens when an optional Prisma relation (`Model?`, default SetNull) sits on
+// a required scalar field.
+for (const [table, definition] of sqlSchemas) {
+  for (const relation of definition.relations) {
+    if (relation.onDelete !== "SET NULL") continue;
+    const required = relation.fields.filter((field) => definition.notNull.has(field));
+    assert(
+      required.length === 0,
+      `${table}.${required.join(",")} is NOT NULL but its foreign key uses ON DELETE SET NULL; MySQL rejects this (error 1830). Make the relation required with an explicit onDelete, or make the field optional.`,
+    );
+  }
+}
 
 let checkedColumns = 0;
 for (const model of modelSpecs.values()) {

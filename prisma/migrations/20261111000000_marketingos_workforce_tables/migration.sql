@@ -2185,7 +2185,7 @@ ALTER TABLE `EmployeeMemory` ADD CONSTRAINT `EmployeeMemory_employeeId_fkey` FOR
 ALTER TABLE `KnowledgeNode` ADD CONSTRAINT `KnowledgeNode_departmentId_fkey` FOREIGN KEY (`departmentId`) REFERENCES `MosDepartment`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `KnowledgeNode` ADD CONSTRAINT `KnowledgeNode_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `MosCompany`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `KnowledgeNode` ADD CONSTRAINT `KnowledgeNode_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `MosCompany`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `Sop` ADD CONSTRAINT `Sop_departmentId_fkey` FOREIGN KEY (`departmentId`) REFERENCES `MosDepartment`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
