@@ -36,6 +36,16 @@ function normalizeAction(value) {
   return value.replace(/\s+/g, " ").toUpperCase();
 }
 
+// Prisma schema strings use backslash escapes (\\, \", \n, ...).
+function unescapePrismaString(value) {
+  return value.replace(/\\(.)/g, (_, char) => ({ n: "\n", r: "\r", t: "\t" })[char] ?? char);
+}
+
+// MySQL string-literal content: '' and backslash escapes.
+function unescapeSqlString(value) {
+  return value.replace(/''|\\(.)/g, (match, char) => (match === "''" ? "'" : ({ 0: "\0", n: "\n", r: "\r", t: "\t", Z: "\x1a" })[char] ?? char));
+}
+
 function readMigration(directory) {
   const sql = readFileSync(path.join(migrationsRoot, directory, "migration.sql"), "utf8");
   const executableSql = sql.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*--.*$/gm, " ");
@@ -85,7 +95,7 @@ function parsePrismaModels(schema) {
     const name = match[1];
     const body = match[2];
     const table = body.match(/^\s{2}@@map\("([^"]+)"\)/m)?.[1] ?? name;
-    const model = { name, table, columns: new Map(), indexes: new Set(), relations: [] };
+    const model = { name, table, columns: new Map(), optionalFields: new Set(), dbGeneratedDefaults: new Map(), indexes: new Set(), relations: [] };
     modelToTable.set(name, table);
 
     for (const line of body.split(/\r?\n/)) {
@@ -98,17 +108,19 @@ function parsePrismaModels(schema) {
             fields: parseColumns(fields),
             targetModel: relation[1],
             references: parseColumns(references),
-            // Prisma's default is SET NULL for optional relations, RESTRICT otherwise.
-            onDelete: PRISMA_REFERENTIAL_ACTIONS.get(relation[3].match(/\bonDelete:\s*(\w+)/)?.[1] ?? "")
-              ?? (relation[2] ? "SET NULL" : "RESTRICT"),
+            onDelete: PRISMA_REFERENTIAL_ACTIONS.get(relation[3].match(/\bonDelete:\s*(\w+)/)?.[1] ?? "") ?? null,
+            optionalRelation: Boolean(relation[2]),
           });
         }
       }
 
       const field = line.match(/^\s{2}(\w+)\s+(\w+)(\[\])?(\?)?(.*)$/);
       if (field && !field[3] && scalarTypes.has(field[2])) {
-        const [, fieldName, type, , , rawAttributes] = field;
+        const [, fieldName, type, , optional, rawAttributes] = field;
         const attributes = rawAttributes.split("//", 1)[0];
+        if (optional) model.optionalFields.add(fieldName);
+        const generated = attributes.match(/@default\(\s*dbgenerated\(\s*"((?:[^"\\]|\\.)*)"\s*\)\s*\)/);
+        if (generated) model.dbGeneratedDefaults.set(fieldName, unescapePrismaString(generated[1]));
         const native = attributes.match(/@db\.(\w+)(?:\(([^)]*)\))?/);
         const sqlType = native
           ? `${native[1].toUpperCase()}${native[2] ? `(${native[2].replace(/\s+/g, "")})` : ""}`
@@ -125,6 +137,14 @@ function parsePrismaModels(schema) {
         model.indexes.add(`${kind}:${parseColumns(modelIndex[2]).join(",")}`);
       }
     }
+    // Prisma's default onDelete follows the relation's referential arity: RESTRICT
+    // when any foreign-key scalar is required, SET NULL only when the relation and
+    // all of its scalars are optional (psl referential_arity/default_on_delete_action).
+    for (const relation of model.relations) {
+      if (relation.onDelete) continue;
+      const scalarsOptional = relation.fields.every((field) => model.optionalFields.has(field));
+      relation.onDelete = relation.optionalRelation && scalarsOptional ? "SET NULL" : "RESTRICT";
+    }
     models.set(name, model);
   }
 
@@ -134,6 +154,7 @@ function parsePrismaModels(schema) {
 function parseSqlTable(tableDefinition) {
   const columns = new Map();
   const notNull = new Set();
+  const expressionDefaults = new Map();
   const indexes = new Set();
   const relations = [];
 
@@ -142,6 +163,10 @@ function parseSqlTable(tableDefinition) {
     if (column) {
       columns.set(column[1], normalizeType(column[2]));
       if (/\bNOT\s+NULL\b/i.test(line)) notNull.add(column[1]);
+      if (/\bDEFAULT\s*\(/i.test(line)) {
+        const literal = line.match(/\bDEFAULT\s*\(\s*'((?:[^'\\]|\\.|'')*)'\s*\)/i);
+        expressionDefaults.set(column[1], literal ? { value: unescapeSqlString(literal[1]) } : { value: null, line: line.trim() });
+      }
     }
 
     const primary = line.match(/^\s*PRIMARY\s+KEY\s*\(([^)]+)\)/i);
@@ -163,7 +188,7 @@ function parseSqlTable(tableDefinition) {
     });
   }
 
-  return { columns, notNull, indexes, relations };
+  return { columns, notNull, expressionDefaults, indexes, relations };
 }
 
 const schema = readFileSync(schemaPath, "utf8");
@@ -251,6 +276,8 @@ for (const directory of directories) {
     `${directory} contains a destructive SQL operation.`,
   );
   assert(!/\bPRAGMA\b|\bAUTOINCREMENT\b|"(?:HumanAvatar|AvatarVideo|\w+)"/i.test(parsed.sqlWithoutLiterals), `${directory} contains SQLite-specific syntax or double-quoted identifiers.`);
+  // Prisma renders dbgenerated("(_utf8mb4\\'[]\\')") verbatim, which MySQL cannot parse.
+  assert(!/_utf8mb4\\'/i.test(parsed.executableSql), `${directory} contains a Prisma-rendered default such as (_utf8mb4\\'[]\\'); write it as DEFAULT ('[]').`);
   if (contract.extra) {
     assert(contract.extra.every((table) => actualTables.includes(table)), `${directory} is missing the implicit family-project relation table.`);
   }
@@ -275,6 +302,7 @@ for (const [table, definition] of sqlSchemas) {
 }
 
 let checkedColumns = 0;
+let checkedDefaults = 0;
 for (const model of modelSpecs.values()) {
   const actual = sqlSchemas.get(model.table);
   assert(actual, `Missing migration table for Prisma model ${model.name}.`);
@@ -285,6 +313,27 @@ for (const model of modelSpecs.values()) {
     const actualType = actual.columns.get(column);
     assert(actualType === expectedType, `${model.name}.${column} has SQL type ${actualType}; schema expects ${expectedType}.`);
     checkedColumns++;
+  }
+  // MySQL 8 hands an expression default back to Prisma as the printed expression
+  // passed through String::print (sql/dd/dd_table.cc, convert_and_print), so
+  // DEFAULT ('[]') is introspected as (_utf8mb4\'[]\'). Prisma's drift check
+  // compares that text with the schema's dbgenerated() string, so the schema
+  // has to use exactly that spelling or every diff reports the column.
+  assert(
+    JSON.stringify(sorted([...actual.expressionDefaults.keys()])) === JSON.stringify(sorted([...model.dbGeneratedDefaults.keys()])),
+    `${model.name}: dbgenerated() defaults in schema.prisma (${sorted([...model.dbGeneratedDefaults.keys()]).join(", ") || "none"}) and expression defaults in the migrations (${sorted([...actual.expressionDefaults.keys()]).join(", ") || "none"}) differ.`,
+  );
+  for (const [column, expression] of actual.expressionDefaults) {
+    assert(expression.value !== null, `${model.table}.${column}: only string-literal expression defaults are verified (${expression.line}).`);
+    assert(/^[\x20-\x7e]*$/.test(expression.value) && !/['\\]/.test(expression.value), `${model.table}.${column}: the default '${expression.value}' needs quote/backslash/non-ASCII escaping; confirm the introspected form on a real MySQL 8 first.`);
+    const introspected = `(_utf8mb4\\'${expression.value}\\')`;
+    const declared = model.dbGeneratedDefaults.get(column);
+    const psl = (value) => value.replace(/[\\"]/g, (char) => `\\${char}`);
+    assert(
+      declared === introspected,
+      `${model.name}.${column} must be @default(dbgenerated("${psl(introspected)}")), the form MySQL 8 reports for DEFAULT ('${expression.value}'); found dbgenerated("${psl(declared)}"). Any other spelling shows up as drift in prisma migrate diff.`,
+    );
+    checkedDefaults++;
   }
   assert(JSON.stringify(sorted([...actual.indexes])) === JSON.stringify(sorted([...model.indexes])), `${model.name} indexes/uniques/primary key differ between schema and migrations.`);
   const expectedRelations = model.relations.map((relation) => ({
@@ -308,4 +357,4 @@ assert(familyJoin.relations.length === 2 && familyJoin.relations.every((relation
 const avatarMigration = readMigration("20261007000000_human_avatar_ownership").executableSql;
 assert(/REFERENCES\s+`HumanAvatar`\s*\(`id`\)\s+ON\s+DELETE\s+RESTRICT/i.test(avatarMigration), "AvatarVideo FK must restrict deletion to preserve associated video records.");
 
-console.log(`PASS: ${models.length} Prisma models, ${checkedColumns} scalar column types, indexes, unique constraints, primary keys, foreign keys, and one implicit relation table match six additive MySQL migrations; no destructive SQL found.`);
+console.log(`PASS: ${models.length} Prisma models, ${checkedColumns} scalar column types, indexes, unique constraints, primary keys, foreign keys, and one implicit relation table match six additive MySQL migrations; ${checkedDefaults} TEXT expression defaults use the form MySQL 8 reports to Prisma; no destructive SQL found.`);

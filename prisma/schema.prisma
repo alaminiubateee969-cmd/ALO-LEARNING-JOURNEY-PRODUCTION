@@ -770,6 +770,14 @@ model MarketingLead {
 // Notification, AuditLog, Department, Invoice). Relation field names are
 // unchanged. Long/JSON strings use TEXT/LONGTEXT; string defaults on TEXT
 // columns are expression defaults because MySQL 8 rejects literal ones.
+//
+// Those defaults are written exactly as MySQL 8 reports them back to Prisma
+// (`(_utf8mb4\'[]\')` for SQL `DEFAULT ('[]')`), which is also what
+// `prisma db pull` produces; any other spelling makes `prisma migrate diff`
+// and `migrate dev` report drift on every run. Prisma copies the string into
+// generated SQL verbatim and MySQL cannot parse it there, so a migration that
+// adds such a column must spell the default `DEFAULT ('[]')` by hand.
+// scripts/verify-migrations.mjs enforces both halves.
 
 // ==================== MULTI-TENANT COMPANY ====================
 
@@ -915,7 +923,7 @@ model User {
 model CompanyUser {
   id          String   @id @default(cuid())
   role        String   @default("team_member")
-  permissions String @default(dbgenerated("('{}')")) @db.Text
+  permissions String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text
   joinedAt    DateTime @default(now())
   userId      String
   user        User     @relation(fields: [userId], references: [id])
@@ -941,7 +949,7 @@ model SocialAccount {
   accessToken     String @db.Text
   refreshToken    String? @db.Text
   tokenExpiresAt  DateTime?
-  scopes          String @default(dbgenerated("('[]')")) @db.Text
+  scopes          String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text
   webhookUrl      String? @db.Text
   status          String   @default("active")
   lastSyncedAt    DateTime?
@@ -967,7 +975,7 @@ model Content {
   hashtags      String? @db.Text
   scheduledAt   DateTime?
   publishedAt   DateTime?
-  engagement    String @default(dbgenerated("('{}')")) @db.Text
+  engagement    String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text
   aiGenerated   Boolean  @default(false)
   creatorId     String?
   creator       User?    @relation("ContentCreator", fields: [creatorId], references: [id])
@@ -989,7 +997,7 @@ model MosCampaign {
   budget      Float?
   startDate   DateTime?
   endDate     DateTime?
-  metrics     String @default(dbgenerated("('{}')")) @db.Text
+  metrics     String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text
   companyId   String
   company     MosCompany  @relation(fields: [companyId], references: [id])
   createdAt   DateTime @default(now())
@@ -1108,8 +1116,8 @@ model SeoChallenge {
   status         String   @default("active")
   currentDay     Int      @default(0)
   score          Int      @default(0)
-  tasks          String @default(dbgenerated("('[]')")) @db.Text
-  results        String @default(dbgenerated("('{}')")) @db.LongText
+  tasks          String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text
+  results        String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.LongText
   companyId      String
   company        MosCompany  @relation(fields: [companyId], references: [id])
   createdAt      DateTime @default(now())
@@ -1138,7 +1146,7 @@ model AiAgent {
   name        String
   type        String
   description String? @db.Text
-  config      String @default(dbgenerated("('{}')")) @db.Text
+  config      String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text
   isEnabled   Boolean  @default(true)
   companyId   String
   company     MosCompany  @relation(fields: [companyId], references: [id])
@@ -1212,7 +1220,7 @@ model MosNotification {
   link        String? @db.Text  // URL to navigate to when clicked
   isRead      Boolean   @default(false)
   readAt      DateTime?
-  metadata    String @default(dbgenerated("('{}')")) @db.LongText  // JSON: extra context
+  metadata    String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.LongText  // JSON: extra context
   createdAt   DateTime  @default(now())
 
   @@index([userId, isRead])
@@ -1243,7 +1251,7 @@ model Announcement {
   title        String
   content      String @db.LongText
   priority     String    @default("normal")  // low | normal | high
-  targetRoles  String @default(dbgenerated("('all')")) @db.Text  // JSON array of role keys, or "all"
+  targetRoles  String @default(dbgenerated("(_utf8mb4\\'all\\')")) @db.Text  // JSON array of role keys, or "all"
   isActive     Boolean   @default(true)
   expiresAt    DateTime?
   createdBy    String?
@@ -1266,7 +1274,7 @@ model Activity {
   description  String @db.Text
   resourceType String?                  // lead | deal | contact | ticket | campaign | content | ...
   resourceId   String?
-  metadata     String @default(dbgenerated("('{}')")) @db.LongText  // JSON
+  metadata     String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.LongText  // JSON
   createdAt    DateTime  @default(now())
 
   @@index([companyId, createdAt])
@@ -1315,8 +1323,8 @@ model Employee {
   avatar          String? @db.Text
   mission         String @db.Text  // What this employee exists to do
   constitution     String? @db.LongText  // Behavioral rules and constraints
-  authority       String @default(dbgenerated("('{}')")) @db.Text  // JSON: what they can authorize
-  permissions     String @default(dbgenerated("('{}')")) @db.Text  // JSON: RBAC permissions
+  authority       String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text  // JSON: what they can authorize
+  permissions     String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text  // JSON: RBAC permissions
 
   // Specialization
   departmentId    String
@@ -1326,18 +1334,18 @@ model Employee {
   directReports   Employee[]  @relation("EmpHierarchy")
 
   // Skills & Capabilities
-  skills          String @default(dbgenerated("('[]')")) @db.Text  // JSON array of skill IDs/names
-  capabilities    String @default(dbgenerated("('[]')")) @db.Text  // JSON: what this employee can DO
-  tools           String @default(dbgenerated("('[]')")) @db.Text  // JSON: tools this employee can use
+  skills          String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON array of skill IDs/names
+  capabilities    String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: what this employee can DO
+  tools           String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: tools this employee can use
 
   // Model Configuration
   preferredModel  String?              // Preferred AI model for this employee
   modelTier       String   @default("balanced") // fast, balanced, reasoning, coding, vision, specialized
-  modelConfig     String @default(dbgenerated("('{}')")) @db.Text  // JSON: model-specific config
+  modelConfig     String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text  // JSON: model-specific config
 
   // KPIs & Performance
-  kpis            String @default(dbgenerated("('[]')")) @db.Text  // JSON: KPI definitions
-  currentKpis     String @default(dbgenerated("('{}')")) @db.Text  // JSON: current KPI values
+  kpis            String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: KPI definitions
+  currentKpis     String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text  // JSON: current KPI values
   totalTasks      Int      @default(0)
   completedTasks  Int      @default(0)
   failedTasks     Int      @default(0)
@@ -1350,11 +1358,11 @@ model Employee {
   canConsult      Boolean  @default(true)
   canReview       Boolean  @default(false)
   canEscalate     Boolean  @default(true)
-  collaborationRules String @default(dbgenerated("('{}')")) @db.Text
+  collaborationRules String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text
 
   // Escalation
-  escalationRules String @default(dbgenerated("('[]')")) @db.Text  // JSON: when/how to escalate
-  escalationPath  String @default(dbgenerated("('[]')")) @db.Text  // JSON: chain of escalation
+  escalationRules String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: when/how to escalate
+  escalationPath  String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: chain of escalation
 
   // System
   isEnabled       Boolean  @default(true)
@@ -1394,7 +1402,7 @@ model TaskExecution {
 
   // Execution
   status          String   @default("pending") // pending, running, completed, failed, escalated, validated
-  input           String @default(dbgenerated("('{}')")) @db.Text  // JSON: task input/context
+  input           String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text  // JSON: task input/context
   output          String? @db.LongText  // JSON: task result
   modelUsed       String? @db.Text  // Which model was actually used
   modelTier       String?                   // fast, balanced, reasoning, etc.
@@ -1405,10 +1413,10 @@ model TaskExecution {
   completedAt     DateTime?
 
   // Knowledge & Memory Used
-  skillsUsed      String @default(dbgenerated("('[]')")) @db.Text  // JSON: skills loaded
-  sopsUsed        String @default(dbgenerated("('[]')")) @db.Text  // JSON: SOPs followed
-  knowledgeUsed   String @default(dbgenerated("('[]')")) @db.Text  // JSON: knowledge nodes retrieved
-  memoryUsed      String @default(dbgenerated("('[]')")) @db.Text  // JSON: memory types accessed
+  skillsUsed      String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: skills loaded
+  sopsUsed        String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: SOPs followed
+  knowledgeUsed   String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: knowledge nodes retrieved
+  memoryUsed      String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: memory types accessed
   ragUsed         Boolean  @default(false)
 
   // Quality
@@ -1426,12 +1434,12 @@ model TaskExecution {
   // Collaboration
   collaborationType String? // solo, delegated, consulted, parallel, synthesized
   parentTaskId     String?  // For sub-tasks
-  childTaskIds     String @default(dbgenerated("('[]')")) @db.Text  // JSON
-  consultedEmployees String @default(dbgenerated("('[]')")) @db.Text  // JSON
+  childTaskIds     String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON
+  consultedEmployees String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON
 
   // Learning
   lessonLearned   String? @db.Text
-  improvementTags String @default(dbgenerated("('[]')")) @db.Text  // JSON
+  improvementTags String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON
 
   companyId       String
   createdAt       DateTime @default(now())
@@ -1450,7 +1458,7 @@ model EmployeeMemory {
   category        String?              // Sub-category for organization
   title           String
   content         String @db.LongText  // The actual memory content
-  metadata        String @default(dbgenerated("('{}')")) @db.LongText  // JSON: extra context
+  metadata        String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.LongText  // JSON: extra context
   relevance       Float    @default(1.0) // Relevance score 0-1
   accessCount     Int      @default(0)
   lastAccessedAt  DateTime?
@@ -1478,7 +1486,7 @@ model KnowledgeNode {
   content         String @db.LongText  // The knowledge content
   summary         String? @db.LongText  // Short summary for quick matching
   nodeType        String   @default("document") // document, faq, guideline, template, policy, best_practice
-  tags            String @default(dbgenerated("('[]')")) @db.Text  // JSON: searchable tags
+  tags            String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: searchable tags
   category        String?
 
   // Embedding for similarity search (stored as JSON array of floats)
@@ -1488,7 +1496,7 @@ model KnowledgeNode {
   departmentId    String?
   department      MosDepartment? @relation(fields: [departmentId], references: [id])
   accessLevel     String   @default("company") // public, department, role, restricted
-  accessRoles     String @default(dbgenerated("('[]')")) @db.Text  // JSON: roles that can access
+  accessRoles     String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: roles that can access
 
   // Usage tracking
   accessCount     Int      @default(0)
@@ -1513,20 +1521,20 @@ model Sop {
   description     String? @db.Text
   version         Int      @default(1)
   category        String               // e.g. "content_creation", "lead_qualification"
-  triggerConditions String @default(dbgenerated("('[]')")) @db.Text  // JSON: when this SOP should be triggered
+  triggerConditions String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: when this SOP should be triggered
 
   // SOP Steps (JSON array of step objects)
-  steps           String @default(dbgenerated("('[]')")) @db.LongText
+  steps           String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.LongText
   // Each step: { order, title, description, decisionPoints: [], validations: [] }
 
   // Preconditions
-  preconditions    String @default(dbgenerated("('[]')")) @db.Text  // JSON: what must be true before execution
+  preconditions    String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: what must be true before execution
 
   // Which employees/departments this SOP applies to
   departmentId    String?
   department      MosDepartment? @relation(fields: [departmentId], references: [id])
-  applicableRoles String @default(dbgenerated("('[]')")) @db.Text  // JSON: employee levels that should follow this
-  applicableTasks String @default(dbgenerated("('[]')")) @db.Text  // JSON: task types that trigger this SOP
+  applicableRoles String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: employee levels that should follow this
+  applicableTasks String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: task types that trigger this SOP
 
   isActive        Boolean  @default(true)
   usageCount      Int      @default(0)
@@ -1548,14 +1556,14 @@ model WorkforceConversation {
 
   // Messages stored as JSON array for efficiency
   // Each: { role: 'user'|'agent'|'system', content, timestamp, modelUsed, skillsLoaded, memoryAccessed }
-  messages        String @default(dbgenerated("('[]')")) @db.LongText
+  messages        String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.LongText
   messageCount    Int      @default(0)
 
   // Context loaded for this conversation
-  skillsLoaded    String @default(dbgenerated("('[]')")) @db.Text  // JSON
-  knowledgeLoaded String @default(dbgenerated("('[]')")) @db.Text  // JSON
-  memoryAccessed  String @default(dbgenerated("('[]')")) @db.Text  // JSON
-  sopsLoaded      String @default(dbgenerated("('[]')")) @db.Text  // JSON
+  skillsLoaded    String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON
+  knowledgeLoaded String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON
+  memoryAccessed  String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON
+  sopsLoaded      String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON
 
   // Execution context
   taskContext     String? @db.LongText  // If conversation led to task execution
@@ -1574,7 +1582,7 @@ model ModelConfig {
   name            String               // e.g. "gpt-4o", "claude-3.5-sonnet"
   provider        String               // e.g. "openai", "anthropic"
   tier            String               // fast, balanced, reasoning, coding, vision, embedding, specialized
-  capabilities    String @default(dbgenerated("('[]')")) @db.Text  // JSON: text, vision, function_calling, etc.
+  capabilities    String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: text, vision, function_calling, etc.
   maxTokens       Int      @default(4096)
   costPer1kInput  Float    @default(0)
   costPer1kOutput Float    @default(0)
@@ -1583,7 +1591,7 @@ model ModelConfig {
   isEnabled       Boolean  @default(true)
   isFallback      Boolean  @default(false)
   fallbackFor     String? @db.Text  // ID of model this is a fallback for
-  config          String @default(dbgenerated("('{}')")) @db.Text  // JSON: provider-specific config
+  config          String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text  // JSON: provider-specific config
   sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1602,7 +1610,7 @@ model ToolDefinition {
   authType        String                     // oauth2, api_key, bot_token, partner, none, internal, webhook
   
   // Required environment variables / credentials
-  requiredCredentials String @default(dbgenerated("('[]')")) @db.Text  // JSON: [{key: "GOOGLE_CLIENT_ID", label: "Client ID", isSecret: false}, ...]
+  requiredCredentials String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: [{key: "GOOGLE_CLIENT_ID", label: "Client ID", isSecret: false}, ...]
   
   connectionType  String                     // api, rest_api, graph_api, bot_api, webhook, platform, partner_api, internal, tracking, database, redis, automation
   
@@ -1642,12 +1650,12 @@ model ToolConnection {
   lastError       String? @db.Text
   
   // Stored credentials (encrypted at rest in production)
-  credentials     String @default(dbgenerated("('{}')")) @db.Text  // JSON: {env_var_name: encrypted_value, ...}
+  credentials     String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text  // JSON: {env_var_name: encrypted_value, ...}
   
   // Configuration
-  config          String @default(dbgenerated("('{}')")) @db.Text  // JSON: tool-specific configuration
-  webhooks        String @default(dbgenerated("('[]')")) @db.Text  // JSON: registered webhook URLs
-  scopes          String @default(dbgenerated("('[]')")) @db.Text  // JSON: OAuth scopes granted
+  config          String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text  // JSON: tool-specific configuration
+  webhooks        String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: registered webhook URLs
+  scopes          String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: OAuth scopes granted
   
   // Usage tracking
   totalCalls      Int      @default(0)
@@ -1695,7 +1703,7 @@ model ToolUsageLog {
 model Webhook {
   id          String   @id @default(cuid())
   url         String @db.Text
-  events      String @default(dbgenerated("('[]')")) @db.Text  // JSON array of event names: ["lead.created", "campaign.completed"]
+  events      String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON array of event names: ["lead.created", "campaign.completed"]
   status      String   @default("active") // active | disabled
   secret      String? @db.Text  // for signature verification
   companyId   String
@@ -1713,7 +1721,7 @@ model ApiKey {
   companyId   String
   company     MosCompany  @relation(fields: [companyId], references: [id])
   // Scopes (JSON array) — e.g. ["calls:read", "calls:write", "billing:read"]
-  scopes      String @default(dbgenerated("('[]')")) @db.Text
+  scopes      String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text
   // Per-minute rate limit (null = use company default)
   rateLimitPerMin Int?
   // Optional expiry
@@ -1789,8 +1797,8 @@ model Competitor {
   name         String
   website      String? @db.Text
   description  String? @db.Text
-  strengths    String @default(dbgenerated("('[]')")) @db.Text
-  weaknesses   String @default(dbgenerated("('[]')")) @db.Text
+  strengths    String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text
+  weaknesses   String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text
   pricing      String? @db.Text
   marketShare  String? @db.Text
   threatLevel  String   @default("medium")
@@ -1807,7 +1815,7 @@ model KeywordTracker {
   difficulty   Int      @default(0)
   trend        String   @default("stable")
   lastPosition Int?
-  competitorPositions String @default(dbgenerated("('{}')")) @db.Text
+  competitorPositions String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text
   companyId    String
   company      MosCompany  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
@@ -1836,8 +1844,8 @@ model Workflow {
   name         String
   description  String? @db.Text
   trigger      String   @default("manual")  // manual | lead.created | deal.won | ticket.created | schedule
-  triggerConfig String @default(dbgenerated("('{}')")) @db.Text  // JSON: schedule config, event filter, etc.
-  steps        String @default(dbgenerated("('[]')")) @db.LongText  // JSON array of step definitions
+  triggerConfig String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text  // JSON: schedule config, event filter, etc.
+  steps        String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.LongText  // JSON array of step definitions
   isActive     Boolean  @default(false)
   lastRunAt    DateTime?
   runCount     Int      @default(0)
@@ -1856,7 +1864,7 @@ model WorkflowRun {
   workflow     Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   status       String   @default("pending")  // pending | running | completed | failed
   trigger      String   @default("manual")
-  input        String @default(dbgenerated("('{}')")) @db.Text
+  input        String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text
   output       String? @db.LongText
   error        String? @db.Text
   startedAt    DateTime?
@@ -1886,9 +1894,9 @@ model Integration {
   // Connection-level status (separate from credential_status)
   status          String   @default("pending")  // pending | connected | action_required | expired | revoked | unavailable | error
   // OAuth scopes granted by the user (JSON array — non-secret)
-  grantedScopes   String @default(dbgenerated("('[]')")) @db.Text
+  grantedScopes   String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text
   // Resources selected by the user (de-normalised copy for fast reads)
-  selectedResources String @default(dbgenerated("('[]')")) @db.Text  // JSON array of {type, id, name}
+  selectedResources String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON array of {type, id, name}
   // OAuth state id (FK to OAuthState) used during the in-flight authorize flow
   currentStateId  String?
   // Token expiry (iso) — populated on callback; used by daily health check
@@ -1953,7 +1961,7 @@ model IntegrationResource {
   // Whether the resource is reachable on the provider API right now
   status          String   @default("valid")  // valid | action_required | expired | unavailable
   // Raw metadata returned by discovery (non-secret)
-  metadata        String @default(dbgenerated("('{}')")) @db.LongText  // JSON
+  metadata        String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.LongText  // JSON
   discoveredAt    DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1997,7 +2005,7 @@ model OAuthState {
   // The redirect URI the provider should send the user back to
   redirectUri     String @db.Text
   // Requested scopes (JSON array)
-  scopes          String @default(dbgenerated("('[]')")) @db.Text
+  scopes          String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text
   // Auto-expire so abandoned authorizations don't accumulate
   expiresAt       DateTime
   // Set to true on successful callback so re-use is rejected
@@ -2020,7 +2028,7 @@ model IntegrationManifest {
   workspaceId     String?
   // JSON: list of {provider, connection_id, credential_reference (vault://),
   // resources[], status}
-  manifest        String @default(dbgenerated("('{}')")) @db.Text
+  manifest        String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text
   // When the user confirmed the setup
   confirmedAt     DateTime @default(now())
   // Who confirmed
@@ -2100,7 +2108,7 @@ model AiModelEntry {
   // Context window in tokens (helps the chain pick the right model)
   contextWindow   Int      @default(8192)
   // Capabilities: JSON array ["chat", "vision", "tools", "json_mode"]
-  capabilities    String @default(dbgenerated("('[\"chat\"]')")) @db.Text
+  capabilities    String @default(dbgenerated("(_utf8mb4\\'[\"chat\"]\\')")) @db.Text
   // Whether this model is the default fallback for the provider
   isDefault       Boolean  @default(false)
   // Whether this model is enabled in the chain
@@ -2253,12 +2261,12 @@ model AfterHoursRule {
   timezone        String   @default("Asia/Dhaka")
   // JSON array of weekday numbers that are working days
   // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
-  workingDays     String @default(dbgenerated("('[1,2,3,4,5]')")) @db.Text  // Mon-Fri default
+  workingDays     String @default(dbgenerated("(_utf8mb4\\'[1,2,3,4,5]\\')")) @db.Text  // Mon-Fri default
   // HH:MM in the configured timezone
   workingStart    String   @default("09:00")
   workingEnd      String   @default("18:00")
   // JSON array of {date: "YYYY-MM-DD", name: "..."} for public holidays
-  holidays        String @default(dbgenerated("('[]')")) @db.Text
+  holidays        String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text
   // What to do with inbound messages outside working hours
   // queue | auto_reply_with_disclaimer | emergency_only
   afterHoursPolicy String  @default("auto_reply_with_disclaimer")
@@ -2322,20 +2330,20 @@ model VoiceAgent {
   speakingStyle   String? @db.Text  // "formal" | "friendly" | "professional" | "casual"
   personality     String? @db.Text
   // Conversation
-  systemPrompt    String @default(dbgenerated("('')")) @db.LongText
+  systemPrompt    String @default(dbgenerated("(_utf8mb4\\'\\')")) @db.LongText
   greetingMessage String? @db.Text
   fallbackResponse String? @db.LongText
   // Behavior
   maxCallDurationSec Int   @default(300)
   workingHoursStart String? @db.Text  // "09:00"
   workingHoursEnd   String? @db.Text  // "18:00"
-  workingDays      String @default(dbgenerated("('[1,2,3,4,5]')")) @db.Text
+  workingDays      String @default(dbgenerated("(_utf8mb4\\'[1,2,3,4,5]\\')")) @db.Text
   // Knowledge
   knowledgeBaseId String?
   // CRM link
   crmEnabled      Boolean  @default(true)
   // Tools (JSON array of tool names from agent-tools.ts allowlist)
-  allowlistedTools String @default(dbgenerated("('[\"crm_lookup_lead\",\"crm_create_lead\",\"content_save_artifact\"]')")) @db.Text
+  allowlistedTools String @default(dbgenerated("(_utf8mb4\\'[\"crm_lookup_lead\",\"crm_create_lead\",\"content_save_artifact\"]\\')")) @db.Text
   // Sensitive-action approval gate
   approvalMode    String  @default("suspend")  // suspend | auto_approve | auto_reject
   // Deployment
@@ -2458,7 +2466,7 @@ model PhoneNumber {
   // Country + type
   country         String   @default("BD")
   numberType      String   @default("local")  // local | toll_free | mobile | national
-  capabilities    String @default(dbgenerated("('[\"voice\",\"sms\"]')")) @db.Text  // JSON array
+  capabilities    String @default(dbgenerated("(_utf8mb4\\'[\"voice\",\"sms\"]\\')")) @db.Text  // JSON array
   // Lifecycle
   status          String   @default("available")  // available | assigned | active | released | porting
   assignedAt      DateTime?
@@ -2555,7 +2563,7 @@ model CallEvent {
   actorType       String   // "system" | "ai_agent" | "human_agent" | "caller" | "supervisor"
   actorId         String?
   // Optional metadata
-  metadata        String @default(dbgenerated("('{}')")) @db.LongText  // JSON
+  metadata        String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.LongText  // JSON
   timestamp       DateTime @default(now())
 
   @@index([callId, timestamp])
@@ -2568,7 +2576,7 @@ model IvrMenu {
   name            String
   description     String? @db.Text
   // JSON tree of nodes: [{ id, type: "play"|"gather"|"route"|"hangup", prompt?, inputVar?, routes: [{ dtmf, target }] }]
-  tree            String @default(dbgenerated("('[]')")) @db.Text
+  tree            String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text
   language        String   @default("bn-BD")
   voiceId         String?
   status          String   @default("draft")  // draft | active | archived
@@ -2587,7 +2595,7 @@ model RingGroup {
   name            String
   description     String? @db.Text
   // Agent user ids in this ring group
-  memberIds       String @default(dbgenerated("('[]')")) @db.Text  // JSON array of userIds
+  memberIds       String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON array of userIds
   // Dial strategy
   strategy        String   @default("ring_all")  // ring_all | hunt | longest_idle | round_robin
   ringTimeoutSec  Int      @default(20)
@@ -2609,7 +2617,7 @@ model CallQueue {
   name            String
   description     String? @db.Text
   // Members
-  agentIds        String @default(dbgenerated("('[]')")) @db.Text  // JSON array of userIds
+  agentIds        String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON array of userIds
   // Queue config
   maxSize         Int      @default(50)
   priorityLevels  Int      @default(3)
@@ -2748,7 +2756,7 @@ model PronunciationDictionary {
   name            String
   language        String   @default("bn-BD")
   // JSON: [{ word: "আলো ল্যাবস", phonetic: "alo labs", type: "proper_noun" }]
-  entries         String @default(dbgenerated("('[]')")) @db.Text
+  entries         String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text
   status          String   @default("active")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -2796,7 +2804,7 @@ model OutboundCampaign {
   name            String
   description     String? @db.Text
   // Script
-  script          String @default(dbgenerated("('')")) @db.LongText  // conversation flow
+  script          String @default(dbgenerated("(_utf8mb4\\'\\')")) @db.LongText  // conversation flow
   agentId         String?  // voice agent that runs the campaign
   // Contact list
   contactListId   String?  // reference to lead list filter
@@ -2805,7 +2813,7 @@ model OutboundCampaign {
   endAt           DateTime?
   callingWindowStart String @default("09:00")  // local time
   callingWindowEnd String  @default("18:00")
-  callingDays     String @default(dbgenerated("('[1,2,3,4,5]')")) @db.Text
+  callingDays     String @default(dbgenerated("(_utf8mb4\\'[1,2,3,4,5]\\')")) @db.Text
   timezone        String   @default("Asia/Dhaka")
   // Compliance
   dncSuppression  Boolean  @default(true)
@@ -2849,7 +2857,7 @@ model CampaignCall {
   outcome         String?  // "answered" | "no_answer" | "busy" | "failed" | "dnc_skipped" | "consent_missing"
   durationSec     Int      @default(0)
   // Personalization
-  dynamicVariables String @default(dbgenerated("('{}')")) @db.Text  // JSON: {name, account_id, etc.}
+  dynamicVariables String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text  // JSON: {name, account_id, etc.}
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -2864,7 +2872,7 @@ model CallSummary {
   // Structured summary
   intent          String?
   summary         String @db.LongText
-  actionItems     String @default(dbgenerated("('[]')")) @db.Text  // JSON array
+  actionItems     String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON array
   followUpDate    DateTime?
   followUpType    String?  // "callback" | "email" | "sms" | "meeting"
   // Customer signals
@@ -2910,10 +2918,10 @@ model KnowledgeDocument {
   sourceType      String   // "pdf" | "docx" | "txt" | "csv" | "url" | "faq"
   sourceUrl       String? @db.Text  // original URL or storage path
   // Content
-  rawText         String @default(dbgenerated("('')")) @db.LongText  // extracted plain text
+  rawText         String @default(dbgenerated("(_utf8mb4\\'\\')")) @db.LongText  // extracted plain text
   chunksCount     Int      @default(0)
   // Permissions
-  visibleToAgents String @default(dbgenerated("('[]')")) @db.Text  // JSON array of agentIds; empty = all
+  visibleToAgents String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON array of agentIds; empty = all
   // Status
   status          String   @default("processing")  // processing | indexed | failed | archived
   indexedAt       DateTime?
@@ -2981,7 +2989,7 @@ model SupervisorAction {
   supervisor      User     @relation("SupervisorActor", fields: [supervisorUserId], references: [id])
   // Context
   reason          String? @db.Text
-  metadata        String @default(dbgenerated("('{}')")) @db.LongText  // JSON
+  metadata        String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.LongText  // JSON
   // Result
   outcome         String?  // "success" | "failed" | "rejected"
   errorMessage    String? @db.Text
@@ -3007,7 +3015,7 @@ model Customer {
   city            String?
   // Status
   status          String   @default("lead")  // lead | qualified | customer | churned | blocked
-  tags           String @default(dbgenerated("('[]')")) @db.Text  // JSON array
+  tags           String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON array
   // Assignments
   assignedAgentId String?
   // Consent preferences
@@ -3043,7 +3051,7 @@ model SharedInboxMessage {
   // Content
   subject         String? @db.Text
   body            String @db.LongText
-  mediaUrls       String @default(dbgenerated("('[]')")) @db.Text  // JSON array
+  mediaUrls       String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON array
   // Threading
   threadId        String?
   // Assignment
@@ -3053,7 +3061,7 @@ model SharedInboxMessage {
   isAiGenerated   Boolean  @default(false)  // per directive §14: distinguish AI vs provider-confirmed
   isProviderConfirmed Boolean @default(false)  // set true when SMS/email delivery receipt arrives
   // Tags + internal notes
-  tags            String @default(dbgenerated("('[]')")) @db.Text  // JSON array
+  tags            String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON array
   internalNotes   String? @db.Text  // for internal context (not sent to customer)
   // Audit
   createdAt       DateTime @default(now())
@@ -3110,7 +3118,7 @@ model SubscriptionPlan {
   maxRecordingStorageMb Int @default(500)
   maxOutboundCallsPerDay Int @default(50)
   // Features (JSON array of feature flags)
-  features        String @default(dbgenerated("('[]')")) @db.Text
+  features        String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text
   // Trial
   trialDays       Int      @default(0)
   // Status
@@ -3274,9 +3282,9 @@ model Skill {
   category        String   // marketing, sales, engineering, finance, operations, support, creative, data, security, management
   subcategory     String?
   description     String @db.Text
-  proficiencyLevels String @default(dbgenerated("('[\"beginner\",\"intermediate\",\"advanced\",\"expert\"]')")) @db.Text
-  prerequisites   String @default(dbgenerated("('[]')")) @db.Text  // JSON: skill IDs required before this
-  tools           String @default(dbgenerated("('[]')")) @db.Text  // JSON: tool names this skill uses
+  proficiencyLevels String @default(dbgenerated("(_utf8mb4\\'[\"beginner\",\"intermediate\",\"advanced\",\"expert\"]\\')")) @db.Text
+  prerequisites   String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: skill IDs required before this
+  tools           String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: tool names this skill uses
   isActive        Boolean  @default(true)
   companyId       String?
   company         MosCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
@@ -3292,14 +3300,14 @@ model Prompt {
   category        String   // system, task, role, instruction, template
   subcategory     String?
   content         String @db.LongText  // The prompt text (with {{variables}})
-  variables       String @default(dbgenerated("('[]')")) @db.Text  // JSON: list of template variables
+  variables       String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: list of template variables
   language        String   @default("en")
-  tags            String @default(dbgenerated("('[]')")) @db.Text  // JSON
+  tags            String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON
   companyId       String?
   company         MosCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   departmentId    String?
   department      MosDepartment? @relation("PromptDepartment", fields: [departmentId], references: [id])
-  applicableRoles String @default(dbgenerated("('[]')")) @db.Text  // JSON: employee levels
+  applicableRoles String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: employee levels
   version         Int      @default(1)
   isActive        Boolean  @default(true)
   useCount       Int      @default(0)
@@ -3320,25 +3328,25 @@ model AgentProfile {
   level           String   // executive, director, manager, supervisor, specialist, worker
 
   // Capabilities
-  skillsJson     String @default(dbgenerated("('[]')")) @db.Text  // JSON: array of skill names
-  toolsJson      String @default(dbgenerated("('[]')")) @db.Text  // JSON: array of tool names
-  promptsJson    String @default(dbgenerated("('[]')")) @db.Text  // JSON: array of prompt IDs
-  sopsJson       String @default(dbgenerated("('[]')")) @db.Text  // JSON: array of SOP IDs
+  skillsJson     String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: array of skill names
+  toolsJson      String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: array of tool names
+  promptsJson    String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: array of prompt IDs
+  sopsJson       String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: array of SOP IDs
 
   // Model config
   modelTier      String   @default("balanced")
   preferredModel String?
 
   // Knowledge + Memory
-  knowledgeBaseIds String @default(dbgenerated("('[]')")) @db.Text  // JSON: knowledge node IDs
+  knowledgeBaseIds String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: knowledge node IDs
   memoryType     String   @default("episodic")  // episodic, semantic, procedural, working
 
   // Behavior
-  constitution   String @default(dbgenerated("('')")) @db.LongText  // Behavioral rules
-  authority      String @default(dbgenerated("('{}')")) @db.Text  // JSON: what they can authorize
-  kpisJson       String @default(dbgenerated("('[]')")) @db.Text  // JSON: KPI definitions
-  collaborationRules String @default(dbgenerated("('[]')")) @db.Text  // JSON: who they can collaborate with
-  escalationRules String @default(dbgenerated("('[]')")) @db.Text  // JSON: when to escalate
+  constitution   String @default(dbgenerated("(_utf8mb4\\'\\')")) @db.LongText  // Behavioral rules
+  authority      String @default(dbgenerated("(_utf8mb4\\'{}\\')")) @db.Text  // JSON: what they can authorize
+  kpisJson       String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: KPI definitions
+  collaborationRules String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: who they can collaborate with
+  escalationRules String @default(dbgenerated("(_utf8mb4\\'[]\\')")) @db.Text  // JSON: when to escalate
 
   // Status
   isActive       Boolean  @default(true)

@@ -97,10 +97,20 @@ jobs:
             --script --exit-code > drift.sql 2> drift.err
           code=$?
           set -e
-          annotate() { awk 'BEGIN { ORS = "%0A" } { gsub(/%/, "%25"); gsub(/\r/, "%0D"); print }' "$1" | head -c 60000; }
+          # GitHub truncates each annotation at about 4 KB, so long output is split.
+          annotate() { awk 'BEGIN { ORS = "%0A" } { gsub(/%/, "%25"); gsub(/\r/, "%0D"); print }' "$1" | head -c 3900; }
           if [ "$code" = "2" ]; then
             cat drift.sql
-            echo "::error title=Schema drift::prisma/migrations does not reproduce prisma/schema.prisma. A migration needs:%0A$(annotate drift.sql)"
+            { echo '### Schema drift: a migration is needed'; echo '```sql'; cat drift.sql; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            tables=$(grep -oE '^(ALTER TABLE|CREATE TABLE|CREATE (UNIQUE )?INDEX `[^`]+` ON|DROP INDEX `[^`]+` ON) `[^`]+`' drift.sql | grep -oE '`[^`]+`$' | tr -d '`' | sort -u | paste -sd ' ' - | head -c 2500)
+            echo "::error title=Schema drift::prisma/migrations does not reproduce prisma/schema.prisma: $(grep -c ';[[:space:]]*$' drift.sql) statements. Tables: ${tables}. Full SQL follows and is in the job summary."
+            split -C 3300 -d -a 2 drift.sql drift.part.
+            parts=$(ls drift.part.* | wc -l); i=0
+            for part in drift.part.*; do
+              [ -e "$part" ] || break
+              i=$((i + 1)); [ "$i" -le 8 ] || break
+              echo "::error title=Schema drift SQL ${i}/${parts}::$(annotate "$part")"
+            done
             exit 1
           fi
           if [ "$code" != "0" ]; then
