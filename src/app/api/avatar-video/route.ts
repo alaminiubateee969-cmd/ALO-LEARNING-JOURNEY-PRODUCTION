@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { buildSceneImagePrompt } from '@/lib/human-avatars';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { requireOwner } from '@/lib/auth';
@@ -37,23 +37,28 @@ const VIDEO_DIR = path.join(process.cwd(), 'storage', 'avatar-videos');
 const SCENE_IMG_DIR = path.join(process.cwd(), 'public', 'avatar-scenes');
 const SCENE_AUDIO_DIR = path.join(process.cwd(), 'public', 'avatar-audio');
 
-function exec(cmd: string, timeoutMs = 300000): string {
+function exec(bin: string, args: string[], timeoutMs = 300000): string {
   try {
-    return execSync(cmd, { timeout: timeoutMs, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-  } catch (e: unknown) {
-    const err = e as { stderr?: string; message?: string };
-    throw new Error(`Command failed: ${cmd.slice(0, 120)}\n${(err.stderr || err.message || '').slice(0, 400)}`);
+    const result = spawnSync(bin, args, { timeout: timeoutMs, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+    if (result.status !== 0) {
+      const stderr = (result.stderr || "").slice(0, 400);
+      throw new Error(`Command failed: ${bin} ${args.slice(0, 5).join(" ")}...\n${stderr}`);
+    }
+    return (result.stdout || "").trim();
+  } catch (e: any) {
+    if (e.message && e.message.startsWith("Command failed:")) throw e;
+    throw new Error(`Command failed: ${bin} ${args.slice(0, 5).join(" ")}...\n${(e.stderr || e.message || "").slice(0, 400)}`);
   }
 }
 
 function probeDuration(filePath: string): number {
-  const out = exec(`ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${filePath}"`);
+  const out = exec("ffprobe", ["-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", filePath]);
   return parseFloat(out);
 }
 
 function probeStreams(filePath: string): { video: boolean; audio: boolean; width?: number; height?: number; duration?: number } {
   try {
-    const json = exec(`ffprobe -v quiet -print_format json -show_format -show_streams "${filePath}"`);
+    const json = exec("ffprobe", ["-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filePath]);
     const data = JSON.parse(json);
     const v = data.streams.find((s: any) => s.codec_type === 'video');
     const a = data.streams.find((s: any) => s.codec_type === 'audio');
@@ -199,7 +204,7 @@ async function generateSceneAudio(
   } else {
     const listFile = outPath.replace(/\.wav$/, '_list.txt');
     fs.writeFileSync(listFile, partPaths.map((p) => `file '${p}'`).join('\n'));
-    exec(`ffmpeg -y -f concat -safe 0 -i "${listFile}" -c copy "${outPath}"`);
+    exec("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", outPath]);
     partPaths.forEach((p) => { try { fs.unlinkSync(p); } catch {} });
     try { fs.unlinkSync(listFile); } catch {}
   }
@@ -273,10 +278,7 @@ function composeVideo(
       const dur = sceneDurations[i];
       const clip = path.join(tmpDir, `scene_${i}.mp4`);
       const zoompan = `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=${Math.round(dur * 25)}:s=1080x1920:fps=25`;
-      exec(
-        `ffmpeg -y -loop 1 -i "${img}" -i "${aud}" -filter_complex "[0:v]${zoompan}[v]" -map "[v]" -map 1:a -c:v libx264 -preset ${quality === 'cinematic' ? 'slow' : 'medium'} -crf ${quality === 'hd' ? '20' : '23'} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest "${clip}"`,
-        180000
-      );
+      exec("ffmpeg", ["-y", "-loop", "1", "-i", img, "-i", aud, "-filter_complex", `[0:v]${zoompan}[v]`, "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", quality === 'cinematic' ? 'slow' : 'medium', "-crf", quality === 'hd' ? '20' : '23', "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-shortest", clip], 180000);
       sceneClips.push(clip);
     }
 
@@ -285,22 +287,20 @@ function composeVideo(
     fs.writeFileSync(concatList, sceneClips.map((c) => `file '${c}'`).join('\n'));
     const bodyVideo = path.join(tmpDir, 'body.mp4');
     // re-encode to ensure uniform streams (sample rate / channel layout)
-    exec(`ffmpeg -y -f concat -safe 0 -i "${concatList}" -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p -c:a aac -b:a 128k -ar 44100 -ac 2 "${bodyVideo}"`);
+    exec("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", concatList, "-c:v", "libx264", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2", bodyVideo]);
 
     // 3. Title card WITH silent audio matching body's audio config (44100Hz stereo AAC)
     const titleCard = path.join(tmpDir, 'title.mp4');
     const safeTitle = title.replace(/'/g, '').replace(/:/g, '').replace(/"/g, '');
     const safeAvatar = avatarName.replace(/'/g, '').replace(/:/g, '').replace(/"/g, '');
     // anullsrc at 44100Hz stereo matches body audio — so concat won't drop/mismatch streams
-    exec(
-      `ffmpeg -y -loop 1 -i "${portraitPath}" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -filter_complex "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${safeTitle}':fontcolor=white:fontsize=56:x=(w-text_w)/2:y=h*0.78:box=1:boxcolor=black@0.6:boxborderw=20,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='with ${safeAvatar}':fontcolor=white:fontsize=32:x=(w-text_w)/2:y=h*0.88[v]" -map "[v]" -map 1:a -t 3 -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p -r 25 -c:a aac -b:a 128k -ar 44100 -ac 2 -shortest "${titleCard}"`
-    );
+    exec("ffmpeg", ["-y", "-loop", "1", "-i", portraitPath, "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100", "-filter_complex", `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${safeTitle}':fontcolor=white:fontsize=56:x=(w-text_w)/2:y=h*0.78:box=1:boxcolor=black@0.6:boxborderw=20,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='with ${safeAvatar}':fontcolor=white:fontsize=32:x=(w-text_w)/2:y=h*0.88[v]`, "-map", "[v]", "-map", "1:a", "-t", "3", "-c:v", "libx264", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p", "-r", "25", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2", "-shortest", titleCard]);
 
     // 4. Final concat: title (v+a) + body (v+a) — both have matching streams.
     // Re-encode (not -c copy) to guarantee stream alignment across the concat boundary.
     const finalList = path.join(tmpDir, 'final.txt');
     fs.writeFileSync(finalList, [`file '${titleCard}'`, `file '${bodyVideo}'`].join('\n'));
-    exec(`ffmpeg -y -f concat -safe 0 -i "${finalList}" -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p -c:a aac -b:a 128k -ar 44100 -ac 2 "${outPath}"`);
+    exec("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", finalList, "-c:v", "libx264", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2", outPath]);
 
     // 5. VALIDATE: must have both video AND audio streams (B1 verification)
     const streams = probeStreams(outPath);
