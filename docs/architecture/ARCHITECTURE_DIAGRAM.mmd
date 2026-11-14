@@ -1,0 +1,41 @@
+architecture-beta
+    group frontend(cloud)[Frontend - Next.js 16]
+    service nextjs(server)[Next.js App Router] in frontend
+    service react(internet)[React 19 + Radix UI] in frontend
+
+    group backend(cloud)[Backend - Node.js 22]
+    service pm2(server)[PM2 Process] in backend
+    service proxy(internet)[proxy.ts Middleware] in backend
+    service api(server)[313 API Routes] in backend
+
+    group data(database)[Data Layer]
+    service mysql(database)[MySQL 8 - db_learn] in data
+    service prisma(database)[Prisma 6 ORM] in data
+
+    group media(server)[Media Pipeline - Local Only]
+    service ffmpeg(server)[ffmpeg + ffprobe] in media
+    service piper(server)[Piper TTS] in media
+    service espeak(server)[espeak fallback] in media
+    service comfyui(server)[ComfyUI images] in media
+
+    group infra(server)[Infrastructure]
+    service nginx(server)[Nginx reverse proxy] in infra
+    service cloudflare(internet)[Cloudflare DNS+SSL] in infra
+    service storage(database)[Local file storage] in infra
+
+    group auth(server)[Auth]
+    service nextauth(server)[NextAuth JWT] in auth
+    service otp(server)[SMS OTP via httpSMS] in auth
+
+    cloudflare:R --> nginx:R
+    nginx:R --> nextjs:R
+    nextjs:R --> proxy:R
+    proxy:R --> api:R
+    api:L --> prisma:L
+    prisma:R --> mysql:L
+    api:L --> ffmpeg:R
+    api:L --> piper:R
+    piper:R --> espeak:R
+    api:L --> storage:L
+    api:L --> nextauth:R
+    nextauth:R --> otp:R

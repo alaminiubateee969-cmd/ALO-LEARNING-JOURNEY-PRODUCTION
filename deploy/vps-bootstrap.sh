@@ -12,7 +12,7 @@ DOMAIN="${PUBLIC_BASE_URL:-https://learn.aloeducation.com}"
 [ "$APP_DIR" = "/home/aloedu/LEARNING-JOURNEY" ] || { echo '[preflight] ERROR: APP_DIR must be /home/aloedu/LEARNING-JOURNEY' >&2; exit 1; }
 [ "$APP_NAME" = "learn-aloeducation" ] || { echo '[preflight] ERROR: PM2 process name must be learn-aloeducation' >&2; exit 1; }
 [ "$PORT" = "3017" ] || { echo '[preflight] ERROR: APP_PORT must be 3017' >&2; exit 1; }
-[ "$DOMAIN" = "https://learn.aloeducation.com" ] || { echo '[preflight] ERROR: public URL must be https://learn.aloeducation.com' >&2; exit 1; }
+case " https://learn.aloeducation.com https://learn.alolabs.net " in *" $DOMAIN "*) ;; *) echo "[preflight] ERROR: public URL must be one of: https://learn.aloeducation.com https://learn.alolabs.net" >&2; exit 1;; esac
 
 printf '%s\n' 'Read-only deployment preflight — no server configuration or data will be changed.'
 printf '[preflight] expected app path: %s\n' "$APP_DIR"

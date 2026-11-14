@@ -11,7 +11,7 @@ DOMAIN="${PUBLIC_BASE_URL:-https://learn.aloeducation.com}"
 [ "$APP_DIR" = "/home/aloedu/LEARNING-JOURNEY" ] || fail "APP_DIR must be /home/aloedu/LEARNING-JOURNEY"
 [ "$APP_NAME" = "learn-aloeducation" ] || fail "PM2 app must be learn-aloeducation"
 [ "$PORT" = "3017" ] || fail "application port must be 3017"
-[ "$DOMAIN" = "https://learn.aloeducation.com" ] || fail "public URL must be https://learn.aloeducation.com"
+case " https://learn.aloeducation.com https://learn.alolabs.net " in *" $DOMAIN "*) ;; *) fail "public URL must be one of: https://learn.aloeducation.com https://learn.alolabs.net";; esac
 for cmd in pm2 node curl ss; do command -v "$cmd" >/dev/null || fail "$cmd is not installed"; done
 
 if ! pm2 jlist 2>/dev/null | node -e '
