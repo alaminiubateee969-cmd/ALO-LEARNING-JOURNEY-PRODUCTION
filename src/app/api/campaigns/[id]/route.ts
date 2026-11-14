@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     const data = await req.json();
 
-    const existing = await db.campaign.findFirst({ where: { id, companyId: payload.companyId } });
+    const existing = await db.mosCampaign.findFirst({ where: { id, companyId: payload.companyId } });
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const update: any = {};
@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
-    const campaign = await db.campaign.update({
+    const campaign = await db.mosCampaign.update({
       where: { id },
       data: update,
       include: { contents: true },
@@ -53,12 +53,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!payload || !payload.companyId) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
     const { id } = await params;
-    const existing = await db.campaign.findFirst({ where: { id, companyId: payload.companyId } });
+    const existing = await db.mosCampaign.findFirst({ where: { id, companyId: payload.companyId } });
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // Unlink contents before deleting
     await db.content.updateMany({ where: { campaignId: id }, data: { campaignId: null } });
-    await db.campaign.delete({ where: { id } });
+    await db.mosCampaign.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('[DELETE /api/campaigns/[id]]', err);

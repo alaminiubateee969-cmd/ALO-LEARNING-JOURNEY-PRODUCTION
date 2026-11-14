@@ -14,7 +14,7 @@
  * This adapter is production code; the external service is NOT testable here.
  */
 
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { log, newJobId } from '@/lib/observability';
@@ -38,7 +38,7 @@ export interface LipSyncResult {
 
 function probeDuration(filePath: string): number | null {
   try {
-    const out = execSync(`ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${filePath}"`, { encoding: 'utf-8' }).trim();
+    const out = (spawnSync('ffprobe', ['-v', 'quiet', '-show_entries', 'format=duration', '-of', 'csv=p=0', filePath], { encoding: 'utf-8' }).stdout || '').trim();
     return parseFloat(out) || null;
   } catch {
     return null;
@@ -47,7 +47,7 @@ function probeDuration(filePath: string): number | null {
 
 function probeHasVideoAndAudio(filePath: string): { video: boolean; audio: boolean } {
   try {
-    const out = execSync(`ffprobe -v error -show_entries stream=codec_type -of csv=p=0 "${filePath}"`, { encoding: 'utf-8' }).trim();
+    const out = (spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', filePath], { encoding: 'utf-8' }).stdout || '').trim();
     const lines = out.split('\n').map((s) => s.trim()).filter(Boolean);
     return {
       video: lines.includes('video'),

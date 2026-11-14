@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     if (resource) where.resource = resource;
 
     const [logs, total] = await Promise.all([
-      db.auditLog.findMany({
+      db.mosAuditLog.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         take: limit,
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
           user: { select: { id: true, name: true, email: true, avatar: true } },
         },
       }),
-      db.auditLog.count({ where }),
+      db.mosAuditLog.count({ where }),
     ]);
 
     return NextResponse.json({

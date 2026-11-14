@@ -82,7 +82,14 @@ test("CRM workspace selection is admin-protected and not mistaken for membership
   assert.match(helper, /await requireOwner\(\)/);
   assert.match(helper, /x-alo-company-id/);
   assert.match(ui, /not a membership token or authorization boundary/);
-  assert.match(readFileSync(new URL("../src/app/api/crm/leads/route.ts", import.meta.url), "utf8"), /companyId:\s*scope\.companyId/);
+  // /api/crm/leads is shared with MarketingOS (PR #27); the admissions-CRM handler
+  // lives in alo-handlers.ts and serves every request without a Bearer token.
+  const aloLeads = readFileSync(new URL("../src/app/api/crm/leads/alo-handlers.ts", import.meta.url), "utf8");
+  assert.match(aloLeads, /resolveCompanyScope\(request\)/);
+  assert.match(aloLeads, /companyId:\s*scope\.companyId/);
+  const route = readFileSync(new URL("../src/app/api/crm/leads/route.ts", import.meta.url), "utf8");
+  assert.match(route, /from "\.\/alo-handlers"/);
+  assert.match(route, /isMarketingOsRequest\(request\) \? marketingos\.GET\(request\) : alo\.GET\(request\)/);
 });
 
 test("health route exposes release identity, requires MySQL/admin setup in production, and redacts DB host", () => {

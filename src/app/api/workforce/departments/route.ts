@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Get all departments for this company
-    const departments = await db.department.findMany({
+    const departments = await db.mosDepartment.findMany({
       where: { companyId },
       select: {
         id: true,

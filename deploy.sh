@@ -16,6 +16,19 @@
 #   - Either: a git remote already configured OR pass GITHUB_REPO env var
 #   - For auto-deploy to VPS: GitHub secrets set (DEPLOY_HOST, DEPLOY_SSH_KEY, DOCKERHUB_USERNAME, etc.)
 #
+# ── DISABLED in this repository ──────────────────────────────────────────────
+# This script was written for the standalone MarketingOS checkout (SQLite/Bun,
+# marketing.alolabs.net). Since PR #27 MarketingOS ships inside the ALO Learning
+# Journey app and shares its production MySQL database, where this script is
+# unsafe: it commits every file and pushes straight to main (bypassing PR review
+# and CI), and runs `prisma db push --accept-data-loss`, which can drop tables or
+# columns that prisma/schema.prisma does not model and bypasses the migration
+# history the deploy gates rely on. It is kept for reference only.
+# Use DEPLOYMENT.md, MIGRATION-RECOVERY-PLAN.md and .github/workflows/deploy.yml.
+echo "deploy.sh is disabled in this repository (it would push to main and run 'prisma db push --accept-data-loss')." >&2
+echo "Follow DEPLOYMENT.md and the 'Deploy to VPS' GitHub workflow instead." >&2
+exit 1
+
 set -euo pipefail
 
 # Colors

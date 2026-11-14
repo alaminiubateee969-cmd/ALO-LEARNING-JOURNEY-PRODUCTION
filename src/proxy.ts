@@ -4,7 +4,7 @@ import { isAdminAuthenticationConfigured } from "@/lib/auth-config";
 import { verifyMediaToken } from "@/lib/media-token";
 
 const STATIC_PREFIXES = ["/_next/"];
-const STATIC_PATHS = new Set(["/favicon.ico", "/robots.txt", "/logo.svg"]);
+const STATIC_PATHS = new Set(["/favicon.ico", "/robots.txt", "/sitemap.xml", "/logo.svg"]);
 const PROTECTED_MEDIA_PREFIXES = [
   "/avatar-videos/",
   "/avatar-audio/",
@@ -29,7 +29,7 @@ function apiResponse(status: number, error: string) {
   );
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   if (STATIC_PATHS.has(pathname) || STATIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.next();
@@ -88,5 +88,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|logo.svg).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|logo.svg).*)"],
 };

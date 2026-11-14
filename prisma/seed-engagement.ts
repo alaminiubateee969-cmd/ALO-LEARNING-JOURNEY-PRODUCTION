@@ -80,7 +80,7 @@ async function main() {
 
   // ─── ACTIVITY FEED ────────────────────────────────────────────────────
   console.log('\n  → Activity feed...');
-  const leads = await prisma.lead.findMany({
+  const leads = await prisma.mosLead.findMany({
     where: { companyId },
     take: 20,
     orderBy: { createdAt: 'desc' },
@@ -156,12 +156,12 @@ async function main() {
   console.log('\n  → Notifications...');
   // Send a welcome notification to each team member
   for (const member of teamMembers) {
-    const exists = await prisma.notification.findFirst({
+    const exists = await prisma.mosNotification.findFirst({
       where: { userId: member.userId, type: 'system', title: 'Welcome to Kexsio MarketingOS' },
     });
     if (exists) continue;
 
-    await prisma.notification.create({
+    await prisma.mosNotification.create({
       data: {
         userId: member.userId,
         type: 'system',
@@ -174,7 +174,7 @@ async function main() {
     });
 
     // Add a "deal.won" sample notification
-    await prisma.notification.create({
+    await prisma.mosNotification.create({
       data: {
         userId: member.userId,
         type: 'deal.won',
@@ -187,7 +187,7 @@ async function main() {
     });
 
     // Add a lead notification
-    await prisma.notification.create({
+    await prisma.mosNotification.create({
       data: {
         userId: member.userId,
         type: 'lead.created',

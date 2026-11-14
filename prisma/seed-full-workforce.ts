@@ -105,23 +105,23 @@ const SOP_TEMPLATES = [
 
 async function main() {
   console.log('🚀 Comprehensive AI Workforce Seed...');
-  const company = await prisma.company.findFirst();
+  const company = await prisma.mosCompany.findFirst();
   if (!company) { console.error('No company found'); return; }
   const companyId = company.id;
 
   // 1. DEPARTMENTS → 100
   console.log('\n🏢 Departments → 100...');
   for (const def of ADDITIONAL_DEPARTMENTS) {
-    const existing = await prisma.department.findUnique({ where: { code: def.code } }).catch(() => null);
+    const existing = await prisma.mosDepartment.findUnique({ where: { code: def.code } }).catch(() => null);
     if (existing) continue;
     let parentId = null;
     if (def.parentId) {
-      const parent = await prisma.department.findUnique({ where: { code: def.parentId } }).catch(() => null);
+      const parent = await prisma.mosDepartment.findUnique({ where: { code: def.parentId } }).catch(() => null);
       if (parent) parentId = parent.id;
     }
-    await prisma.department.create({ data: { name: def.name, code: def.code, description: def.description, level: def.level, sortOrder: def.sortOrder, icon: def.icon, color: def.color, parentId, companyId } });
+    await prisma.mosDepartment.create({ data: { name: def.name, code: def.code, description: def.description, level: def.level, sortOrder: def.sortOrder, icon: def.icon, color: def.color, parentId, companyId } });
   }
-  console.log(`  ✅ Departments: ${await prisma.department.count({ where: { companyId } })}`);
+  console.log(`  ✅ Departments: ${await prisma.mosDepartment.count({ where: { companyId } })}`);
 
   // 2. SKILLS → 10,000+
   console.log('\n🎯 Skills → 10,000+...');
@@ -152,7 +152,7 @@ async function main() {
 
   // 3. PROMPTS → 50,000+
   console.log('\n📝 Prompts → 50,000+...');
-  const allDepts = await prisma.department.findMany({ where: { companyId }, select: { id: true, name: true, code: true } });
+  const allDepts = await prisma.mosDepartment.findMany({ where: { companyId }, select: { id: true, name: true, code: true } });
   const ROLES = ['executive','director','manager','supervisor','specialist','worker'];
   const TONES = ['professional','friendly','formal','casual','persuasive','informative','inspirational','urgent'];
   let promptBatch: any[] = [];
@@ -205,7 +205,7 @@ async function main() {
   for (const emp of employees) {
     const skills = JSON.parse(emp.skills || '[]');
     const tools = JSON.parse(emp.tools || '[]');
-    const dept = await prisma.department.findUnique({ where: { id: emp.departmentId }, select: { name: true } });
+    const dept = await prisma.mosDepartment.findUnique({ where: { id: emp.departmentId }, select: { name: true } });
     profileBatch.push({
       agentId: emp.employeeId, name: emp.name, role: emp.title, department: dept?.name || 'General', level: emp.level,
       skillsJson: JSON.stringify(skills), toolsJson: JSON.stringify(tools), promptsJson: '[]', sopsJson: '[]',
@@ -222,7 +222,7 @@ async function main() {
 
   // FINAL SUMMARY
   const [d,e,a,s,pr,sop,k,m,ap] = await Promise.all([
-    prisma.department.count({ where: { companyId } }), prisma.employee.count({ where: { companyId } }), prisma.aiAgent.count({ where: { companyId } }),
+    prisma.mosDepartment.count({ where: { companyId } }), prisma.employee.count({ where: { companyId } }), prisma.aiAgent.count({ where: { companyId } }),
     prisma.skill.count(), prisma.prompt.count(), prisma.sop.count({ where: { companyId } }), prisma.knowledgeNode.count({ where: { companyId } }),
     prisma.modelConfig.count(), prisma.agentProfile.count({ where: { companyId } }),
   ]);

@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
         where: { companyId, acceptedAt: null },
         orderBy: { createdAt: 'desc' },
       }),
-      db.auditLog.findMany({
+      db.mosAuditLog.findMany({
         where: { companyId },
         include: { user: { select: { name: true, email: true } } },
         orderBy: { createdAt: 'desc' },
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
           companyId,
         },
       });
-      await db.auditLog.create({
+      await db.mosAuditLog.create({
         data: {
           action: 'invite',
           resource: `Invitation: ${email}`,
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
         where: { id: companyUserId },
         data: { role },
       });
-      await db.auditLog.create({
+      await db.mosAuditLog.create({
         data: {
           action: 'update_role',
           resource: `Member: ${companyUserId}`,
@@ -143,10 +143,10 @@ export async function POST(req: NextRequest) {
       const target = await db.companyUser.findFirst({ where: { id: companyUserId, companyId } });
       if (!target) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
       // Unlink assigned leads/tickets first
-      await db.lead.updateMany({ where: { assignedToId: companyUserId }, data: { assignedToId: null } });
+      await db.mosLead.updateMany({ where: { assignedToId: companyUserId }, data: { assignedToId: null } });
       await db.ticket.updateMany({ where: { assignedToId: companyUserId }, data: { assignedToId: null } });
       await db.companyUser.delete({ where: { id: companyUserId } });
-      await db.auditLog.create({
+      await db.mosAuditLog.create({
         data: {
           action: 'remove_member',
           resource: `Member: ${companyUserId}`,

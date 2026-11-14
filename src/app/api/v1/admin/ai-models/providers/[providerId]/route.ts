@@ -5,7 +5,7 @@
  *
  * PATCH body (any subset):
  *   { "label": "...", "baseUrl": "...", "isEnabled": true, "priority": 50,
- *     "api_key": "new-secret-key", "notes": "..." }
+ *     "api_key": "...", "notes": "..." }
  *
  * When api_key is supplied, it OVERWRITES the existing encrypted key.
  * The api_key is NEVER returned in the response.

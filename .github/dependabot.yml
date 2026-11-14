@@ -1,14 +1,34 @@
 version: 2
 updates:
+  # package-lock.json is the canonical lockfile (CI, the VPS deploy script and
+  # cPanel all run `npm ci`). The marketingos/ sub-project has its own
+  # package.json and is not tracked here.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
     ignore:
+      # Breaking majors need a deliberate migration PR (e.g. Prisma 7 requires
+      # prisma.config.ts + driver adapters; ESLint 10, lucide-react 1.x,
+      # @hookform/resolvers 7, framer-motion 14 and react-syntax-highlighter 16
+      # all broke the build when auto-merged in Nov 2026).
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # sharp is 0.x, so its "minor" bumps are breaking (0.34 -> 0.35 changed
+      # the default export) and ship new native binaries. The production CPU
+      # lacks SSE4.2 and sharp compatibility there is unverified
+      # (audit/07-NETWORKING-REPAIR-20261013.md), so only patches are automatic.
       - dependency-name: "sharp"
-        versions: [">=0.33.0"]
-    # Don't open PRs for sub-projects that have their own package.json
-    # marketingos/ is a separate sub-project with its own deps
+        update-types: ["version-update:semver-minor"]
+    groups:
+      # Prisma CLI and client must always move together.
+      prisma:
+        patterns: ["prisma", "@prisma/*"]
+      # One reviewable weekly PR instead of a burst of individual merges.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+        exclude-patterns: ["prisma", "@prisma/*"]
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

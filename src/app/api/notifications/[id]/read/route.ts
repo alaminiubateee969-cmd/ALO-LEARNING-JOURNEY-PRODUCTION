@@ -14,10 +14,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { id } = await params;
     // Verify ownership
-    const notif = await db.notification.findFirst({ where: { id, userId: payload.userId } });
+    const notif = await db.mosNotification.findFirst({ where: { id, userId: payload.userId } });
     if (!notif) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const updated = await db.notification.update({
+    const updated = await db.mosNotification.update({
       where: { id },
       data: { isRead: true, readAt: new Date() },
     });
