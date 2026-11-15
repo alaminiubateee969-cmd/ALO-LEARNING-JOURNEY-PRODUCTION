@@ -1,6 +1,7 @@
 const PHONE_E164 = /^\+[1-9]\d{6,14}$/;
 
 export function isAdminOtpRequired(): boolean {
+  if (process.env.ADMIN_OTP_REQUIRED === "false") return false;
   return process.env.NODE_ENV === "production" || process.env.ADMIN_OTP_REQUIRED === "true";
 }
 

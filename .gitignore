@@ -96,3 +96,5 @@ public/generated/
 skills/
 __pycache__/
 *.py[cod]
+.env.config
+.env.bak*
