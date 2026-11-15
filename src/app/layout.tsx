@@ -101,6 +101,15 @@ const jsonLd = {
   },
 };
 
+// Pageview analytics — opt-in via env vars. Only one needs to be set.
+// Google Analytics 4 (GA_MEASUREMENT_ID, e.g. "G-XXXXXXXXXX") OR
+// Plausible Analytics (NEXT_PUBLIC_PLAUSIBLE_DOMAIN + optional PLAUSIBLE_SRC).
+// Both are privacy-friendly options; Plausible is cookieless + GDPR-safe.
+const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() || "";
+const PLAUSIBLE_DOMAIN = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN?.trim() || "";
+const PLAUSIBLE_SRC =
+  process.env.NEXT_PUBLIC_PLAUSIBLE_SRC?.trim() || "https://plausible.io/js/script.js";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -113,6 +122,29 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        {GA_ID && (
+          <>
+            {/* Google Analytics 4 */}
+            <script
+              async
+              src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
+            />
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${GA_ID}',{anonymize_ip:true});`,
+              }}
+            />
+          </>
+        )}
+        {PLAUSIBLE_DOMAIN && (
+          /* Plausible Analytics — cookieless, GDPR-friendly */
+          <script
+            async
+            defer
+            data-domain={PLAUSIBLE_DOMAIN}
+            src={PLAUSIBLE_SRC}
+          />
+        )}
       </head>
       <body className="antialiased bg-background text-foreground">
         <ThemeProvider>{children}</ThemeProvider>
