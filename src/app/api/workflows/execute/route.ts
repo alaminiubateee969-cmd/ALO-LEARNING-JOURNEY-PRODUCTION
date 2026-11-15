@@ -158,6 +158,7 @@ async function executeStep(
           type: 'email',
           status: 'draft',
           body: step.config?.body || '',
+          engagement: '{}',
           creatorId: userId,
           companyId,
         },

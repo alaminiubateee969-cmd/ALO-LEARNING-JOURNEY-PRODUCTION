@@ -820,5 +820,8 @@ export async function generateChatReply(
   system: string,
   message: string,
 ): Promise<AIResult<ChatReply>> {
-  return chatJSON<ChatReply>(system, message, { reply: "" }, { timeoutMs: 30000 });
+  // The production host runs the model on CPU only, where one short reply was
+  // measured at ~38s. A 30s budget answered `503 ai_unavailable` even though
+  // Ollama was healthy and answered correctly, so this call needs headroom.
+  return chatJSON<ChatReply>(system, message, { reply: "" }, { timeoutMs: 90_000 });
 }
