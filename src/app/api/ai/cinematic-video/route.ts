@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     } catch {
       script = `Welcome to this cinematic video about ${topic}.`; storyboard = [{ scene: 1, visual: 'Opening', narration: script, mood: 'professional' }];
     }
-    const content = await db.content.create({ data: { title: `Cinematic Video: ${topic.slice(0, 80)}`, type: 'video', status: 'draft', body: `Script: ${script}\nStoryboard: ${JSON.stringify(storyboard)}`, aiGenerated: true, creatorId: payload.userId, companyId: payload.companyId } });
+    const content = await db.content.create({ data: { title: `Cinematic Video: ${topic.slice(0, 80)}`, type: 'video', status: 'draft', body: `Script: ${script}\nStoryboard: ${JSON.stringify(storyboard)}`, engagement: '{}', aiGenerated: true, creatorId: payload.userId, companyId: payload.companyId } });
     await emitEvent({ companyId: payload.companyId, userId: payload.userId, type: 'ai.cinematic_video_created', title: 'Cinematic video created', description: topic.slice(0, 60), resourceType: 'content', resourceId: content.id });
     return NextResponse.json({ data: { contentId: content.id, title: topic, script, storyboard } }, { status: 201 });
   } catch { return NextResponse.json({ error: 'Failed' }, { status: 500 }); }
