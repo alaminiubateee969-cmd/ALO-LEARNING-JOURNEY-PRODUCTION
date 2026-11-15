@@ -3,6 +3,9 @@
  * Used by workforce chat, voice agents, and live dashboards.
  */
 
+/** Listener invoked with the decoded payload of a server event. */
+export type RealtimeListener = (data: unknown) => void;
+
 export interface RealtimeClientOptions {
   url?: string;
   token?: string;
@@ -14,7 +17,7 @@ export class RealtimeClient {
   private token: string;
   private reconnect: boolean;
   private ws: WebSocket | null = null;
-  private listeners: Map<string, Set<Function>> = new Map();
+  private listeners: Map<string, Set<RealtimeListener>> = new Map();
 
   constructor(options: RealtimeClientOptions = {}) {
     this.url = options.url || process.env.NEXT_PUBLIC_APP_URL || "https://learn.alolabs.net";
@@ -45,12 +48,12 @@ export class RealtimeClient {
     this.ws = null;
   }
 
-  on(event: string, callback: Function): void {
+  on(event: string, callback: RealtimeListener): void {
     if (!this.listeners.has(event)) this.listeners.set(event, new Set());
     this.listeners.get(event)!.add(callback);
   }
 
-  off(event: string, callback: Function): void {
+  off(event: string, callback: RealtimeListener): void {
     this.listeners.get(event)?.delete(callback);
   }
 

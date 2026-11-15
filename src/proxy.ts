@@ -1,6 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminAuthenticationConfigured } from "@/lib/auth-config";
+import { verifyMarketingOsBearer } from "@/lib/bearer-auth";
 import { verifyMediaToken } from "@/lib/media-token";
 
 const STATIC_PREFIXES = ["/_next/"];
@@ -62,9 +63,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Allow JWT Bearer token API requests through — route handlers verify themselves
-  const authHeader = request.headers.get("Authorization") ?? "";
-  if (pathname.startsWith("/api/") && authHeader.startsWith("Bearer ")) {
+  // MarketingOS authenticates with a signed JWT instead of the admin session.
+  // The token is verified here — an arbitrary `Authorization: Bearer <junk>`
+  // header must never skip this gateway and reach a session-only API route.
+  // Route handlers additionally verify the token and scope every query by the
+  // `companyId` it carries.
+  if (pathname.startsWith("/api/") && await verifyMarketingOsBearer(request.headers.get("authorization"))) {
     return NextResponse.next();
   }
 

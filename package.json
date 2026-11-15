@@ -23,6 +23,7 @@
     "test:integration": "tsx scripts/verify-login.ts && tsx scripts/test-integrations.ts && tsx scripts/test-ollama-cloud.ts && tsx scripts/test-sms-providers.ts && tsx scripts/test-voice-contact-center.ts",
     "verify": "npm run typecheck && npm run lint && npm test",
     "verify:migrations": "node scripts/verify-migrations.mjs",
+    "db:repair-defaults": "node scripts/repair-column-defaults.mjs",
     "test:migrations:integration": "node scripts/test-migrations.mjs",
     "db:push": "node scripts/prisma-dev-guard.mjs push",
     "db:generate": "prisma generate",
