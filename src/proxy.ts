@@ -62,6 +62,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Allow JWT Bearer token API requests through — route handlers verify themselves
+  const authHeader = request.headers.get("Authorization") ?? "";
+  if (pathname.startsWith("/api/") && authHeader.startsWith("Bearer ")) {
+    return NextResponse.next();
+  }
+
   const token = await getToken({
     req: request,
     secret: process.env.NEXTAUTH_SECRET,
