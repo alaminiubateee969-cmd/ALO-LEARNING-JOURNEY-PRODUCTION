@@ -19,7 +19,7 @@ function jsonText(value: unknown, fallback = '{}'): string {
   if (typeof value === 'string') return value;
   try {
     return JSON.stringify(value);
-  } catch {
+  } catch (e) { console.error("[campaigns] 500:", e);
     return fallback;
   }
 }
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
     // Parse metrics JSON strings into objects so the frontend can read them directly
     const parsed = campaigns.map((c) => ({
       ...c,
-      metrics: (() => { try { return JSON.parse(c.metrics || '{}'); } catch { return {}; } })(),
+      metrics: (() => { try { return JSON.parse(c.metrics || '{}'); } catch (e) { console.error("[campaigns] 500:", e); return {}; } })(),
     }));
 
     return NextResponse.json({ campaigns: parsed });
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     const metrics = (() => {
       const parsed = (() => {
-        try { return JSON.parse(jsonText(body.metrics)); } catch { return {}; }
+        try { return JSON.parse(jsonText(body.metrics)); } catch (e) { console.error("[campaigns] 500:", e); return {}; }
       })();
       const base = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
       const description = optionalText(body.description);
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Fire event: campaign created
-    await emitEvent({
+    try { await emitEvent({
       companyId: payload.companyId,
       userId: payload.userId,
       type: 'campaign.created',
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
       resourceId: campaign.id,
       link: '/campaigns',
       metadata: { name: campaign.name, type: campaign.type, budget: campaign.budget },
-    });
+    }); } catch (evErr) { console.error("[campaigns] emitEvent failed:", evErr); }
 
     return NextResponse.json({ campaign });
   } catch (err) {

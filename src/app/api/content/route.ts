@@ -18,7 +18,7 @@ function jsonText(value: unknown, fallback: string): string {
   if (typeof value === 'string') return value;
   try {
     return JSON.stringify(value);
-  } catch {
+  } catch (e) { console.error("[content] 500:", e);
     return fallback;
   }
 }
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Fire event: content created (or content.published if status=published)
-    await emitEvent({
+    try { await emitEvent({
       companyId: payload.companyId,
       userId: payload.userId,
       type: content.status === 'published' ? 'content.published' : 'content.created',
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       resourceId: content.id,
       link: '/content',
       metadata: { title: content.title, type: content.type, platform: content.platform, status: content.status },
-    });
+    }); } catch (evErr) { console.error("[content] emitEvent failed:", evErr); }
 
     return NextResponse.json({ content });
   } catch (err) {
