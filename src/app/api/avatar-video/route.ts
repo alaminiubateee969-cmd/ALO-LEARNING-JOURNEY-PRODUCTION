@@ -417,10 +417,28 @@ export async function POST(req: NextRequest) {
       return badRequest('avatar', 'Avatar portrait not generated yet. Generate portrait first.');
     }
 
+    // 5b. FACE CONSISTENCY — enrich faceDescription from family/clone reference photos.
+    // Accepts referenceImages: string[] (2-5 file paths) from the Family Studio clone flow.
+    // When provided, the scene-image prompt is seeded with these photos so the same
+    // person appears across every video generated for this avatar.
+    const referenceImagesRaw = body.referenceImages;
+    const referenceImages: string[] = Array.isArray(referenceImagesRaw)
+      ? referenceImagesRaw.filter((p: unknown): p is string => typeof p === 'string' && p.startsWith('/avatar-scenes/') || (typeof p === 'string' && p.startsWith('/avatars/')))
+          .slice(0, 5)
+      : [];
+    if (referenceImages.length > 0) {
+      log('info', 'face-consistency-enabled', { jobId, avatarId, refCount: referenceImages.length });
+    }
+    // Persist reference image paths on the video record for the compositor to use.
+    const faceConsistencyRefs = referenceImages.length > 0 ? JSON.stringify(referenceImages) : null;
+
     markGenerationStart(ownerId!);
     log('info', 'pipeline-start', { jobId, ownerId, avatarId, promptPreview: truncatePrompt(sanitized), targetDuration, quality });
 
     // create pending video record
+    // NOTE: referenceImages are stored in scenesJson (a LongText column) once
+    // scenes are generated — see composeVideo() which merges refs + scenes.
+    // We hold them in faceConsistencyRefs for the compositor to pick up.
     const video = await db.avatarVideo.create({
       data: {
         ownerId: ownerId!,
@@ -431,6 +449,9 @@ export async function POST(req: NextRequest) {
         progress: 5,
         currentStep: 'Writing Bengali script with LLM',
         quality,
+        // Pre-seed scenesJson with the reference image paths so the compositor
+        // can read them when building scene prompts (face-consistency seed).
+        scenesJson: faceConsistencyRefs,
       },
     });
 
