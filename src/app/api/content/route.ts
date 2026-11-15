@@ -3,6 +3,38 @@ import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
 import { emitEvent } from '@/lib/events';
 
+// Prisma rejects unknown arguments, so request bodies are mapped onto the
+// Content model explicitly instead of being spread straight into `data`.
+// `engagement` is TEXT NOT NULL in the schema; older deployments were created
+// without the column default, so it is always written explicitly.
+function optionalText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function jsonText(value: unknown, fallback: string): string {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function optionalJsonText(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  return jsonText(value, '[]');
+}
+
+function optionalDate(value: unknown): Date | null {
+  const text = optionalText(value);
+  if (!text) return null;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const token = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -22,7 +54,8 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ content });
-  } catch {
+  } catch (err) {
+    console.error('[GET /api/content]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -33,17 +66,39 @@ export async function POST(req: NextRequest) {
     if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
     const payload = await verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-
-    const data = await req.json();
-    // Prisma stores engagement as String, so JSON.stringify objects
-    const createData: any = { ...data, creatorId: payload.userId, companyId: payload.companyId };
-    if (data.engagement && typeof data.engagement === 'object') {
-      createData.engagement = JSON.stringify(data.engagement);
+    if (!payload.companyId) {
+      return NextResponse.json({ error: 'No company associated' }, { status: 400 });
     }
-    if (data.scheduledAt) createData.scheduledAt = new Date(data.scheduledAt);
-    if (data.publishedAt) createData.publishedAt = new Date(data.publishedAt);
-    createData.aiGenerated = data.aiGenerated || false;
-    const content = await db.content.create({ data: createData });
+
+    const input = await req.json().catch(() => null);
+    if (!input || typeof input !== 'object') {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const title = optionalText(input.title);
+    if (!title) return NextResponse.json({ error: 'title is required' }, { status: 400 });
+
+    const content = await db.content.create({
+      data: {
+        title,
+        type: optionalText(input.type) ?? 'post',
+        status: optionalText(input.status) ?? 'draft',
+        platform: optionalText(input.platform),
+        body: optionalText(input.body) ?? optionalText(input.content),
+        mediaUrl: optionalText(input.mediaUrl),
+        mediaType: optionalText(input.mediaType),
+        thumbnailUrl: optionalText(input.thumbnailUrl),
+        hashtags: optionalJsonText(input.hashtags),
+        // The dashboard form posts `scheduledDate`; the model column is `scheduledAt`.
+        scheduledAt: optionalDate(input.scheduledAt) ?? optionalDate(input.scheduledDate),
+        publishedAt: optionalDate(input.publishedAt),
+        engagement: jsonText(input.engagement, '{}'),
+        aiGenerated: Boolean(input.aiGenerated),
+        campaignId: optionalText(input.campaignId),
+        creatorId: payload.userId,
+        companyId: payload.companyId,
+      },
+    });
 
     // Fire event: content created (or content.published if status=published)
     await emitEvent({
@@ -59,7 +114,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ content });
-  } catch {
+  } catch (err) {
+    console.error('[POST /api/content]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

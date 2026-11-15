@@ -36,6 +36,21 @@ test("administrator OTP is mandatory in production and opt-in elsewhere", () => 
   withEnv({ NODE_ENV: "test", ADMIN_OTP_REQUIRED: "true" }, () => assert.equal(isAdminOtpRequired(), true));
 });
 
+test("only an explicit ADMIN_OTP_REQUIRED=false opt-out disables the production second factor", () => {
+  withEnv({ NODE_ENV: "production", ADMIN_OTP_REQUIRED: "false" }, () => assert.equal(isAdminOtpRequired(), false));
+  // Anything else keeps production mandatory, including unrelated values.
+  withEnv({ NODE_ENV: "production", ADMIN_OTP_REQUIRED: "no" }, () => assert.equal(isAdminOtpRequired(), true));
+  withEnv({ NODE_ENV: "production", ADMIN_OTP_REQUIRED: "" }, () => assert.equal(isAdminOtpRequired(), true));
+  // With the opt-out, password-only admin auth is accepted without an SMS provider.
+  withEnv({
+    NODE_ENV: "production",
+    ADMIN_OTP_REQUIRED: "false",
+    NEXTAUTH_SECRET: "test-only-secret-not-for-production",
+    ADMIN_EMAIL: "admin@example.test",
+    ADMIN_PASSWORD_HASH: `scrypt$${"a".repeat(22)}$${"b".repeat(86)}`,
+  }, () => assert.equal(isAdminAuthenticationConfigured(), true));
+});
+
 test("production administrator auth fails closed until valid SMS delivery settings exist", () => {
   const credentials = {
     NODE_ENV: "production",

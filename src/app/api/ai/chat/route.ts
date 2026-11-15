@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
-import ZAI from 'z-ai-web-dev-sdk';
+import { generateChatReply } from '@/lib/ai';
+
+const MAX_MESSAGE_CHARS = 4000;
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,13 +12,15 @@ export async function POST(req: NextRequest) {
     const payload = await verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-    const { message, conversationId } = await req.json();
-    if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 });
-
-    // Save user message
-    await db.aiChatMessage.create({
-      data: { role: 'user', content: message, userId: payload.userId },
-    });
+    const { message } = await req.json().catch(() => ({}) as Record<string, unknown>);
+    const question = typeof message === 'string' ? message.trim() : '';
+    if (!question) return NextResponse.json({ error: 'Message required' }, { status: 400 });
+    if (question.length > MAX_MESSAGE_CHARS) {
+      return NextResponse.json(
+        { error: `Message too long (max ${MAX_MESSAGE_CHARS} characters)` },
+        { status: 400 },
+      );
+    }
 
     // Get recent conversation history
     const recentMessages = await db.aiChatMessage.findMany({
@@ -24,7 +28,11 @@ export async function POST(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
-    const history = recentMessages.reverse().map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    const history = recentMessages
+      .reverse()
+      .map((m) => `${m.role}: ${m.content}`)
+      .join('\n')
+      .slice(-4000);
 
     // Get company context for personalized responses
     const companyUser = await db.companyUser.findFirst({
@@ -45,31 +53,45 @@ export async function POST(req: NextRequest) {
 
 ${companyUser ? `The user's company: ${companyUser.company.name}, Industry: ${companyUser.company.industry || 'General'}` : ''}
 
-Be specific, actionable, and provide concrete steps. Use markdown formatting when helpful. Be enthusiastic and professional.`;
+Be specific, actionable, and provide concrete steps. Be enthusiastic and professional.
+Reply with ONLY JSON in the form {"reply": "..."} where "reply" is your answer to the user.`;
 
-    const zai = await ZAI.create();
-    const messages = [{ role: 'assistant' as const, content: systemPrompt }, ...history];
+    const userPrompt = history
+      ? `Conversation so far:\n${history}\n\nNew message: ${question}`
+      : question;
 
-    // Trim if too long
-    const maxMessages = 24;
-    const trimmedMessages = messages.length > maxMessages
-      ? [messages[0], ...messages.slice(-(maxMessages - 1))]
-      : messages;
+    const result = await generateChatReply(systemPrompt, userPrompt);
+    const answer = (result.data?.reply ?? '').trim();
 
-    const completion = await zai.chat.completions.create({
-      messages: trimmedMessages,
-      thinking: { type: 'disabled' },
-    });
+    if (!answer) {
+      // The local model is unreachable and the built-in template cannot answer
+      // free-form questions. Report that honestly instead of failing with 500.
+      return NextResponse.json(
+        {
+          error: 'ai_unavailable',
+          message:
+            'No local AI model answered this request. Set OLLAMA_BASE_URL (and optionally OLLAMA_MODEL) to a reachable Ollama instance, or start Ollama on this server.',
+          provider: result.provider,
+        },
+        { status: 503, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
 
-    const aiResponse = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
-
-    // Save AI response
+    // Persist the exchange only after a real answer was generated.
     await db.aiChatMessage.create({
-      data: { role: 'assistant', content: aiResponse, userId: payload.userId },
+      data: { role: 'user', content: question, userId: payload.userId },
+    });
+    await db.aiChatMessage.create({
+      data: { role: 'assistant', content: answer, userId: payload.userId },
     });
 
-    return NextResponse.json({ response: aiResponse });
-  } catch {
+    return NextResponse.json({
+      response: answer,
+      provider: result.provider,
+      degraded: !result.ok,
+    });
+  } catch (err) {
+    console.error('[POST /api/ai/chat]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -88,7 +110,8 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ messages });
-  } catch {
+  } catch (err) {
+    console.error('[GET /api/ai/chat]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

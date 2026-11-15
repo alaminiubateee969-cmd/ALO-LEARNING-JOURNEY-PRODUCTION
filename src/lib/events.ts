@@ -79,7 +79,7 @@ export async function emitEvent(payload: EventPayload): Promise<void> {
     }
 
     // 1. Create notifications for each recipient (skip the actor if they triggered it)
-    const notifData = recipients
+    const notifData = (recipients ?? [])
       .filter((id) => id !== userId)
       .map((recipientId) => ({
         userId: recipientId,

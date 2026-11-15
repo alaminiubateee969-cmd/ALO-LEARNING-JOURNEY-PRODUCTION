@@ -11,10 +11,12 @@
  *     (see `src/lib/api-client.ts`), so those requests go to the MarketingOS
  *     handler, which verifies the JWT itself and returns 401 when it is invalid.
  *   - Every other request goes to the ALO handler, which is protected by the
- *     next-auth session enforced in `src/middleware.ts` (production).
+ *     next-auth session enforced in `src/proxy.ts` (production).
  *
- * This only selects an implementation; it never grants access. Middleware runs
- * first for every request, and each handler keeps its own authentication.
+ * This only selects an implementation; it never grants access. The proxy entry
+ * point (`src/proxy.ts`) runs first for every request and only lets a Bearer
+ * request through after `verifyMarketingOsBearer()` has validated its
+ * signature; each handler then keeps its own authentication.
  */
 export function isMarketingOsRequest(request: Request): boolean {
   return /^Bearer\s+\S+/i.test(request.headers.get("authorization") ?? "");

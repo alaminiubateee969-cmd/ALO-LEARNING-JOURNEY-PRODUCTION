@@ -189,6 +189,74 @@ the independent read-only schema review and restore rehearsal are mandatory. If
 the actual status does not match the rehearsed plan, do not force the deploy—stop
 and revise the plan.
 
+## Phase E — TEXT column defaults missing on an existing database
+
+A live MariaDB database whose tables were created before the current schema (and
+which has no `_prisma_migrations` rows) can be missing the expression defaults
+that `prisma/schema.prisma` declares for JSON-holding `TEXT`/`LONGTEXT` columns:
+
+```prisma
+engagement String @default(dbgenerated("(_utf8mb4\'{}\')")) @db.Text
+```
+
+Prisma omits such a column when the caller does not pass a value, so MySQL
+rejects the `INSERT` with error 1364 (`Field 'x' doesn't have a default value`)
+and the API answers HTTP 500. Observed symptom: `POST /api/content`,
+`POST /api/campaigns`, and `POST /api/seo` failed while their `GET` siblings
+worked, because those models have `TEXT NOT NULL` columns without a live
+default (`Content.engagement`, `MosCampaign.metrics`, `SeoChallenge.tasks`).
+
+Read-only check (no changes):
+
+```sql
+SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE()
+   AND DATA_TYPE IN ('tinytext', 'text', 'mediumtext', 'longtext')
+   AND IS_NULLABLE = 'NO'
+   AND COLUMN_DEFAULT IS NULL
+ ORDER BY TABLE_NAME, COLUMN_NAME;
+```
+
+Repair with `scripts/repair-column-defaults.mjs`. It compares the schema's 101
+declared TEXT defaults with `information_schema`, prints the missing ones, and,
+with `--apply`, runs `ALTER TABLE … ALTER COLUMN … SET DEFAULT (…)` (MariaDB
+≥ 10.2.1 / MySQL ≥ 8.0.13; falls back to `MODIFY`). It never alters row data,
+never drops or renames a column, and is safe to re-run.
+
+```bash
+node scripts/repair-column-defaults.mjs            # report only (default)
+node scripts/repair-column-defaults.mjs --apply    # set the missing defaults
+node scripts/repair-column-defaults.mjs --env-file .env.config
+```
+
+The script reads `DATABASE_URL` from `--env-file`, then `.env.config`, then
+`.env`, then the process environment, and always prints the URL with the
+password redacted.
+
+Application-level hardening shipped with the same change (so the three known
+endpoints work even before the repair is applied, and so the real error is
+logged instead of being swallowed):
+
+- `POST /api/content` maps the dashboard payload onto real columns — the form
+  posts `scheduledDate`, which is accepted as an alias for `scheduledAt` — and
+  always writes `engagement`.
+- `POST /api/campaigns` drops `description` (the model has no such column,
+  which previously made Prisma reject the insert) and always writes `metrics`.
+- `POST /api/seo` always writes `tasks`.
+- All three routes, plus `GET` siblings, now log the underlying error with
+  `console.error` before returning HTTP 500.
+
+`POST /api/ai/chat` no longer calls the bundled external AI SDK: it uses the
+local model (`OLLAMA_BASE_URL`) through `generateChatReply()` and answers
+HTTP 503 with `ai_unavailable` when no model is reachable, instead of a bare
+HTTP 500.
+
+`src/proxy.ts` now verifies the MarketingOS bearer JWT (`src/lib/bearer-auth.ts`)
+before skipping the admin-session check, so an arbitrary
+`Authorization: Bearer <anything>` header can no longer reach session-only API
+routes.
+
 ## Required evidence to close this blocker
 
 Attach the following to the authorized internal release record (not the Git
