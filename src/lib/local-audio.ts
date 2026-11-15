@@ -182,6 +182,52 @@ async function synthesizeBuiltInSpeechWav(text: string, outputPath: string, voic
   return durationSeconds;
 }
 
+// Piper HTTP server (e.g. piper-http docker) — produces NATURAL Bangla speech
+// using the bn_BD-google-medium ONNX voice model. Configure via PIPER_BASE_URL.
+// Falls back to espeak CLI and built-in formant synth if unavailable.
+const PIPER_HTTP_URL = process.env.PIPER_BASE_URL?.trim() || "";
+const PIPER_BN_VOICE = process.env.PIPER_BN_VOICE?.trim() || "bn_BD-google-medium";
+const PIPER_EN_VOICE = process.env.PIPER_EN_VOICE?.trim() || "en_US-lessac-medium";
+
+async function synthesizeViaPiperHttp(
+  text: string,
+  outputPath: string,
+  voice: string
+): Promise<{ ok: boolean; durationSeconds: number }> {
+  if (!PIPER_HTTP_URL) return { ok: false, durationSeconds: 0 };
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    const res = await fetch(`${PIPER_HTTP_URL}/synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, voice, speed: 1.0, noise: 0.0, lengthScale: 1.0 }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return { ok: false, durationSeconds: 0 };
+
+    // piper-http returns audio bytes directly OR a JSON envelope
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const data: any = await res.json();
+      const audioB64: string = data.audio_base64 || data.audio || "";
+      if (!audioB64) return { ok: false, durationSeconds: 0 };
+      await writeFile(outputPath, Buffer.from(audioB64, "base64"));
+    } else {
+      // raw audio bytes (audio/wav)
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length < 44) return { ok: false, durationSeconds: 0 };
+      await writeFile(outputPath, buf);
+    }
+    const file = await stat(outputPath).catch(() => null);
+    if (!file || file.size < 44) return { ok: false, durationSeconds: 0 };
+    return { ok: true, durationSeconds: estimateSpeechDuration(text, 150) };
+  } catch {
+    return { ok: false, durationSeconds: 0 };
+  }
+}
+
 export async function synthesizeLocalSpeech(
   text: string,
   outputPath: string,
@@ -192,6 +238,14 @@ export async function synthesizeLocalSpeech(
   const safeVoice = /^[a-zA-Z0-9_-]{1,24}$/.test(requestedVoice) ? requestedVoice : "bn";
   await mkdir(path.dirname(outputPath), { recursive: true });
 
+  // 1st choice: Piper HTTP server with natural Bangla voice model
+  const piperVoice = safeVoice.startsWith("en") ? PIPER_EN_VOICE : PIPER_BN_VOICE;
+  const piperHttp = await synthesizeViaPiperHttp(content, outputPath, piperVoice);
+  if (piperHttp.ok) {
+    return { engine: "piper-local", durationSeconds: piperHttp.durationSeconds };
+  }
+
+  // 2nd choice: Piper CLI binary (if PIPER_MODEL_PATH set)
   const piperModel = process.env.PIPER_MODEL_PATH?.trim();
   if (piperModel) {
     const result = run(process.env.PIPER_BIN?.trim() || "piper", ["--model", piperModel, "--output_file", outputPath], content);
@@ -201,6 +255,7 @@ export async function synthesizeLocalSpeech(
     }
   }
 
+  // 3rd choice: espeak CLI (robotic but always works)
   const binary = process.env.ESPEAK_BIN?.trim() || "espeak";
   const result = run(binary, ["-v", safeVoice, "-s", "140", "-w", outputPath, content]);
   if (result.status === 0) {

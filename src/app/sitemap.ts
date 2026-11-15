@@ -1,13 +1,29 @@
 import type { MetadataRoute } from "next";
 
-// PR #27 hard-coded marketing.alolabs.net here, so this deployment
-// (learn.aloeducation.com) published a sitemap for a different host. A sitemap
-// may only list URLs on its own host, so use the deployment's public URL and
-// list only pages that are reachable without signing in (see middleware.ts).
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://learn.aloeducation.com").replace(/\/+$/, "");
+// Production sitemap. Lists only publicly-reachable pages (proxy.ts gates
+// everything else behind auth). The site URL defaults to the live domain.
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://learn.alolabs.net").replace(/\/+$/, "");
 
 export default function sitemap(): MetadataRoute.Sitemap {
+  const now = new Date();
   return [
-    { url: `${SITE_URL}/contact`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.5 },
+    {
+      url: SITE_URL,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 1.0,
+    },
+    {
+      url: `${SITE_URL}/contact`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.7,
+    },
+    {
+      url: `${SITE_URL}/login`,
+      lastModified: now,
+      changeFrequency: "yearly",
+      priority: 0.3,
+    },
   ];
 }
