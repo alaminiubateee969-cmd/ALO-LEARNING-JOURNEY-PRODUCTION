@@ -369,7 +369,11 @@ export async function generateLocalChatJson(
       method: "POST",
       headers: { "content-type": "application/json" },
       cache: "no-store",
-      signal: AbortSignal.timeout(Math.max(1_000, Math.min(timeoutMs, 12_000))),
+      // Upper bound for one local model call. This must stay above the
+      // assistant chat budget (`generateChatReply`): on a CPU-only host a single
+      // reply takes well over 30s, and clamping it here silently turned a
+      // healthy Ollama into `503 ai_unavailable`.
+      signal: AbortSignal.timeout(Math.max(1_000, Math.min(timeoutMs, 120_000))),
       body: JSON.stringify({
         model,
         stream: false,
