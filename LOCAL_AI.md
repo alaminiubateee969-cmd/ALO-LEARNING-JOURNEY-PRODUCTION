@@ -114,6 +114,10 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen2.5:7b
 ```
 
+Free-form dashboard chat requires a working model: templates cannot answer it. A running Ollama service and an installed model do not guarantee a response. The chat request defaults to 180 seconds; set `OLLAMA_CHAT_TIMEOUT_MS` between 1000 and 300000 for slower hardware, and configure any reverse proxy or hosting request timeout to be at least as long. An inference timeout, malformed model output, or unavailable model returns `503 ai_unavailable`; it does not create a chat exchange. Check Ollama logs, model tag and host memory if it persists. `/api/ai/local-status` distinguishes detected Ollama models from template fallback availability; its image service check does not verify the checkpoint can be loaded.
+
+Authentication uses two independent systems. ALO console endpoints require the administrator's NextAuth session cookie, while MarketingOS endpoints require their own tenant bearer token. A tenant JWT is not an ALO administrator credential, including for local status, ideas, content generation, and images. Log in to the appropriate application rather than granting tenant tokens access to all routes.
+
 Docker deployments may use a private Compose service name such as `http://ollama:11434`. Public endpoints are blocked by the application adapter. When Ollama is offline or the selected model is not installed, generated-copy APIs return a marked local template fallback; the fallback is not an LLM output.
 
 ## Image generation

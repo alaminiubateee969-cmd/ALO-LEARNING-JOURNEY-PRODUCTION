@@ -820,8 +820,11 @@ export async function generateChatReply(
   system: string,
   message: string,
 ): Promise<AIResult<ChatReply>> {
-  // The production host runs the model on CPU only, where one short reply was
-  // measured at ~38s. A 30s budget answered `503 ai_unavailable` even though
-  // Ollama was healthy and answered correctly, so this call needs headroom.
-  return chatJSON<ChatReply>(system, message, { reply: "" }, { timeoutMs: 90_000 });
+  // CPU inference can exceed 90 seconds, especially on a cold model. Keep a
+  // finite default budget and allow operators to tune it for their hardware.
+  const configured = Number(process.env.OLLAMA_CHAT_TIMEOUT_MS);
+  const timeoutMs = Number.isFinite(configured) && configured >= 1_000
+    ? Math.min(configured, 300_000)
+    : 180_000;
+  return chatJSON<ChatReply>(system, message, { reply: "" }, { timeoutMs });
 }

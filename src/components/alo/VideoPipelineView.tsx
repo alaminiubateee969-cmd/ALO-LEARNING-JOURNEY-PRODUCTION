@@ -116,7 +116,7 @@ export default function VideoPipelineView({ onOpenPhotoStudio }: { onOpenPhotoSt
             body: JSON.stringify({ prompt, filename: `sb_${scene.id}_${Date.now()}.png` }),
           });
           const data = await response.json().catch(() => ({}));
-          if (!response.ok || !data.url || /\.svg$/i.test(String(data.url))) {
+          if (!response.ok || !data.url || data.usedFallback || /\.svg$/i.test(String(data.url))) {
             failures++;
             continue;
           }

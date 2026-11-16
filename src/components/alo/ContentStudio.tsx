@@ -106,11 +106,12 @@ export default function ContentStudio({
         }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Image generation failed");
       setImageUrl(data.url);
       setImageMeta({ provider: data.provider, usedFallback: data.usedFallback });
       toast({
         title: data.usedFallback ? "Local placeholder তৈরি হয়েছে" : "ইমেজ তৈরি হয়েছে ✨",
-        description: data.usedFallback ? "provider_missing — SVG placeholder" : `Provider: ${data.provider}`,
+        description: data.usedFallback ? "Local placeholder; not generated artwork" : `Provider: ${data.provider}`,
       });
     } catch (e) {
       toast({ title: "ইমেজ তৈরি ব্যর্থ", description: String(e), variant: "destructive" });

@@ -3,6 +3,9 @@ import { db } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
 import { generateChatReply } from '@/lib/ai';
 
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
 const MAX_MESSAGE_CHARS = 4000;
 
 export async function POST(req: NextRequest) {
@@ -61,7 +64,7 @@ Reply with ONLY JSON in the form {"reply": "..."} where "reply" is your answer t
       : question;
 
     const result = await generateChatReply(systemPrompt, userPrompt);
-    const answer = (result.data?.reply ?? '').trim();
+    const answer = typeof result.data?.reply === 'string' ? result.data.reply.trim() : '';
 
     if (!answer) {
       // The local model is unreachable and the built-in template cannot answer
@@ -70,7 +73,7 @@ Reply with ONLY JSON in the form {"reply": "..."} where "reply" is your answer t
         {
           error: 'ai_unavailable',
           message:
-            'No local AI model answered this request. Set OLLAMA_BASE_URL (and optionally OLLAMA_MODEL) to a reachable Ollama instance, or start Ollama on this server.',
+            'No local AI model answered this request. Check the Ollama service and configured model, or increase OLLAMA_CHAT_TIMEOUT_MS for a slow host.',
           provider: result.provider,
         },
         { status: 503, headers: { 'Cache-Control': 'no-store' } },
