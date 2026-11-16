@@ -154,6 +154,8 @@ export async function POST(req: NextRequest) {
         connectedAt: new Date(),
         credentials: JSON.stringify(credentials || {}),
         config: JSON.stringify(config || {}),
+        webhooks: '[]',
+        scopes: '[]',
       },
       update: {
         status: 'active',

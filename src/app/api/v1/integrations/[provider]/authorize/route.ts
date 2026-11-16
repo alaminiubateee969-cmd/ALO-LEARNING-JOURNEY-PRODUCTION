@@ -99,6 +99,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       authMethod: 'oauth',
       status: 'pending',
       grantedScopes: JSON.stringify(provider.scopes),
+      selectedResources: '[]',
       currentStateId: oauthState.id,
       createdBy: ctx.userId,
       updatedBy: ctx.userId,

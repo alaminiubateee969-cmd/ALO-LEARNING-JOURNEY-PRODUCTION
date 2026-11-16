@@ -28,9 +28,10 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ provider: string }> }) {
   const { provider: providerSlug } = await params;
+  const redirectBase = '/dashboard?view=integrations';
   const provider = getProvider(providerSlug);
   if (!provider) {
-    return NextResponse.redirect(new URL('/integrations?error=unknown_provider', request.url));
+    return NextResponse.redirect(new URL(`${redirectBase}&error=unknown_provider`, request.url));
   }
 
   const url = new URL(request.url);
@@ -42,23 +43,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // User denied consent on the provider's page
   if (error) {
     return NextResponse.redirect(
-      new URL(`/integrations?provider=${providerSlug}&error=${encodeURIComponent(error)}&desc=${encodeURIComponent(errorDesc || '')}`, request.url)
+      new URL(`${redirectBase}&provider=${providerSlug}&error=${encodeURIComponent(error)}&desc=${encodeURIComponent(errorDesc || '')}`, request.url)
     );
   }
   if (!code || !state) {
-    return NextResponse.redirect(new URL(`/integrations?provider=${providerSlug}&error=missing_params`, request.url));
+    return NextResponse.redirect(new URL(`${redirectBase}&provider=${providerSlug}&error=missing_params`, request.url));
   }
 
   // Find the OAuthState row by state token (and verify it's valid)
   const oauthState = await db.oAuthState.findUnique({ where: { state } });
   if (!oauthState || oauthState.provider !== providerSlug) {
-    return NextResponse.redirect(new URL(`/integrations?provider=${providerSlug}&error=invalid_state`, request.url));
+    return NextResponse.redirect(new URL(`${redirectBase}&provider=${providerSlug}&error=invalid_state`, request.url));
   }
   if (oauthState.consumed) {
-    return NextResponse.redirect(new URL(`/integrations?provider=${providerSlug}&error=state_consumed`, request.url));
+    return NextResponse.redirect(new URL(`${redirectBase}&provider=${providerSlug}&error=state_consumed`, request.url));
   }
   if (oauthState.expiresAt.getTime() < Date.now()) {
-    return NextResponse.redirect(new URL(`/integrations?provider=${providerSlug}&error=state_expired`, request.url));
+    return NextResponse.redirect(new URL(`${redirectBase}&provider=${providerSlug}&error=state_expired`, request.url));
   }
 
   // Constant-time state comparison (defense in depth — the DB lookup already
@@ -66,14 +67,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // tampered with between authorize and callback while the row was still
   // in flight).
   if (!validateStateToken(oauthState.state, state)) {
-    return NextResponse.redirect(new URL(`/integrations?provider=${providerSlug}&error=state_mismatch`, request.url));
+    return NextResponse.redirect(new URL(`${redirectBase}&provider=${providerSlug}&error=state_mismatch`, request.url));
   }
 
   // Resolve OAuth client credentials
   const clientId = resolveOAuthClientId(provider);
   const clientSecret = resolveOAuthClientSecret(provider);
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(new URL(`/integrations?provider=${providerSlug}&error=client_not_configured`, request.url));
+    return NextResponse.redirect(new URL(`${redirectBase}&provider=${providerSlug}&error=client_not_configured`, request.url));
   }
 
   // Exchange code → tokens (server-to-server; PKCE verifier only sent here)
@@ -104,7 +105,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         source: 'api',
       },
     });
-    return NextResponse.redirect(new URL(`/integrations?provider=${providerSlug}&error=token_exchange`, request.url));
+    return NextResponse.redirect(new URL(`${redirectBase}&provider=${providerSlug}&error=token_exchange`, request.url));
   }
 
   const tokens: any = await tokenRes.json();
@@ -114,7 +115,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const grantedScopes: string[] = tokens.scope ? String(tokens.scope).split(/[\s,]+/) : provider.scopes;
 
   if (!accessToken) {
-    return NextResponse.redirect(new URL(`/integrations?provider=${providerSlug}&error=no_access_token`, request.url));
+    return NextResponse.redirect(new URL(`${redirectBase}&provider=${providerSlug}&error=no_access_token`, request.url));
   }
 
   // Encrypt + persist secrets
@@ -176,5 +177,5 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     metadata: { provider: providerSlug, scopes: grantedScopes },
   });
 
-  return NextResponse.redirect(new URL(`/integrations?provider=${providerSlug}&status=connected`, request.url));
+  return NextResponse.redirect(new URL(`${redirectBase}&provider=${providerSlug}&status=connected`, request.url));
 }

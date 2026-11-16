@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
         name: String(data.name),
         keyPrefix,
         hashedKey,
+        scopes: Array.isArray(data.scopes) ? JSON.stringify(data.scopes) : '[]',
         companyId: payload.companyId,
       },
     });

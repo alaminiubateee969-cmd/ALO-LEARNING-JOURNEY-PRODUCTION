@@ -125,7 +125,7 @@ async function main() {
     { maxTokens: 100 }
   );
   assert(result.text.length > 0, 'chain returns non-empty text');
-  assert(result.provider !== '', `chain resolves a provider (${result.provider})`);
+  assert(result.provider.length > 0, `chain resolves a provider (${result.provider})`);
   assert(result.durationMs > 0, 'duration is recorded');
   assert(typeof result.fallback === 'boolean', 'fallback flag is set');
   assert(typeof result.attempts === 'number' && result.attempts >= 1, `attempts recorded (${result.attempts})`);

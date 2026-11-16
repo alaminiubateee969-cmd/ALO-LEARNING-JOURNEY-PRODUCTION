@@ -109,7 +109,7 @@ async function main() {
   await prisma.afterHoursRule.upsert({
     where: { companyId: testCompany.id },
     update: {},
-    create: { companyId: testCompany.id, timezone: 'Asia/Dhaka', workingDays: '[1,2,3,4,5]' },
+    create: { companyId: testCompany.id, timezone: 'Asia/Dhaka', workingDays: '[1,2,3,4,5]', holidays: '[]' },
   });
   const decision = await evaluateAfterHours(testCompany.id);
   assert(decision.timezone === 'Asia/Dhaka', 'timezone = Asia/Dhaka');
@@ -166,7 +166,7 @@ async function main() {
     { role: 'user', content: 'Reply with the exact string.' },
   ], { maxTokens: 30, temperature: 0 });
   assert(chainResult.text.length > 0, 'chain returned non-empty text');
-  assert(chainResult.provider !== '', `provider recorded (${chainResult.provider})`);
+  assert(chainResult.provider.length > 0, `provider recorded (${chainResult.provider})`);
   assert(chainResult.model !== '', `model recorded (${chainResult.model})`);
   assert(chainResult.durationMs > 0, `latency recorded (${chainResult.durationMs}ms)`);
   console.log(`     → provider=${chainResult.provider}, model=${chainResult.model}, ${chainResult.durationMs}ms, ${chainResult.attempts} attempt(s)`);

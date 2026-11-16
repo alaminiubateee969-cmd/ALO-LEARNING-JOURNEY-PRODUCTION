@@ -1,7 +1,11 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminAuthenticationConfigured } from "@/lib/auth-config";
-import { verifyMarketingOsBearer } from "@/lib/bearer-auth";
+import {
+  isMarketingOsApiPath,
+  readBearerToken,
+  verifyMarketingOsBearer,
+} from "@/lib/bearer-auth";
 import { verifyMediaToken } from "@/lib/media-token";
 
 const STATIC_PREFIXES = ["/_next/"];
@@ -14,12 +18,25 @@ const PROTECTED_MEDIA_PREFIXES = [
   "/avatars/",
 ];
 
+function constantTimeEqual(a: string, b: string): boolean {
+  if (!a || !b || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 function isPublicPath(request: NextRequest): boolean {
   const { pathname, searchParams } = request.nextUrl;
   if (pathname === "/login" || pathname.startsWith("/login/")) return true;
   if (pathname === "/contact" || pathname.startsWith("/contact/")) return true;
   if (pathname === "/api/contact" || pathname.startsWith("/api/contact/")) return true;
   if (pathname === "/api/health" && searchParams.get("details") !== "1") return true;
+  if (pathname === "/api/v1/auth/refresh" && request.method === "POST") return true;
+  if (/^\/api\/v1\/integrations\/[^/]+\/callback\/?$/.test(pathname) && request.method === "GET") {
+    return true;
+  }
   return pathname === "/api/auth" || pathname.startsWith("/api/auth/");
 }
 
@@ -39,11 +56,19 @@ export async function proxy(request: NextRequest) {
   if ((pathname === "/api/recovery/sweep" || pathname.startsWith("/api/recovery/sweep/")) && request.method === "POST") {
     const configuredSecret = process.env.CRON_SECRET ?? "";
     const suppliedSecret = request.headers.get("x-cron-secret") ?? "";
-    if (configuredSecret && suppliedSecret.length === configuredSecret.length && suppliedSecret === configuredSecret) {
+    if (constantTimeEqual(suppliedSecret, configuredSecret)) {
       return NextResponse.next();
     }
     // Otherwise continue through normal session authentication. The route
     // accepts a signed-in admin or a constant-time-valid cron header.
+  }
+
+  if ((pathname === "/api/cron/social-publish" || pathname.startsWith("/api/cron/social-publish/")) && request.method === "GET") {
+    const configuredSecret = process.env.CRON_SECRET ?? "";
+    const suppliedBearer = readBearerToken(request.headers.get("authorization")) ?? "";
+    if (constantTimeEqual(suppliedBearer, configuredSecret)) {
+      return NextResponse.next();
+    }
   }
 
   if (isPublicPath(request)) return NextResponse.next();
@@ -64,11 +89,15 @@ export async function proxy(request: NextRequest) {
   }
 
   // MarketingOS authenticates with a signed JWT instead of the admin session.
-  // The token is verified here — an arbitrary `Authorization: Bearer <junk>`
-  // header must never skip this gateway and reach a session-only API route.
-  // Route handlers additionally verify the token and scope every query by the
-  // `companyId` it carries.
-  if (pathname.startsWith("/api/") && await verifyMarketingOsBearer(request.headers.get("authorization"))) {
+  // Both the signature and the route allowlist are checked here so neither an
+  // arbitrary `Authorization: Bearer <junk>` header nor a valid MarketingOS
+  // tenant token can skip the gateway and reach a single-tenant ALO route.
+  // Allowed route handlers additionally verify the token and scope every query
+  // by the `companyId` it carries.
+  if (
+    isMarketingOsApiPath(pathname) &&
+    await verifyMarketingOsBearer(request.headers.get("authorization"))
+  ) {
     return NextResponse.next();
   }
 

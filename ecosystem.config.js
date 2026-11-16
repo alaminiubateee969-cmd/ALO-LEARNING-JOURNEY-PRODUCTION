@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- PM2 config is CommonJS by design */
 // PM2 production config. `scripts/deploy-production.sh` loads this file via
 // APP_DIR/current, so __dirname is the selected release. The VPS path is
 // operator-configured and intentionally not hard-coded here.

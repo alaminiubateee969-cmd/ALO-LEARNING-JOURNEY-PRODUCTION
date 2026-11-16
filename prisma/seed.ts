@@ -103,7 +103,7 @@ async function seed() {
       const linkExists = await prisma.companyUser.findFirst({ where: { userId: existing.id, companyId: company.id } });
       if (!linkExists) {
         await prisma.companyUser.create({
-          data: { userId: existing.id, companyId: company.id, role: member.role },
+          data: { userId: existing.id, companyId: company.id, role: member.role, permissions: '{}' },
         });
       }
       continue;
@@ -121,6 +121,7 @@ async function seed() {
         userId: user.id,
         companyId: company.id,
         role: member.role,
+        permissions: '{}',
       },
     });
   }
@@ -192,6 +193,7 @@ async function seed() {
       status: 'active',
       currentDay: 12,
       score: 45,
+      tasks: '[]',
       results: JSON.stringify({
         initialRanking: 85,
         currentRanking: 62,
@@ -257,6 +259,7 @@ async function seed() {
         name: agent.name,
         type: agent.type,
         description: agent.desc,
+        config: '{}',
         isEnabled: Math.random() > 0.3,
         companyId: company.id,
       },

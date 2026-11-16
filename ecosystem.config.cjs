@@ -1,47 +1,78 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 
-// Read from .env.config (NOT .env — Next.js auto-loads .env and corrupts $ values)
+// Parse .env and .env.config literally (no `$` interpolation, which would
+// corrupt `scrypt$<salt>$<hash>` values when Next.js runs dotenv-expand).
+// Values in .env.config take precedence over .env.
 const envVars = {};
-const envPath = path.join(__dirname, '.env.config');
-if (fs.existsSync(envPath)) {
-  fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
-    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
-    if (!m) return;
+for (const filename of ['.env', '.env.config']) {
+  const filePath = path.join(__dirname, filename);
+  if (!fs.existsSync(filePath)) continue;
+  for (const line of fs.readFileSync(filePath, 'utf8').split('\n')) {
+    const m = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!m) continue;
     let val = m[2].trim();
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'")))
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1);
+    }
     envVars[m[1]] = val;
-  });
+  }
 }
 
-const CRITICAL = {
-  ADMIN_PASSWORD_HASH: 'scrypt$QDpU69Mn8wDFBAg3W5N-FQ$5d6YQFQPhqQoBsZu98K0WKNUCv-8Y5tzYgxI1dmnaVbeSNM77zziqruHn5TI_pkf_BEIHYHKejNWUluy8-YGYw',
-  ALO_ADMIN_PASSWORD_HASH: 'scrypt$QDpU69Mn8wDFBAg3W5N-FQ$5d6YQFQPhqQoBsZu98K0WKNUCv-8Y5tzYgxI1dmnaVbeSNM77zziqruHn5TI_pkf_BEIHYHKejNWUluy8-YGYw',
-  ADMIN_EMAIL: 'admin@alolabs.net',
-  ADMIN_OTP_REQUIRED: 'false',
-  NEXTAUTH_SECRET: envVars.NEXTAUTH_SECRET || 'alo-jwt-secret-key-32-bytes-random',
-  NEXTAUTH_URL: 'https://learn.alolabs.net',
-  JWT_SECRET: envVars.JWT_SECRET || 'fallback-jwt-secret',
-  DATABASE_URL: envVars.DATABASE_URL || 'mysql://user_learn:AloLearn2026@127.0.0.1:3306/alo_learning',
+const releaseFile = path.join(__dirname, 'RELEASE_SHA');
+const releaseSha =
+  envVars.RELEASE_SHA ||
+  process.env.RELEASE_SHA ||
+  (fs.existsSync(releaseFile) ? fs.readFileSync(releaseFile, 'utf8').trim() : 'unknown');
+
+const port = String(envVars.PORT || process.env.PORT || '3061');
+const runtimeEnv = {
+  ...envVars,
+  NODE_ENV: 'production',
+  PORT: port,
+  NEXTAUTH_URL: envVars.NEXTAUTH_URL || process.env.NEXTAUTH_URL || 'https://learn.alolabs.net',
+  ADMIN_OTP_REQUIRED: envVars.ADMIN_OTP_REQUIRED ?? process.env.ADMIN_OTP_REQUIRED ?? 'false',
+  RELEASE_SHA: releaseSha,
 };
+
+for (const key of [
+  'DATABASE_URL',
+  'NEXTAUTH_SECRET',
+  'JWT_SECRET',
+  'ADMIN_EMAIL',
+  'ADMIN_PASSWORD_HASH',
+  'ALO_ADMIN_PASSWORD_HASH',
+  'VAULT_MASTER_KEY',
+  'CRON_SECRET',
+]) {
+  const resolved = envVars[key] || process.env[key];
+  if (resolved) runtimeEnv[key] = resolved;
+}
 
 const standalone = path.join(__dirname, '.next', 'standalone');
 const useStandalone = fs.existsSync(path.join(standalone, 'server.js'));
 
-const app = useStandalone ? {
-  name: 'alo-learning-journey-prod',
-  cwd: __dirname,
-  script: path.join(standalone, 'server.js'),
-  instances: 1, exec_mode: 'fork', autorestart: true, max_memory_restart: '1G',
-  env: { ...envVars, ...CRITICAL, NODE_ENV: 'production', PORT: '3061', HOSTNAME: '127.0.0.1' }
-} : {
-  name: 'alo-learning-journey-prod',
-  cwd: __dirname,
-  script: 'node_modules/.bin/next',
-  args: 'start -p 3061',
-  instances: 1, exec_mode: 'fork', autorestart: true, max_memory_restart: '1G',
-  env: { ...envVars, ...CRITICAL, NODE_ENV: 'production', PORT: '3061' }
-};
+const app = useStandalone
+  ? {
+      name: 'alo-learning-journey-prod',
+      cwd: __dirname,
+      script: path.join(standalone, 'server.js'),
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_memory_restart: '1G',
+      env: { ...runtimeEnv, HOSTNAME: envVars.HOSTNAME || '127.0.0.1' },
+    }
+  : {
+      name: 'alo-learning-journey-prod',
+      cwd: __dirname,
+      script: 'node_modules/.bin/next',
+      args: `start -p ${port}`,
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_memory_restart: '1G',
+      env: runtimeEnv,
+    };
 
 module.exports = { apps: [app] };

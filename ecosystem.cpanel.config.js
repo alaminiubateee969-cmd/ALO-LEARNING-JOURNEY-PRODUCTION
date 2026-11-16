@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- PM2 config is CommonJS by design */
 // cPanel-specific PM2 config (if you use PM2 on cPanel instead of Passenger).
 // For standard cPanel "Node.js Application Manager" you DON'T need this file -
 // just use Startup file: scripts/cpanel-start.mjs
