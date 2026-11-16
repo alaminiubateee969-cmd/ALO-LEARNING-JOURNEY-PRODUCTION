@@ -158,9 +158,9 @@ jobs:
           # `missing_api_key: "Missing API key"` are not flagged. Excludes
           # dependencies, build output, archived uploads, the separate
           # marketingos/ sub-project, and scripts/ + tests/ fixtures.
-          PATTERN="(password|passwd)['\"]?\s*[:=]\s*['\"][^'\"[:space:]]{6,}['\"]|(secret|api[_-]?key|access[_-]?token)['\"]?\s*[:=]\s*['\"][^'\"[:space:]]{10,}['\"]"
+          PATTERN="(password|passwd)['\"]?\s*[:=]\s*['\"][^'\"[:space:]]{6,}['\"]|(secret|api[_-]?key|access[_-]?token)['\"]?\s*[:=]\s*['\"][^'\"[:space:]]{10,}['\"]|(mysql|postgres|postgresql)://[^'\"[:space:]:]+:[^'\"[:space:]@]{6,}@"
           FOUND=$(grep -rEni "${PATTERN}" \
-            --include="*.ts" --include="*.tsx" --include="*.js" --include="*.mjs" \
+            --include="*.ts" --include="*.tsx" --include="*.js" --include="*.mjs" --include="*.cjs" \
             --exclude-dir=node_modules --exclude-dir=.next --exclude-dir=dist \
             --exclude-dir=upload --exclude-dir=marketingos --exclude-dir=mini-services \
             --exclude-dir=examples --exclude-dir=scripts --exclude-dir=tests \

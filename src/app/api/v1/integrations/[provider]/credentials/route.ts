@@ -80,6 +80,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       authMethod: 'manual',
       status: 'connected',
       grantedScopes: '[]',
+      selectedResources: '[]',
       createdBy: ctx.userId,
       updatedBy: ctx.userId,
     },

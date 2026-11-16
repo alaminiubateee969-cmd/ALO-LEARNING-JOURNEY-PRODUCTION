@@ -16,7 +16,6 @@ function fail(label, detail) { console.log(`❌ ${label}${detail ? ` — ${detai
 console.log("=== ALO Media Pipeline — Same Human Image + Voice + Video ===\n");
 
 // 1. Binary check
-import { localMediaBinaries } from "../src/lib/local-audio.ts"; // will fail in mjs, so manual spawn
 function run(cmd, args) {
   try { return spawnSync(cmd, args, { encoding: "utf8", timeout: 5000 }).status === 0; }
   catch { return false; }
@@ -24,9 +23,12 @@ function run(cmd, args) {
 const ff = run("ffmpeg", ["-version"]) || fs.existsSync(path.join(process.cwd(), "node_modules/@ffmpeg-installer/linux-x64/ffmpeg"));
 const fp = run("ffprobe", ["-version"]) || fs.existsSync(path.join(process.cwd(), "node_modules/@ffprobe-installer/linux-x64/ffprobe"));
 const es = run("espeak", ["--version"]);
-ff ? ok("FFmpeg", "available") : fail("FFmpeg", "not found — fallback will try @ffmpeg-installer");
-fp ? ok("FFprobe", "available") : fail("FFprobe", "not found");
-es ? ok("eSpeak", "local TTS available") : warn("eSpeak", "missing — built-in formant WAV will be used (still works)");
+if (ff) ok("FFmpeg", "available");
+else fail("FFmpeg", "not found — fallback will try @ffmpeg-installer");
+if (fp) ok("FFprobe", "available");
+else fail("FFprobe", "not found");
+if (es) ok("eSpeak", "local TTS available");
+else warn("eSpeak", "missing — built-in formant WAV will be used (still works)");
 
 // 2. Presets
 try {
@@ -54,7 +56,8 @@ try {
 const dirs = ["public/avatars","public/avatar-scenes","public/avatar-audio","public/avatar-thumbs","public/generated","storage/videos","storage/audio"];
 for (const d of dirs) {
   const full = path.join(process.cwd(), d);
-  fs.existsSync(full) ? ok(`Dir ${d}`, "exists") : warn(`Dir ${d}`, "missing — auto-created on next generation");
+  if (fs.existsSync(full)) ok(`Dir ${d}`, "exists");
+  else warn(`Dir ${d}`, "missing — auto-created on next generation");
 }
 
 // 4. Local TTS dry-run (formant WAV, no external binary needed)

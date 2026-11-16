@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       contactListId: body.contactListId || null,
       startAt: body.startAt ? new Date(body.startAt) : null,
       endAt: body.endAt ? new Date(body.endAt) : null,
+      callingDays: Array.isArray(body.callingDays) ? JSON.stringify(body.callingDays) : '[1,2,3,4,5]',
       timezone: body.timezone || 'Asia/Dhaka',
       dncSuppression: body.dncSuppression ?? true,
       consentRequired: body.consentRequired ?? true,

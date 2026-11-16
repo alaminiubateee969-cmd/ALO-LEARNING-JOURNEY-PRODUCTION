@@ -47,6 +47,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       supervisorUserId: ctx.userId,
       reason,
       outcome: 'success',
+      metadata: '{}',
     },
   });
 

@@ -70,7 +70,13 @@ export async function POST(req: NextRequest) {
     ];
     for (const agent of defaultAgents) {
       await db.aiAgent.create({
-        data: { name: agent.name, type: agent.type, description: agent.desc, companyId: company.id },
+        data: {
+          name: agent.name,
+          type: agent.type,
+          description: agent.desc,
+          config: '{}',
+          companyId: company.id,
+        },
       });
     }
 

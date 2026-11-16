@@ -1430,6 +1430,9 @@ export async function routeTask(
         sopsUsed: JSON.stringify(sopsUsed),
         knowledgeUsed: JSON.stringify(knowledgeUsed),
         memoryUsed: JSON.stringify(memoryTypes),
+        childTaskIds: '[]',
+        consultedEmployees: '[]',
+        improvementTags: '[]',
         ragUsed: knowledge.length > 0,
         companyId: task.companyId,
         startedAt: new Date(),
@@ -1584,6 +1587,11 @@ export async function executeWithEmployee(
         data: {
           employeeId: employee.id,
           userId: companyUser?.userId || 'system',
+          messages: '[]',
+          skillsLoaded: '[]',
+          knowledgeLoaded: '[]',
+          memoryAccessed: '[]',
+          sopsLoaded: '[]',
           companyId: companyId || employee.companyId,
         },
       });

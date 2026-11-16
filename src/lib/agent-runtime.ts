@@ -172,6 +172,13 @@ export async function runAgent(
       // assignedEmployeeId is null for AI agents (no Employee row) — see schema comment
       status: 'running',
       input: JSON.stringify({ resourceType: input.resourceType, resourceId: input.resourceId, context: input.context || {} }),
+      skillsUsed: '[]',
+      sopsUsed: '[]',
+      knowledgeUsed: '[]',
+      memoryUsed: '[]',
+      childTaskIds: '[]',
+      consultedEmployees: '[]',
+      improvementTags: '[]',
       startedAt: new Date(),
       companyId, // required by schema
     },
