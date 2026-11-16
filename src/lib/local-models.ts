@@ -373,7 +373,7 @@ export async function generateLocalChatJson(
       // assistant chat budget (`generateChatReply`): on a CPU-only host a single
       // reply takes well over 30s, and clamping it here silently turned a
       // healthy Ollama into `503 ai_unavailable`.
-      signal: AbortSignal.timeout(Math.max(1_000, Math.min(timeoutMs, 120_000))),
+      signal: AbortSignal.timeout(Math.max(1_000, Math.min(timeoutMs, 300_000))),
       body: JSON.stringify({
         model,
         stream: false,
@@ -542,7 +542,7 @@ async function probeService(url: URL, timeoutMs = 1_800): Promise<{ ok: boolean;
 
 export async function getLocalAiStatus() {
   const model = process.env.OLLAMA_MODEL?.trim() || "qwen2.5:7b";
-  const checkpoint = process.env.COMFYUI_CHECKPOINT?.trim() || "alo-editorial-sharp-local";
+  const checkpoint = process.env.COMFYUI_CHECKPOINT?.trim() || "";
   let ollama: { ok: boolean; data?: unknown; error?: string };
   let comfyui: { ok: boolean; error?: string };
   try {
@@ -557,29 +557,37 @@ export async function getLocalAiStatus() {
   }
 
   const builtinEnabled = process.env.ALO_DISABLE_BUILTIN_LOCAL_AI !== "true";
-  const availableModels = (ollama.data as { models?: Array<{ name?: string }> } | undefined)?.models ?? [];
-  const externalModels = availableModels.map((item) => item.name).filter((name): name is string => Boolean(name));
-  const installedModels = externalModels.length > 0
-    ? externalModels
-    : builtinEnabled
-      ? [model, "alo-local-bn-en:1.0"]
-      : [];
-  const modelInstalled = installedModels.some((name) => name === model || name.startsWith(`${model}-`));
+  const models = (ollama.data as { models?: unknown } | undefined)?.models;
+  const installedModels = Array.isArray(models)
+    ? models.flatMap((item: unknown) => {
+        if (!item || typeof item !== "object") return [];
+        const name = (item as { name?: unknown }).name;
+        return typeof name === "string" && name ? [name] : [];
+      })
+    : [];
+  // Ollama normalizes untagged model names to :latest.
+  const canonical = (name: string) => name.includes(":") ? name : `${name}:latest`;
+  const modelInstalled = installedModels.some((name) => canonical(name) === canonical(model));
+  const textModelReady = ollama.ok && modelInstalled;
+  const imageServiceReady = comfyui.ok && Boolean(process.env.COMFYUI_CHECKPOINT?.trim());
 
   return {
     mode: "local-only" as const,
     paidApiCalls: false as const,
     text: {
-      available: (ollama.ok && modelInstalled) || builtinEnabled,
-      serviceAvailable: ollama.ok || builtinEnabled,
+      available: textModelReady,
+      serviceAvailable: ollama.ok,
+      templateFallbackAvailable: builtinEnabled,
       model,
       installedModels,
-      error: (ollama.ok && modelInstalled) || builtinEnabled ? null : ollama.error ?? `Configured Ollama model ${model} is not installed`,
+      error: textModelReady ? null : ollama.error ?? `Configured Ollama model ${model} is not installed`,
     },
     images: {
-      available: (comfyui.ok && Boolean(process.env.COMFYUI_CHECKPOINT?.trim())) || builtinEnabled,
+      available: imageServiceReady,
       checkpoint,
-      error: (comfyui.ok && Boolean(process.env.COMFYUI_CHECKPOINT?.trim())) || builtinEnabled ? null : comfyui.error ?? "COMFYUI_CHECKPOINT is not configured",
+      placeholderAvailable: builtinEnabled,
+      checkpointVerified: false,
+      error: imageServiceReady ? null : comfyui.error ?? "COMFYUI_CHECKPOINT is not configured",
     },
   };
 }

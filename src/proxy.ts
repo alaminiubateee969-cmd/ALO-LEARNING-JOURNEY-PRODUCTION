@@ -94,10 +94,10 @@ export async function proxy(request: NextRequest) {
   // tenant token can skip the gateway and reach a single-tenant ALO route.
   // Allowed route handlers additionally verify the token and scope every query
   // by the `companyId` it carries.
-  // Accept verified Bearer JWT on ALL API routes, not just MarketingOS.
-  // The frontend api-client.ts sends Bearer on every request.
-  const bearerSubject = await verifyMarketingOsBearer(request.headers.get("authorization"));
-  if (bearerSubject) {
+  if (
+    isMarketingOsApiPath(pathname) &&
+    await verifyMarketingOsBearer(request.headers.get("authorization"))
+  ) {
     return NextResponse.next();
   }
 
