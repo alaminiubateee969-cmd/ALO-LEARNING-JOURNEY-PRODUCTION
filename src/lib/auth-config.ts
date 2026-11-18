@@ -1,6 +1,16 @@
 const PHONE_E164 = /^\+[1-9]\d{6,14}$/;
 
+/**
+ * SMS OTP is a second factor for the single administrator account.
+ *
+ * It is mandatory in production unless the operator deliberately sets
+ * `ADMIN_OTP_REQUIRED=false`. That opt-out is an explicit owner decision (used
+ * while no SMS provider is configured) and removes the second factor, so it
+ * must be paired with a strong `ADMIN_PASSWORD_HASH`. Any other value —
+ * including unset — keeps production on the mandatory path.
+ */
 export function isAdminOtpRequired(): boolean {
+  if (process.env.ADMIN_OTP_REQUIRED === "false") return false;
   return process.env.NODE_ENV === "production" || process.env.ADMIN_OTP_REQUIRED === "true";
 }
 

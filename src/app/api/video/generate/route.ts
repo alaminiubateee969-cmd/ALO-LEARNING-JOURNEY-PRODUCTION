@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureSeeded } from "@/lib/seed";
 import { executeAsAgent } from "@/lib/agent-runtime";
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 import { promises as fs } from "fs";
 import fsSync from "fs";
 import path from "path";
@@ -10,21 +10,27 @@ import path from "path";
 const VIDEO_DIR = path.join(process.cwd(), "storage", "videos");
 const FONT_FILE = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
 
-function exec(cmd: string, timeoutMs = 300000): string {
+function exec(bin: string, args: string[], timeoutMs = 300000): string {
   try {
-    return execSync(cmd, { timeout: timeoutMs, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+    const result = spawnSync(bin, args, { timeout: timeoutMs, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+    if (result.status !== 0) {
+      const stderr = (result.stderr || "").slice(0, 400);
+      throw new Error(`Command failed: ${bin} ${args.slice(0, 5).join(" ")}...\n${stderr}`);
+    }
+    return (result.stdout || "").trim();
   } catch (e: any) {
-    throw new Error(`Command failed: ${cmd.slice(0, 100)}\n${(e.stderr || e.message || "").slice(0, 300)}`);
+    if (e.message && e.message.startsWith("Command failed:")) throw e;
+    throw new Error(`Command failed: ${bin} ${args.slice(0, 5).join(" ")}...\n${(e.stderr || e.message || "").slice(0, 400)}`);
   }
 }
 
 function probeDuration(filePath: string): number {
-  const out = exec(`ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${filePath}"`);
+  const out = exec("ffprobe", ["-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", filePath]);
   return parseFloat(out);
 }
 
 function probeVideo(filePath: string) {
-  const json = exec(`ffprobe -v quiet -print_format json -show_format -show_streams "${filePath}"`);
+  const json = exec("ffprobe", ["-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filePath]);
   const data = JSON.parse(json);
   const v = data.streams.find((s: any) => s.codec_type === "video");
   const a = data.streams.find((s: any) => s.codec_type === "audio");
@@ -107,7 +113,7 @@ function generateTTSToTarget(
 
     const partPath = path.join(VIDEO_DIR, `${jobId}_part${lineIdx}.wav`);
     const escapedText = text.replace(/"/g, '\\"').replace(/`/g, "\\`").replace(/\$/g, "\\$");
-    exec(`espeak "${escapedText}" -v ${voice} -s 140 -w "${partPath}"`);
+    exec("espeak", [escapedText, "-v", voice, "-s", "140", "-w", partPath]);
 
     const partDur = probeDuration(partPath);
     segments.push({ text, start: totalDuration, end: totalDuration + partDur });
@@ -119,8 +125,8 @@ function generateTTSToTarget(
   // Concatenate all audio parts
   const concatListPath = path.join(VIDEO_DIR, `${jobId}_concat.txt`);
   const concatContent = audioParts.map((p) => `file '${p}'`).join("\n");
-  exec(`echo '${concatContent.replace(/'/g, "'\\''")}' > "${concatListPath}"`);
-  exec(`ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -c copy "${audioPath}"`);
+  fsSync.writeFileSync(concatListPath, concatContent);
+  exec("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", concatListPath, "-c", "copy", audioPath]);
 
   // Clean up parts
   for (const part of audioParts) {
@@ -182,7 +188,7 @@ export async function POST(req: Request) {
 
     // STEP 4: Generate video — background + audio + text overlay
     // Video duration = audio duration (ensures narration matches video)
-    exec(`ffmpeg -y -f lavfi -i "color=c=0x1a1a2e:s=1920x1080:d=${audioDuration.toFixed(2)}:r=30" -i "${audioPath}" -vf "${videoFilter}" -c:v libx264 -preset fast -pix_fmt yuv420p -c:a aac -b:a 128k -shortest "${videoPath}"`);
+    exec("ffmpeg", ["-y", "-f", "lavfi", "-i", `color=c=0x1a1a2e:s=1920x1080:d=${audioDuration.toFixed(2)}:r=30`, "-i", audioPath, "-vf", videoFilter, "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-shortest", videoPath]);
 
     // STEP 5: Validate the generated video with ffprobe
     const metadata = probeVideo(videoPath);

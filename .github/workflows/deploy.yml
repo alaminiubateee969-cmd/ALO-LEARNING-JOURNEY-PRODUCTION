@@ -17,7 +17,8 @@ name: Deploy to VPS
 # ── Deployment safety (explicit gates) ──────────────────────────────────────
 #   Job `network-preflight` — connectivity tests ONLY. Never deploys, never
 #   touches the running application. Can be run alone via workflow_dispatch
-#   (mode=preflight-only) to produce network evidence.
+#   (mode=preflight-only) to produce network evidence. On push it runs only
+#   when VPS_DEPLOY_ENABLED == 'true' (otherwise it and `deploy` are skipped).
 #   Job `deploy` runs ONLY when ALL of the following hold:
 #     1. CI `verify` job is green (same reusable workflow as PRs);
 #     2. `network-preflight` is green (Tailscale auth + tailnet ACL + TCP 22 +
@@ -71,6 +72,11 @@ jobs:
   # ── Read-only network evidence: Tailscale auth, ACL reachability, TCP 22 ──
   network-preflight:
     name: network-preflight
+    # Manual runs (preflight-only / deploy) always test the network. On push it
+    # runs only once the readiness switch is on: with deployment disabled and the
+    # Tailscale/SSH secrets not yet configured, every merge to main would
+    # otherwise end in a red, fail-closed preflight that deploys nothing.
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.VPS_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
@@ -98,8 +104,8 @@ jobs:
             exit 1
           fi
 
-      # Pinned action: tailscale/github-action v4.2.0, pinned to its release
-      # commit SHA (d1b6cd204f8dceda5b3eaad7f1f767be390056cd). Nodes created by
+      # Pinned action: tailscale/github-action v4.4.0, pinned to its release
+      # commit SHA (064b10558093f38325e838ddea35486bdc6b1d5c). Nodes created by
       # this action are ephemeral: they log out at the end of the job and are
       # removed from the tailnet automatically. The OAuth client is scoped to
       # auth_keys write + tag:github-runner only (deploy/tailscale/README.md).
@@ -143,7 +149,8 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST || secrets.VPS_HOST }}
           SERVER_PORT: ${{ secrets.VPS_PORT }}
           SERVER_USER: ${{ secrets.VPS_USER }}
-          SSH_KEY_FILE: $HOME/.ssh/deploy_key
+          # SSH_KEY_FILE is intentionally unset: `env:` values are not shell-expanded,
+          # so "$HOME/..." would be a literal path. The script defaults to ~/.ssh/deploy_key.
         run: bash scripts/network-preflight.sh --tcp --ssh
 
       - name: Preflight summary
@@ -257,7 +264,8 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST || secrets.VPS_HOST }}
           SERVER_PORT: ${{ secrets.VPS_PORT }}
           SERVER_USER: ${{ secrets.VPS_USER }}
-          SSH_KEY_FILE: $HOME/.ssh/deploy_key
+          # SSH_KEY_FILE is intentionally unset: `env:` values are not shell-expanded,
+          # so "$HOME/..." would be a literal path. The script defaults to ~/.ssh/deploy_key.
         run: bash scripts/network-preflight.sh --tcp --ssh
 
       - name: Deploy exact SHA to production server

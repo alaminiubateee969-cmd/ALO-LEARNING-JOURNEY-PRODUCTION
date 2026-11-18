@@ -14,13 +14,13 @@ export async function POST(req: NextRequest) {
     if (!message) return NextResponse.json({ error: 'message required' }, { status: 400 });
     let recipients: any[] = [];
     if (Array.isArray(body.leadIds) && body.leadIds.length > 0) {
-      const leads = await db.lead.findMany({ where: { id: { in: body.leadIds }, companyId: payload.companyId, phone: { not: null } }, select: { id: true, name: true, phone: true } });
+      const leads = await db.mosLead.findMany({ where: { id: { in: body.leadIds }, companyId: payload.companyId, phone: { not: null } }, select: { id: true, name: true, phone: true } });
       recipients = leads.map(l => ({ phone: l.phone!, leadId: l.id, name: l.name }));
     } else if (body.filter) {
       const where: any = { companyId: payload.companyId, phone: { not: null } };
       if (body.filter.source) where.source = body.filter.source;
       if (body.filter.status) where.status = body.filter.status;
-      const leads = await db.lead.findMany({ where, select: { id: true, name: true, phone: true } });
+      const leads = await db.mosLead.findMany({ where, select: { id: true, name: true, phone: true } });
       recipients = leads.map(l => ({ phone: l.phone!, leadId: l.id, name: l.name }));
     }
     if (recipients.length === 0) return NextResponse.json({ error: 'No recipients' }, { status: 400 });

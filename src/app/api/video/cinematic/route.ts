@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureSeeded } from "@/lib/seed";
 import { generateImageFile } from "@/lib/ai";
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 import { promises as fs } from "fs";
 import fsSync from "fs";
 import path from "path";
@@ -11,20 +11,26 @@ const VIDEO_DIR = path.join(process.cwd(), "storage", "videos");
 const ASSET_DIR = path.join(process.cwd(), "storage", "scene-assets");
 const FONT_FILE = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
 
-function exec(cmd: string, timeoutMs = 600000): string {
+function exec(bin: string, args: string[], timeoutMs = 600000): string {
   try {
-    return execSync(cmd, { timeout: timeoutMs, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+    const result = spawnSync(bin, args, { timeout: timeoutMs, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+    if (result.status !== 0) {
+      const stderr = (result.stderr || "").slice(0, 400);
+      throw new Error(`Command failed: ${bin} ${args.slice(0, 5).join(" ")}...\n${stderr}`);
+    }
+    return (result.stdout || "").trim();
   } catch (e: any) {
-    throw new Error(`Command failed: ${cmd.slice(0, 100)}\n${(e.stderr || e.message || "").slice(0, 300)}`);
+    if (e.message && e.message.startsWith("Command failed:")) throw e;
+    throw new Error(`Command failed: ${bin} ${args.slice(0, 5).join(" ")}...\n${(e.stderr || e.message || "").slice(0, 400)}`);
   }
 }
 
 function probeDuration(filePath: string): number {
-  return parseFloat(exec(`ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${filePath}"`));
+  return parseFloat(exec("ffprobe", ["-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", filePath]));
 }
 
 function probeVideo(filePath: string) {
-  const json = exec(`ffprobe -v quiet -print_format json -show_format -show_streams "${filePath}"`);
+  const json = exec("ffprobe", ["-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filePath]);
   const data = JSON.parse(json);
   const v = data.streams.find((s: any) => s.codec_type === "video");
   const a = data.streams.find((s: any) => s.codec_type === "audio");
@@ -96,7 +102,7 @@ export async function POST(req: Request) {
         inputAudioInfo = {
           path: audioUpload,
           duration: probeDuration(audioUpload),
-          format: exec(`ffprobe -v quiet -show_entries format=format_name -of csv=p=0 "${audioUpload}"`),
+          format: exec("ffprobe", ["-v", "quiet", "-show_entries", "format=format_name", "-of", "csv=p=0", audioUpload]),
         };
       } catch {}
     }
@@ -156,7 +162,7 @@ export async function POST(req: Request) {
       const text = allLines[lineIdx % allLines.length];
       const partPath = path.join(jobDir, `part${lineIdx}.wav`);
       const escapedText = text.replace(/"/g, '\\"').replace(/`/g, "\\`").replace(/\$/g, "\\$");
-      exec(`espeak "${escapedText}" -v ${voice} -s 140 -w "${partPath}"`);
+      exec("espeak", [escapedText, "-v", voice, "-s", "140", "-w", partPath]);
       const partDur = probeDuration(partPath);
       segments.push({ text, start: totalDuration, end: totalDuration + partDur });
       audioParts.push(partPath);
@@ -167,7 +173,7 @@ export async function POST(req: Request) {
     // Concatenate audio
     const concatListPath = path.join(jobDir, "concat.txt");
     fsSync.writeFileSync(concatListPath, audioParts.map((p) => `file '${p}'`).join("\n"), "utf-8");
-    exec(`ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -c copy "${audioPath}"`);
+    exec("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", concatListPath, "-c", "copy", audioPath]);
     for (const part of audioParts) { try { fsSync.unlinkSync(part); } catch {} }
     try { fsSync.unlinkSync(concatListPath); } catch {}
 
@@ -215,7 +221,7 @@ export async function POST(req: Request) {
     const videoFilter = `${drawTexts.join(",")},${subtitleFilter}`;
 
     const finalVideoPath = path.join(jobDir, `${jobId}.mp4`);
-    exec(`ffmpeg -y -f lavfi -i "color=c=0x1a1a2e:s=1920x1080:d=${audioDuration.toFixed(2)}:r=30" -i "${audioPath}" -vf "${videoFilter}" -c:v libx264 -preset fast -pix_fmt yuv420p -c:a aac -b:a 128k -shortest "${finalVideoPath}"`);
+    exec("ffmpeg", ["-y", "-f", "lavfi", "-i", `color=c=0x1a1a2e:s=1920x1080:d=${audioDuration.toFixed(2)}:r=30`, "-i", audioPath, "-vf", videoFilter, "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-shortest", finalVideoPath]);
 
     // Validate
     const metadata = probeVideo(finalVideoPath);

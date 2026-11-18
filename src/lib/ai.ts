@@ -801,3 +801,30 @@ export async function parseNaturalCommand(
   };
   return chatJSON<ParsedCommand>(sys, user, fallback, { timeoutMs: 12000 });
 }
+
+// ===== DASHBOARD ASSISTANT CHAT =====
+
+export interface ChatReply {
+  reply: string;
+}
+
+/**
+ * Free-form reply for the dashboard assistant (`POST /api/ai/chat`).
+ *
+ * Local model first (Ollama via `OLLAMA_BASE_URL`). When no model is reachable
+ * the built-in template cannot answer a free-form question, so `data.reply`
+ * comes back empty — callers must report "no model available" instead of
+ * inventing an answer.
+ */
+export async function generateChatReply(
+  system: string,
+  message: string,
+): Promise<AIResult<ChatReply>> {
+  // CPU inference can exceed 90 seconds, especially on a cold model. Keep a
+  // finite default budget and allow operators to tune it for their hardware.
+  const configured = Number(process.env.OLLAMA_CHAT_TIMEOUT_MS);
+  const timeoutMs = Number.isFinite(configured) && configured >= 1_000
+    ? Math.min(configured, 300_000)
+    : 180_000;
+  return chatJSON<ChatReply>(system, message, { reply: "" }, { timeoutMs });
+}

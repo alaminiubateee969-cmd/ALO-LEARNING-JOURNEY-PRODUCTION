@@ -73,7 +73,6 @@ export default function CalendarView() {
         if (!cancelled) setLoading(false);
       }
     };
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetchData();
     return () => { cancelled = true; };

@@ -309,12 +309,13 @@ if [ "$STATUS_CODE" -ne 0 ]; then
     fail "migration status failed without an explicit pending-migration report; no migration attempted"
   fi
   PENDING="$(printf '%s' "$STATUS_OUTPUT" | grep -oE '[0-9]{14}_[A-Za-z0-9_]+' | sort -u || true)"
-  EXPECTED_AFTER_BASELINE="$(printf '%s\n' 20261007000000_human_avatar_ownership 20261010000000_admissions_crm_quotes 20261010000001_admin_otp_challenges 20261018000000_v2_additive_mysql_tables)"
-  EXPECTED_AFTER_AVATAR="$(printf '%s\n' 20261010000000_admissions_crm_quotes 20261010000001_admin_otp_challenges 20261018000000_v2_additive_mysql_tables)"
-  EXPECTED_AFTER_ADMISSIONS="$(printf '%s\n' 20261010000001_admin_otp_challenges 20261018000000_v2_additive_mysql_tables)"
-  EXPECTED_V2_ONLY="20261018000000_v2_additive_mysql_tables"
+  EXPECTED_AFTER_BASELINE="$(printf '%s\n' 20261007000000_human_avatar_ownership 20261010000000_admissions_crm_quotes 20261010000001_admin_otp_challenges 20261018000000_v2_additive_mysql_tables 20261111000000_marketingos_workforce_tables)"
+  EXPECTED_AFTER_AVATAR="$(printf '%s\n' 20261010000000_admissions_crm_quotes 20261010000001_admin_otp_challenges 20261018000000_v2_additive_mysql_tables 20261111000000_marketingos_workforce_tables)"
+  EXPECTED_AFTER_ADMISSIONS="$(printf '%s\n' 20261010000001_admin_otp_challenges 20261018000000_v2_additive_mysql_tables 20261111000000_marketingos_workforce_tables)"
+  EXPECTED_AFTER_OTP="$(printf '%s\n' 20261018000000_v2_additive_mysql_tables 20261111000000_marketingos_workforce_tables)"
+  EXPECTED_MARKETINGOS_ONLY="20261111000000_marketingos_workforce_tables"
   [ "$PENDING" = "$HISTORY_PENDING" ] || fail "Prisma status differs from the checksum-verified history suffix; no migration attempted"
-  if [ -z "$PENDING" ] || { [ "$PENDING" != "$EXPECTED_AFTER_BASELINE" ] && [ "$PENDING" != "$EXPECTED_AFTER_AVATAR" ] && [ "$PENDING" != "$EXPECTED_AFTER_ADMISSIONS" ] && [ "$PENDING" != "$EXPECTED_V2_ONLY" ]; }; then
+  if [ -z "$PENDING" ] || { [ "$PENDING" != "$EXPECTED_AFTER_BASELINE" ] && [ "$PENDING" != "$EXPECTED_AFTER_AVATAR" ] && [ "$PENDING" != "$EXPECTED_AFTER_ADMISSIONS" ] && [ "$PENDING" != "$EXPECTED_AFTER_OTP" ] && [ "$PENDING" != "$EXPECTED_MARKETINGOS_ONLY" ]; }; then
     fail "pending migrations are not a known ordered suffix after the reconciled baseline; no migration attempted"
   fi
   [ "$MIGRATION_PLAN_APPROVED_SHA" = "$EXPECTED_SHA" ] || fail "pending migrations require MIGRATION_PLAN_APPROVED_SHA to equal this exact, restored-copy-rehearsed SHA"

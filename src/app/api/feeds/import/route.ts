@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
         mediaType: 'external',
         thumbnailUrl: null,
         hashtags: '#curated',
+        engagement: '{}',
         creatorId: payload.userId,
         companyId: payload.companyId,
       },

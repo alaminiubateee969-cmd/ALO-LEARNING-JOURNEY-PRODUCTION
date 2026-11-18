@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
           body: `Prompt: ${prompt}\nTask ID: ${result.taskId}\nStatus: ${result.status}`,
           mediaUrl: result.videoUrl || null,
           mediaType: 'video',
+          engagement: '{}',
           aiGenerated: true,
           creatorId: payload.userId,
           companyId: payload.companyId,

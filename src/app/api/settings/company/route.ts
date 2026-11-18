@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const payload = await verifyToken(token);
     if (!payload || !payload.companyId) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-    const company = await db.company.findUnique({ where: { id: payload.companyId } });
+    const company = await db.mosCompany.findUnique({ where: { id: payload.companyId } });
     if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 });
 
     let brandColors: { primary?: string; secondary?: string; accent?: string } = {};
@@ -57,7 +57,7 @@ export async function PUT(req: NextRequest) {
     if (data.marketingGoals !== undefined) update.marketingGoals = String(data.marketingGoals);
 
     if (data.primaryColor || data.secondaryColor || data.accentColor) {
-      const existing = await db.company.findUnique({ where: { id: payload.companyId } });
+      const existing = await db.mosCompany.findUnique({ where: { id: payload.companyId } });
       let brandColors: any = {};
       try { brandColors = JSON.parse(existing?.brandColors || '{}'); } catch { /* skip */ }
       if (data.primaryColor) brandColors.primary = data.primaryColor;
@@ -66,9 +66,9 @@ export async function PUT(req: NextRequest) {
       update.brandColors = JSON.stringify(brandColors);
     }
 
-    const company = await db.company.update({ where: { id: payload.companyId }, data: update });
+    const company = await db.mosCompany.update({ where: { id: payload.companyId }, data: update });
 
-    await db.auditLog.create({
+    await db.mosAuditLog.create({
       data: {
         action: 'update',
         resource: 'Company Settings',

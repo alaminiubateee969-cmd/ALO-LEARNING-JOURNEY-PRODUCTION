@@ -31,6 +31,8 @@ export async function GET() {
         : "External AI is disabled by default; set both owner switches and at least one provider API key to enable the free draft fallback.",
       localTextNeededForModelGeneratedLyrics: true,
       imageGenerationNeedsComfyUiAndCheckpoint: true,
+      imageCheckpointNotVerified: "Service status does not verify that the configured checkpoint is installed or usable.",
+      chatNeedsOllamaModel: "The template fallback cannot answer free-form chat. Model availability does not guarantee a successful or timely response.",
       songAudio: "procedural instrumental; it is not a sung vocal track",
     },
   }, { headers: { "Cache-Control": "no-store" } });

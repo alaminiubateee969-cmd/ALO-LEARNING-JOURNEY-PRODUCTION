@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       data: { lastLoginAt: new Date() },
     });
 
-    await db.auditLog.create({
+    await db.mosAuditLog.create({
       data: {
         action: 'user.login',
         resource: 'auth',

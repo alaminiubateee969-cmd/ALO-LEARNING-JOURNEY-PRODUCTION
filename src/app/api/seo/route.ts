@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ challenges });
-  } catch {
+  } catch (err) {
+    console.error('[GET /api/seo]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -27,9 +28,22 @@ export async function POST(req: NextRequest) {
     if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
     const payload = await verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    if (!payload.companyId) {
+      return NextResponse.json({ error: 'No company associated' }, { status: 400 });
+    }
 
-    const { name, websiteUrl, targetKeywords, duration } = await req.json();
-    if (!websiteUrl) return NextResponse.json({ error: 'Website URL required' }, { status: 400 });
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { name, websiteUrl, targetKeywords } = body;
+    if (!websiteUrl || typeof websiteUrl !== 'string') {
+      return NextResponse.json({ error: 'Website URL required' }, { status: 400 });
+    }
+    const requestedDuration = Number(body.duration);
+    const duration = Number.isFinite(requestedDuration) && requestedDuration > 0
+      ? Math.min(365, Math.trunc(requestedDuration))
+      : 30;
 
     // Generate SEO daily tasks
     const taskTemplates = [
@@ -69,6 +83,9 @@ export async function POST(req: NextRequest) {
         status: 'active',
         currentDay: 0,
         score: 0,
+        // `tasks` is TEXT NOT NULL; older deployments have no column default,
+        // so the value is always supplied explicitly.
+        tasks: JSON.stringify([]),
         results: JSON.stringify({ initialRanking: 100, currentRanking: 100, organicTraffic: 0, backlinks: 0 }),
         companyId: payload.companyId,
         dailyTasks: {
@@ -84,7 +101,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ challenge });
-  } catch {
+  } catch (err) {
+    console.error('[POST /api/seo]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

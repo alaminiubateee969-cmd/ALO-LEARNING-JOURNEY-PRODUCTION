@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
   let invoiceId: string | null = null;
   if (body.invoiceId) {
-    const inv = await db.invoice.findFirst({
+    const inv = await db.mosInvoice.findFirst({
       where: { id: body.invoiceId, companyId: ctx.companyId },
     });
     if (!inv) return notFound('invoice not found');
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
   // If succeeded and linked to invoice, mark invoice as paid
   if (created.status === 'succeeded' && invoiceId) {
-    await db.invoice.update({
+    await db.mosInvoice.update({
       where: { id: invoiceId },
       data: { status: 'paid', paidAt: new Date() },
     });

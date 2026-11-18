@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   // If invoiceId provided, validate it belongs to the tenant (or skip if super_admin)
   let invoiceId: string | null = null;
   if (body.invoiceId) {
-    const inv = await db.invoice.findUnique({ where: { id: body.invoiceId } });
+    const inv = await db.mosInvoice.findUnique({ where: { id: body.invoiceId } });
     if (!inv) return badRequest('invoiceId not found');
     invoiceId = inv.id;
   }

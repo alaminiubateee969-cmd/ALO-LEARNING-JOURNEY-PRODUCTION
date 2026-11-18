@@ -21,11 +21,13 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   for (const extension of ["jpg", "png"]) {
-    const filePath = path.join(VIDEO_DIR, `${id}.${extension}`);
+    // Runtime media lives in the configured storage dir, never in the build:
+    // the ignore hints stop Turbopack tracing the whole project into standalone.
+    const filePath = path.join(/*turbopackIgnore: true*/ VIDEO_DIR, `${id}.${extension}`);
     try {
-      const file = await stat(filePath);
+      const file = await stat(/*turbopackIgnore: true*/ filePath);
       if (!file.isFile()) continue;
-      const image = await readFile(filePath);
+      const image = await readFile(/*turbopackIgnore: true*/ filePath);
       return new Response(new Uint8Array(image), {
         headers: {
           "Content-Type": extension === "png" ? "image/png" : "image/jpeg",

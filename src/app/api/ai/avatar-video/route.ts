@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       const tts = await zai.audio.tts.create({ input: body.script, voice: config.voiceId || 'default' });
       audioUrl = tts.url || null;
     } catch {}
-    const content = await db.content.create({ data: { title: `Avatar Video: ${avatar.name}`, type: 'video', status: 'draft', body: `Script: ${body.script}`, mediaUrl: audioUrl, aiGenerated: true, creatorId: payload.userId, companyId: payload.companyId } });
+    const content = await db.content.create({ data: { title: `Avatar Video: ${avatar.name}`, type: 'video', status: 'draft', body: `Script: ${body.script}`, mediaUrl: audioUrl, engagement: '{}', aiGenerated: true, creatorId: payload.userId, companyId: payload.companyId } });
     await emitEvent({ companyId: payload.companyId, userId: payload.userId, type: 'ai.avatar_video_created', title: `Avatar video: ${avatar.name}`, description: body.script.slice(0, 60), resourceType: 'content', resourceId: content.id });
     return NextResponse.json({ data: { contentId: content.id, avatarName: avatar.name, voiceId: config.voiceId, videoTaskId, videoStatus, audioUrl } }, { status: 201 });
   } catch { return NextResponse.json({ error: 'Failed' }, { status: 500 }); }

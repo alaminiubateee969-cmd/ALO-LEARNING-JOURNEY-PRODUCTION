@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
           status: 'draft',
           platform: body.platform || null,
           body: result.content,
+          engagement: '{}',
           aiGenerated: true,
           creatorId: payload.userId,
           companyId: payload.companyId,

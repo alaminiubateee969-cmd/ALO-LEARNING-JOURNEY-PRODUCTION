@@ -80,7 +80,7 @@ export interface AuditLogData {
 
 export async function createAuditLog(data: AuditLogData): Promise<void> {
   try {
-    await db.auditLog.create({
+    await db.mosAuditLog.create({
       data: {
         userId: data.userId || null,
         action: data.action,

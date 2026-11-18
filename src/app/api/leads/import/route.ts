@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       const notes = notesIdx >= 0 ? (row[notesIdx] || '').trim() : null;
 
       try {
-        const lead = await db.lead.create({
+        const lead = await db.mosLead.create({
           data: {
             name,
             email: email || null,
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        await db.leadActivity.create({
+        await db.mosLeadActivity.create({
           data: { type: 'created', content: 'Imported via CSV', leadId: lead.id },
         });
 

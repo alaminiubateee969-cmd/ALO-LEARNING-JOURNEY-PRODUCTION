@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    const result = await db.notification.updateMany({
+    const result = await db.mosNotification.updateMany({
       where: { userId: payload.userId, isRead: false },
       data: { isRead: true, readAt: new Date() },
     });

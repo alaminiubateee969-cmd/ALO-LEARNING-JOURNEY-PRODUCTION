@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
           status: 'draft',
           mediaUrl: result.url,
           mediaType: 'image',
+          engagement: '{}',
           aiGenerated: true,
           creatorId: payload.userId,
           companyId: payload.companyId,

@@ -125,6 +125,7 @@ export async function POST(req: NextRequest) {
         userId: user.id,
         companyId: payload.companyId,
         role: role || 'team_member',
+        permissions: '{}',
       },
     });
 

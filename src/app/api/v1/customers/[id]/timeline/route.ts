@@ -79,7 +79,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // Lead activities (if linked)
   let leadActivities: any[] = [];
   if (customer.leadId) {
-    leadActivities = await db.leadActivity.findMany({
+    leadActivities = await db.mosLeadActivity.findMany({
       where: { leadId: customer.leadId },
       orderBy: { createdAt: 'desc' },
       take: limit,

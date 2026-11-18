@@ -93,7 +93,7 @@ async function main() {
   const fakeUserId = 'test-user-' + Date.now();
   const fakeCompanyId = 'test-company-' + Date.now();
   // Create a real Company + User row to satisfy FK constraints
-  const company = await db.company.create({
+  const company = await db.mosCompany.create({
     data: { name: `Test ${Date.now()}`, slug: `test-${Date.now()}`, plan: 'free' },
   });
   const stateRow = await db.oAuthState.create({
@@ -116,7 +116,7 @@ async function main() {
     // FK constraint failed (fakeUserId doesn't exist) — that's also a valid outcome
     assert(true, 'FK constraint on userId prevents orphan OAuthState rows');
   }
-  await db.company.delete({ where: { id: company.id } }).catch(() => {});
+  await db.mosCompany.delete({ where: { id: company.id } }).catch(() => {});
 
   console.log('\n[9/10] Free-model AI chain — works through configured providers');
   const { chainChat } = await import('../src/lib/ai-chain');
@@ -125,7 +125,7 @@ async function main() {
     { maxTokens: 100 }
   );
   assert(result.text.length > 0, 'chain returns non-empty text');
-  assert(result.provider !== '', `chain resolves a provider (${result.provider})`);
+  assert(result.provider.length > 0, `chain resolves a provider (${result.provider})`);
   assert(result.durationMs > 0, 'duration is recorded');
   assert(typeof result.fallback === 'boolean', 'fallback flag is set');
   assert(typeof result.attempts === 'number' && result.attempts >= 1, `attempts recorded (${result.attempts})`);

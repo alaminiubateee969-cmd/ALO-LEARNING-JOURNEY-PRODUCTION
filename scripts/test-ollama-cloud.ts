@@ -101,7 +101,7 @@ async function main() {
 
   console.log('\n[9/12] After-hours router — Asia/Dhaka');
   // Create a test company + rule
-  const testCompany = await prisma.company.upsert({
+  const testCompany = await prisma.mosCompany.upsert({
     where: { slug: 'test-ollama-cloud' },
     update: {},
     create: { name: 'Test Ollama Cloud', slug: 'test-ollama-cloud', plan: 'free' },
@@ -109,7 +109,7 @@ async function main() {
   await prisma.afterHoursRule.upsert({
     where: { companyId: testCompany.id },
     update: {},
-    create: { companyId: testCompany.id, timezone: 'Asia/Dhaka', workingDays: '[1,2,3,4,5]' },
+    create: { companyId: testCompany.id, timezone: 'Asia/Dhaka', workingDays: '[1,2,3,4,5]', holidays: '[]' },
   });
   const decision = await evaluateAfterHours(testCompany.id);
   assert(decision.timezone === 'Asia/Dhaka', 'timezone = Asia/Dhaka');
@@ -166,13 +166,13 @@ async function main() {
     { role: 'user', content: 'Reply with the exact string.' },
   ], { maxTokens: 30, temperature: 0 });
   assert(chainResult.text.length > 0, 'chain returned non-empty text');
-  assert(chainResult.provider !== '', `provider recorded (${chainResult.provider})`);
+  assert(chainResult.provider.length > 0, `provider recorded (${chainResult.provider})`);
   assert(chainResult.model !== '', `model recorded (${chainResult.model})`);
   assert(chainResult.durationMs > 0, `latency recorded (${chainResult.durationMs}ms)`);
   console.log(`     → provider=${chainResult.provider}, model=${chainResult.model}, ${chainResult.durationMs}ms, ${chainResult.attempts} attempt(s)`);
 
   // Cleanup
-  await prisma.company.delete({ where: { id: testCompany.id } }).catch(() => {});
+  await prisma.mosCompany.delete({ where: { id: testCompany.id } }).catch(() => {});
 
   console.log(`\n────────────────────────────────────────`);
   console.log(`  ${pass} passed, ${fail} failed`);

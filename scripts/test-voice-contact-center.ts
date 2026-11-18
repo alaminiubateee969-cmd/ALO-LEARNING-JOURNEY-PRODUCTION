@@ -94,7 +94,7 @@ async function main() {
   }
 
   console.log('\n[7/14] Voice agent CRUD');
-  const testCompany = await prisma.company.upsert({
+  const testCompany = await prisma.mosCompany.upsert({
     where: { slug: 'voice-test-' + Date.now() },
     update: {},
     create: { name: 'Voice Test Co', slug: 'voice-test-' + Date.now(), plan: 'professional' },
@@ -107,7 +107,7 @@ async function main() {
     await prisma.companyUser.upsert({
       where: { userId_companyId: { userId: adminUser.id, companyId: testCompany.id } } as any,
       update: {},
-      create: { userId: adminUser.id, companyId: testCompany.id, role: 'super_admin' },
+      create: { userId: adminUser.id, companyId: testCompany.id, role: 'super_admin', permissions: '{}' },
     }).catch(() => {});
 
     // Create voice agent
@@ -120,6 +120,8 @@ async function main() {
         language: 'bn-BD',
         systemPrompt: 'You are a friendly receptionist.',
         greetingMessage: 'আসসালামু আলাইকুম, কেমন সাহায্য করতে পারি?',
+        workingDays: '[1,2,3,4,5]',
+        allowlistedTools: '[]',
         createdBy: adminUser.id,
         updatedBy: adminUser.id,
       },
@@ -163,6 +165,7 @@ async function main() {
       provider: 'manual',
       country: 'BD',
       numberType: 'local',
+      capabilities: '["voice"]',
       companyId: testCompany.id,
       status: 'assigned',
       assignedAt: new Date(),
@@ -188,12 +191,12 @@ async function main() {
 
   // State transition: ringing → active
   await prisma.call.update({ where: { id: call.id }, data: { status: 'active', answeredAt: new Date() } });
-  await prisma.callEvent.create({ data: { callId: call.id, fromStatus: 'ringing', toStatus: 'active', actorType: 'system' } });
+  await prisma.callEvent.create({ data: { callId: call.id, fromStatus: 'ringing', toStatus: 'active', actorType: 'system', metadata: '{}' } });
 
   // State transition: active → closed
   const endedAt = new Date();
   await prisma.call.update({ where: { id: call.id }, data: { status: 'closed', endedAt, durationSec: 120, outcome: 'resolved' } });
-  await prisma.callEvent.create({ data: { callId: call.id, fromStatus: 'active', toStatus: 'closed', actorType: 'system' } });
+  await prisma.callEvent.create({ data: { callId: call.id, fromStatus: 'active', toStatus: 'closed', actorType: 'system', metadata: '{}' } });
 
   const finalCall = await prisma.call.findUnique({ where: { id: call.id }, include: { events: true } });
   assert(finalCall?.status === 'closed', 'call transitioned to closed');
@@ -217,6 +220,7 @@ async function main() {
       name: 'Test Outreach',
       script: 'Hi, this is a test call from ALO Labs.',
       timezone: 'Asia/Dhaka',
+      callingDays: '[1,2,3,4,5]',
       callingWindowStart: '09:00',
       callingWindowEnd: '18:00',
       dncSuppression: true,
@@ -245,6 +249,7 @@ async function main() {
       title: 'Pricing FAQ',
       sourceType: 'txt',
       rawText: 'Our pricing starts at $0 for the free plan.',
+      visibleToAgents: '[]',
       status: 'processing',
     },
   });
@@ -291,7 +296,7 @@ async function main() {
 
   // Cleanup
   await prisma.refreshToken.deleteMany({ where: { companyId: testCompany.id } }).catch(() => {});
-  await prisma.company.delete({ where: { id: testCompany.id } }).catch(() => {});
+  await prisma.mosCompany.delete({ where: { id: testCompany.id } }).catch(() => {});
 
   console.log(`\n────────────────────────────────────────`);
   console.log(`  ${pass} passed, ${fail} failed`);

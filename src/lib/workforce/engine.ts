@@ -445,7 +445,7 @@ export async function getDepartmentEmployees(
   departmentCode: string
 ): Promise<EmployeeWithRelations[]> {
   try {
-    const department = await db.department.findUnique({
+    const department = await db.mosDepartment.findUnique({
       where: { code: departmentCode },
     });
     if (!department) return [];
@@ -494,7 +494,7 @@ export async function getDepartmentTree(
   companyId: string
 ): Promise<DepartmentTreeNode[]> {
   try {
-    const departments = await db.department.findMany({
+    const departments = await db.mosDepartment.findMany({
       where: { companyId, parentId: null },
       include: {
         children: {
@@ -610,7 +610,7 @@ export async function getEmployeeStats(
 // Helper: recursively collect department IDs (self + all children)
 async function collectDepartmentIds(departmentId: string): Promise<string[]> {
   const ids: string[] = [departmentId];
-  const children = await db.department.findMany({
+  const children = await db.mosDepartment.findMany({
     where: { parentId: departmentId },
     select: { id: true },
   });
@@ -1430,6 +1430,9 @@ export async function routeTask(
         sopsUsed: JSON.stringify(sopsUsed),
         knowledgeUsed: JSON.stringify(knowledgeUsed),
         memoryUsed: JSON.stringify(memoryTypes),
+        childTaskIds: '[]',
+        consultedEmployees: '[]',
+        improvementTags: '[]',
         ragUsed: knowledge.length > 0,
         companyId: task.companyId,
         startedAt: new Date(),
@@ -1584,6 +1587,11 @@ export async function executeWithEmployee(
         data: {
           employeeId: employee.id,
           userId: companyUser?.userId || 'system',
+          messages: '[]',
+          skillsLoaded: '[]',
+          knowledgeLoaded: '[]',
+          memoryAccessed: '[]',
+          sopsLoaded: '[]',
           companyId: companyId || employee.companyId,
         },
       });
@@ -2263,7 +2271,7 @@ export async function getWorkforceOverview(
     ] = await Promise.all([
       db.employee.count({ where: { companyId, isEnabled: true } }),
       db.employee.count({ where: { companyId, isEnabled: true, isAvailable: true } }),
-      db.department.count({ where: { companyId } }),
+      db.mosDepartment.count({ where: { companyId } }),
       db.taskExecution.count({ where: { companyId } }),
       db.taskExecution.count({ where: { companyId, status: 'completed' } }),
       db.taskExecution.count({ where: { companyId, status: 'failed' } }),

@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    const leads = await db.lead.findMany({
+    const leads = await db.mosLead.findMany({
       where: { companyId: payload.companyId },
       orderBy: { createdAt: 'desc' },
       include: { tags: true },

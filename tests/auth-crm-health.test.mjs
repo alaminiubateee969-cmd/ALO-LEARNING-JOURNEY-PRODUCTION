@@ -36,6 +36,21 @@ test("administrator OTP is mandatory in production and opt-in elsewhere", () => 
   withEnv({ NODE_ENV: "test", ADMIN_OTP_REQUIRED: "true" }, () => assert.equal(isAdminOtpRequired(), true));
 });
 
+test("only an explicit ADMIN_OTP_REQUIRED=false opt-out disables the production second factor", () => {
+  withEnv({ NODE_ENV: "production", ADMIN_OTP_REQUIRED: "false" }, () => assert.equal(isAdminOtpRequired(), false));
+  // Anything else keeps production mandatory, including unrelated values.
+  withEnv({ NODE_ENV: "production", ADMIN_OTP_REQUIRED: "no" }, () => assert.equal(isAdminOtpRequired(), true));
+  withEnv({ NODE_ENV: "production", ADMIN_OTP_REQUIRED: "" }, () => assert.equal(isAdminOtpRequired(), true));
+  // With the opt-out, password-only admin auth is accepted without an SMS provider.
+  withEnv({
+    NODE_ENV: "production",
+    ADMIN_OTP_REQUIRED: "false",
+    NEXTAUTH_SECRET: "test-only-secret-not-for-production",
+    ADMIN_EMAIL: "admin@example.test",
+    ADMIN_PASSWORD_HASH: `scrypt$${"a".repeat(22)}$${"b".repeat(86)}`,
+  }, () => assert.equal(isAdminAuthenticationConfigured(), true));
+});
+
 test("production administrator auth fails closed until valid SMS delivery settings exist", () => {
   const credentials = {
     NODE_ENV: "production",
@@ -82,7 +97,14 @@ test("CRM workspace selection is admin-protected and not mistaken for membership
   assert.match(helper, /await requireOwner\(\)/);
   assert.match(helper, /x-alo-company-id/);
   assert.match(ui, /not a membership token or authorization boundary/);
-  assert.match(readFileSync(new URL("../src/app/api/crm/leads/route.ts", import.meta.url), "utf8"), /companyId:\s*scope\.companyId/);
+  // /api/crm/leads is shared with MarketingOS (PR #27); the admissions-CRM handler
+  // lives in alo-handlers.ts and serves every request without a Bearer token.
+  const aloLeads = readFileSync(new URL("../src/app/api/crm/leads/alo-handlers.ts", import.meta.url), "utf8");
+  assert.match(aloLeads, /resolveCompanyScope\(request\)/);
+  assert.match(aloLeads, /companyId:\s*scope\.companyId/);
+  const route = readFileSync(new URL("../src/app/api/crm/leads/route.ts", import.meta.url), "utf8");
+  assert.match(route, /from "\.\/alo-handlers"/);
+  assert.match(route, /isMarketingOsRequest\(request\) \? marketingos\.GET\(request\) : alo\.GET\(request\)/);
 });
 
 test("health route exposes release identity, requires MySQL/admin setup in production, and redacts DB host", () => {

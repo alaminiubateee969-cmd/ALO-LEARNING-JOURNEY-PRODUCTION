@@ -6,7 +6,7 @@
  *   { "slug": "...", "label": "...", "baseUrl": "...", "category": "free|self-hosted",
  *     "openAiCompatible": true, "apiKeyOptional": false, "apiKeyEnvName": "...",
  *     "docsUrl": "...", "rateLimitNote": "...", "notes": "...", "priority": 50,
- *     "api_key": "secret-key" }  // api_key is OPTIONAL; if provided, it's encrypted via vault
+ *     "api_key": "..." }  // api_key is OPTIONAL; if provided, it's encrypted via vault
  *
  * The api_key is NEVER returned in any response. Only the masked value is returned.
  */

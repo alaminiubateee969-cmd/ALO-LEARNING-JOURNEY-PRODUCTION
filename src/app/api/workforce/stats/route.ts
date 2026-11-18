@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
       db.employee.count({ where: { companyId, isEnabled: true, status: 'offline' } }),
 
       // Department count
-      db.department.count({ where: { companyId } }),
+      db.mosDepartment.count({ where: { companyId } }),
 
       // Task counts
       db.taskExecution.count({ where: { companyId } }),

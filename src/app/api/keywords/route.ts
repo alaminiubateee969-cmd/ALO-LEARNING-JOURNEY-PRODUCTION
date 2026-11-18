@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
         difficulty: Math.min(100, Math.max(0, Number(body.difficulty) || 0)),
         trend: ['up', 'down', 'stable'].includes(body.trend) ? body.trend : 'stable',
         lastPosition: body.lastPosition != null ? Number(body.lastPosition) : null,
+        competitorPositions: '{}',
         companyId: payload.companyId,
       },
       update: {
